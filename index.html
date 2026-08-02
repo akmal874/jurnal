@@ -248,6 +248,9 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? "" : s)
   .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 
+// Label mapel dengan format "(kode) nama"; kode diabaikan bila kosong.
+const labelMapel = m => (m && m.kode ? "(" + m.kode + ") " : "") + (m ? (m.nama_mapel || "") : "");
+
 let ME = null;
 const namaRole = r => ({admin:"Admin", kepsek:"Kepala Sekolah", guru:"Guru"}[r] || r);
 
@@ -1629,7 +1632,7 @@ async function muatIsiJurnal(){
   const opsiKelas = '<option value="">-- pilih kelas --</option>' +
     kelasList.map(k => '<option value="' + esc(k.id) + '">' + esc(k.nama_kelas) + '</option>').join("");
   const opsiMapel = '<option value="">-- pilih mapel --</option>' +
-    mapelSaya.map(m => '<option value="' + esc(m.id) + '">' + esc(m.nama_mapel) + '</option>').join("");
+    mapelSaya.map(m => '<option value="' + esc(m.id) + '">' + esc(labelMapel(m)) + '</option>').join("");
   const opsiGuru = '<option value="">— tidak menggantikan —</option>' +
     guruList.map(g => '<option value="' + esc(g.nama || g.email) + '">' +
       esc(g.nama || g.email) + '</option>').join("");
@@ -1687,7 +1690,7 @@ window.gantiGuruAsli = () => {
     daftar = window._mapelSaya || semua;  // tidak menggantikan → mapel yang diampu sendiri
   }
   sel.innerHTML = '<option value="">-- pilih mapel --</option>' +
-    daftar.map(m => '<option value="' + esc(m.id) + '">' + esc(m.nama_mapel) + '</option>').join("");
+    daftar.map(m => '<option value="' + esc(m.id) + '">' + esc(labelMapel(m)) + '</option>').join("");
   // pertahankan pilihan lama bila masih ada di daftar baru
   if (daftar.find(m => m.id === terpilih)) sel.value = terpilih;
 };
@@ -2005,7 +2008,7 @@ async function muatNilai(){
       '>' + esc(k.nama_kelas) + '</option>').join("");
   const opsiMapel = '<option value="">-- pilih mapel --</option>' +
     mapelList.map(m => '<option value="' + esc(m.id) + '"' + (m.id===_nMapel?" selected":"") +
-      '>' + esc(m.nama_mapel) + '</option>').join("");
+      '>' + esc(labelMapel(m)) + '</option>').join("");
 
   // tombol tab jenis
   const tabJenis = N_TAB_LIST.map(j =>
@@ -3555,7 +3558,7 @@ const PG_PER_HAL = 10;
 async function renderPengguna(){
   try {
     const { data: profilData, error: errP } = await sb.from("profil")
-      .select("*, guru_mapel(mapel:mapel_id(nama_mapel))");
+      .select("*, guru_mapel(mapel:mapel_id(nama_mapel, kode))");
     if (errP) throw new Error(errP.message);
     _penggunaCache = profilData || [];
     _penggunaCache.sort((a,b) => String(a.nama||"").localeCompare(String(b.nama||"")));
@@ -3580,7 +3583,7 @@ function gambarHalamanPengguna(){
   potongan.forEach(u => {
     const iniSaya = (u.id === ME.id);
     const nmAman = esc(u.nama || u.email).replace(/'/g,"");
-    const mapelTeks = (u.guru_mapel||[]).map(g => g.mapel?.nama_mapel).filter(Boolean).join(", ") || "-";
+    const mapelTeks = (u.guru_mapel||[]).map(g => g.mapel ? labelMapel(g.mapel) : null).filter(Boolean).join(", ") || "-";
     html += '<tr><td><b>' + esc(u.nama || "-") + '</b>' +
         (iniSaya ? ' <span style="color:#3b5bdb;font-size:11px">(Anda)</span>' : '') + '</td>' +
       '<td>' + esc(u.email || "-") + '</td>' +
@@ -3860,7 +3863,7 @@ async function muatJadwal(){
     '<option value="' + esc(k.id) + '"' + (k.id===_jdKelasAktif?" selected":"") +
     '>' + esc(k.nama_kelas) + '</option>').join("");
   const opsiMapel = '<option value="">-- pilih mapel --</option>' +
-    _jdMapelList.map(m => '<option value="' + esc(m.id) + '">' + esc(m.nama_mapel) + '</option>').join("");
+    _jdMapelList.map(m => '<option value="' + esc(m.id) + '">' + esc(labelMapel(m)) + '</option>').join("");
   const opsiGuru = '<option value="">-- pilih guru --</option>' +
     _jdGuruList.map(g => '<option value="' + esc(g.id) + '">' + esc(g.nama||g.email) + '</option>').join("");
   const opsiHari = HARI.slice(1).map((h,i) =>
@@ -3910,7 +3913,7 @@ async function renderJadwal(){
     const { data, error } = await sb
       .from("jadwal")
       .select("id, hari, jam_ke, waktu, kelas_id, mapel_id, guru_id, " +
-              "mapel:mapel_id(nama_mapel), guru:guru_id(nama, email)")
+              "mapel:mapel_id(nama_mapel, kode), guru:guru_id(nama, email)")
       .eq("kelas_id", _jdKelasAktif);
     if (error) throw new Error(error.message);
     _jadwalCache = data || [];
@@ -3948,7 +3951,7 @@ function gambarTabelJadwal(){
       '<table><tr><th>Jam</th><th>Waktu</th><th>Mapel</th><th>Guru</th>' +
       (bolehEdit ? '<th class="aksi-cell">Aksi</th>' : '') + '</tr>';
     slot.forEach(j => {
-      const namaMapel = (j.mapel && j.mapel.nama_mapel) ? j.mapel.nama_mapel : "-";
+      const namaMapel = (j.mapel && j.mapel.nama_mapel) ? labelMapel(j.mapel) : "-";
       const namaGuru = (j.guru && (j.guru.nama || j.guru.email)) ? (j.guru.nama || j.guru.email) : "-";
       html += '<tr><td><b>' + esc(j.jam_ke||"-") + '</b></td>' +
         '<td>' + esc(j.waktu||"-") + '</td>' +
