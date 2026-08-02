@@ -397,6 +397,11 @@ $("lPass").addEventListener("keydown", e => { if (e.key === "Enter") masuk(); })
 $("lEmail").addEventListener("keydown", e => { if (e.key === "Enter") $("lPass").focus(); });
 
 sb.auth.onAuthStateChange(async (event, session) => {
+  // Abaikan refresh token saat tab kembali fokus: jangan bangun ulang nav
+  // (mencegah menu ter-reset ke Beranda). Hanya proses login/logout nyata.
+  if (event === "TOKEN_REFRESHED" && ME) return;
+  if (session && ME && ME.id === session.user.id) return;
+
   if (!session) {
     ME = null;
     $("login").classList.remove("hidden");
