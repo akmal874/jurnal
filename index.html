@@ -135,6 +135,28 @@
 
   .field-err { border-color: var(--merah) !important; }
   .err-teks { display:block; color: var(--merah); font-size:12px; margin-top:4px; }
+
+  header h1 { flex-shrink: 0; }
+  .header-kanan {
+    display: flex; align-items: center; gap: 10px;
+    margin-left: auto; min-width: 0;
+  }
+  .header-info {
+    display: flex; align-items: center; gap: 6px;
+    flex-wrap: wrap; justify-content: flex-end;
+  }
+  .header-kanan .btn { margin-top: 0; flex-shrink: 0; }
+
+  /* Layar sempit (HP): rapatkan & perkecil */
+  @media (max-width: 600px) {
+    header { padding: 12px 14px; gap: 10px; }
+    header h1 { font-size: 16px; line-height: 1.2; }
+    .header-info { font-size: 12px; }
+    #whoNama { max-width: 120px; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap; }
+    .header-kanan .badge { padding: 1px 8px; font-size: 11px; }
+    .header-kanan .btn { padding: 5px 10px; font-size: 12px; }
+  }
 </style>
 </head>
 <body>
@@ -165,11 +187,13 @@
 <div id="app" class="hidden">
   <header>
     <h1>Jurnal PBM</h1>
-    <div>
-      <span id="whoNama">-</span>
-      <span class="badge" id="whoRole">-</span>
-      <span class="badge" id="whoPeriode" style="display:none;margin-left:6px"></span>
-      <button class="btn btn-sm btn-ghost" style="margin-left:8px" onclick="keluar()">Keluar</button>
+    <div class="header-kanan">
+      <div class="header-info">
+        <span id="whoNama">-</span>
+        <span class="badge" id="whoRole">-</span>
+        <span class="badge" id="whoPeriode" style="display:none"></span>
+      </div>
+      <button class="btn btn-sm btn-ghost" onclick="keluar()">Keluar</button>
     </div>
   </header>
   <nav id="nav"></nav>
