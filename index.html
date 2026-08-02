@@ -165,6 +165,17 @@
     .btn-keluar .keluar-ikon { display: inline-block; }
     .btn-keluar { padding: 7px 9px; }
   }
+
+  /* Warna absensi per status */
+  .absen-h { color: #2b8a3e; }   /* Hadir - hijau */
+  .absen-s { color: #f08c00; }   /* Sakit - oranye */
+  .absen-i { color: #3b5bdb; }   /* Izin  - biru   */
+  .absen-a { color: #c92a2a; }   /* Alpa  - merah  */
+  input[type="radio"].rb-h { accent-color: #2b8a3e; }
+  input[type="radio"].rb-s { accent-color: #f08c00; }
+  input[type="radio"].rb-i { accent-color: #3b5bdb; }
+  input[type="radio"].rb-a { accent-color: #c92a2a; }
+  .absen-h, .absen-s, .absen-i, .absen-a { font-weight: 600; }
 </style>
 </head>
 <body>
@@ -1722,7 +1733,7 @@ window.muatAbsensi = async () => {
     const { data, error } = await sb.from("siswa")
       .select("id, nis, nama_siswa").eq("kelas_id", kelasId).order("nama_siswa");
     if (error) throw new Error(error.message);
-    _absenSiswa = (data||[]).map(s => ({ siswa_id: s.id, nis: s.nis||"", nama: s.nama_siswa, status: "Hadir" }));
+    _absenSiswa = (data||[]).map(s => ({ siswa_id: s.id, nis: s.nis||"", nama: s.nama_siswa, status: "Hadir", keterangan: "" }));
     if (!_absenSiswa.length) { area.innerHTML =
       '<p style="color:#b78100;font-size:13px;margin-top:14px">Belum ada siswa di kelas ini.</p>'; return; }
     renderAbsensi();
@@ -1731,22 +1742,38 @@ window.muatAbsensi = async () => {
   }
 };
 
+const KELAS_ABSEN = { Hadir:"h", Sakit:"s", Izin:"i", Alpa:"a" };
 function renderAbsensi(){
   const opsi = ["Hadir","Sakit","Izin","Alpa"];
   let html = '<label style="margin-top:16px">Absensi (' + _absenSiswa.length + ' siswa)</label>' +
     '<div style="margin:8px 0">Tandai semua: ' +
       opsi.map(o => '<button type="button" class="btn btn-ghost btn-sm" style="margin-right:4px" onclick="semuaAbsen(\'' + o + '\')">' + o + '</button>').join("") + '</div>' +
     '<div style="overflow-x:auto"><table><tr><th>No</th><th>Nama</th>' +
-      opsi.map(o => '<th style="text-align:center">' + o + '</th>').join("") + '</tr>';
+      opsi.map(o => '<th style="text-align:center" class="absen-' + KELAS_ABSEN[o] + '">' + o + '</th>').join("") + '</tr>';
   _absenSiswa.forEach((s, i) => {
+    const perluKet = s.status !== "Hadir";   // keterangan hanya untuk Sakit/Izin/Alpa
     html += '<tr><td>' + (i+1) + '</td><td>' + esc(s.nama) + '</td>' +
-      opsi.map(o => '<td style="text-align:center"><input type="radio" name="ab' + i + '" value="' + o + '"' +
-        (s.status===o?' checked':'') + ' onchange="setAbsen(' + i + ',\'' + o + '\')"></td>').join("") + '</tr>';
+      opsi.map(o => '<td style="text-align:center"><input type="radio" name="ab' + i + '" value="' + o + '" class="rb-' + KELAS_ABSEN[o] + '"' +
+        (s.status===o?' checked':'') + ' onchange="setAbsen(' + i + ',\'' + o + '\')"></td>').join("") + '</tr>' +
+      '<tr id="ketRow' + i + '"' + (perluKet ? '' : ' style="display:none"') + '>' +
+        '<td></td><td colspan="' + (opsi.length+1) + '">' +
+          '<input id="ket' + i + '" placeholder="Keterangan (opsional)" value="' + esc(s.keterangan||"") + '" ' +
+            'oninput="setKeterangan(' + i + ', this.value)" style="font-size:13px;padding:6px 10px">' +
+        '</td></tr>';
   });
   $("absenArea").innerHTML = html + '</table></div>';
 }
-window.setAbsen = (i, status) => { _absenSiswa[i].status = status; };
-window.semuaAbsen = (status) => { _absenSiswa.forEach(s => s.status = status); renderAbsensi(); };
+window.setAbsen = (i, status) => {
+  _absenSiswa[i].status = status;
+  const row = $("ketRow" + i);
+  if (row) row.style.display = (status !== "Hadir") ? "" : "none";
+  if (status === "Hadir") { _absenSiswa[i].keterangan = ""; const inp = $("ket"+i); if (inp) inp.value = ""; }
+};
+window.setKeterangan = (i, val) => { _absenSiswa[i].keterangan = val; };
+window.semuaAbsen = (status) => {
+  _absenSiswa.forEach(s => { s.status = status; if (status === "Hadir") s.keterangan = ""; });
+  renderAbsensi();
+};
 
 /* ---- Foto ---- */
 window.pilihFoto = async (ev) => {
@@ -1896,7 +1923,8 @@ window.simpanJurnal = async () => {
       const { error: errDel } = await sb.from("absensi").delete().eq("jurnal_id", jurnalId);
       if (errDel) throw new Error("Gagal hapus absensi lama: " + errDel.message);
       const barisAbsen = _absenSiswa.map(x => ({
-        jurnal_id: jurnalId, siswa_id: x.siswa_id, siswa_nis: x.nis, siswa_nama: x.nama, status: x.status
+        jurnal_id: jurnalId, siswa_id: x.siswa_id, siswa_nis: x.nis, siswa_nama: x.nama,
+        status: x.status, keterangan: (x.status !== "Hadir" ? (x.keterangan || "").trim() : "")
       }));
       const { error: errAb } = await sb.from("absensi").insert(barisAbsen);
       if (errAb) throw new Error("Gagal simpan absensi: " + errAb.message);
@@ -1922,7 +1950,8 @@ window.simpanJurnal = async () => {
       jurnalId = jur.id;
 
       const barisAbsen = _absenSiswa.map(x => ({
-        jurnal_id: jurnalId, siswa_id: x.siswa_id, siswa_nis: x.nis, siswa_nama: x.nama, status: x.status
+        jurnal_id: jurnalId, siswa_id: x.siswa_id, siswa_nis: x.nis, siswa_nama: x.nama,
+        status: x.status, keterangan: (x.status !== "Hadir" ? (x.keterangan || "").trim() : "")
       }));
       const { error: errAb } = await sb.from("absensi").insert(barisAbsen);
       if (errAb) throw new Error("Absensi gagal: " + errAb.message);
@@ -3345,7 +3374,7 @@ window.cetakJurnal = async (id) => {
 
   // absensi jurnal ini (hanya yang tidak hadir)
   const { data: absen } = await sb.from("absensi")
-    .select("siswa_nis, siswa_nama, status").eq("jurnal_id", id);
+    .select("siswa_nis, siswa_nama, status, keterangan").eq("jurnal_id", id);
   const takHadir = (absen || []).filter(a => a.status.toLowerCase() !== "hadir");
 
   // kepsek (tanda tangan kiri)
@@ -3380,8 +3409,8 @@ window.cetakJurnal = async (id) => {
   if (takHadir.length) {
     const baris = takHadir.map((a,i) =>
       '<tr><td>' + (i+1) + '</td><td>' + esc(a.siswa_nis||"-") + '</td><td>' +
-      esc(a.siswa_nama) + '</td><td>' + esc(a.status) + '</td></tr>').join("");
-    tabelRekap = '<table><tr><th>No</th><th>NIS</th><th>Nama</th><th>Kehadiran</th></tr>' + baris + '</table>';
+      esc(a.siswa_nama) + '</td><td>' + esc(a.status) + '</td><td>' + esc(a.keterangan||"-") + '</td></tr>').join("");
+    tabelRekap = '<table><tr><th>No</th><th>NIS</th><th>Nama</th><th>Kehadiran</th><th>Keterangan</th></tr>' + baris + '</table>';
   } else {
     tabelRekap = '<p style="margin-top:10px"><i>Semua siswa hadir.</i></p>';
   }
@@ -3462,11 +3491,11 @@ window.editJurnal = async (id) => {
   // muat absensi kelas, lalu terapkan status tersimpan
   await muatAbsensi();
   const { data: absenLama } = await sb.from("absensi")
-    .select("siswa_id, status").eq("jurnal_id", id);
+    .select("siswa_id, status, keterangan").eq("jurnal_id", id);
   if (absenLama && absenLama.length) {
     absenLama.forEach(a => {
       const idx = _absenSiswa.findIndex(s => s.siswa_id === a.siswa_id);
-      if (idx >= 0) _absenSiswa[idx].status = a.status;
+      if (idx >= 0) { _absenSiswa[idx].status = a.status; _absenSiswa[idx].keterangan = a.keterangan || ""; }
     });
     renderAbsensi();
   }
