@@ -2003,6 +2003,21 @@ async function muatNilai(){
       esc(e.message) + '</div></div>'; return;
   }
 
+  // Guru: hanya mapel yang diampu. Admin/kepsek: semua mapel.
+  if (ME.role === "guru") {
+    try {
+      const { data: mm } = await sb.from("guru_mapel")
+        .select("mapel_id").eq("guru_id", ME.id);
+      const idAmpu = new Set((mm || []).map(x => x.mapel_id));
+      if (idAmpu.size) {
+        const cocok = mapelList.filter(m => idAmpu.has(m.id));
+        if (cocok.length) mapelList = cocok;
+      }
+    } catch (e) {
+      console.warn("Gagal memuat mapel guru:", e.message);
+    }
+  }
+
   const opsiKelas = '<option value="">-- pilih kelas --</option>' +
     kelasList.map(k => '<option value="' + esc(k.id) + '"' + (k.id===_nKelas?" selected":"") +
       '>' + esc(k.nama_kelas) + '</option>').join("");
