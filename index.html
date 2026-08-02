@@ -1897,6 +1897,13 @@ window.simpanJurnal = async () => {
   const { data: kelasRow } = await sb.from("kelas").select("nama_kelas").eq("id", kelasId).single();
   const { data: mapelRow } = await sb.from("mapel").select("nama_mapel").eq("id", mapelId).single();
   const periode = await ambilPeriodeAktif();
+
+  // Cek pengaturan verifikasi. Bila tidak wajib -> jurnal langsung Disetujui.
+  const { data: cfgApp } = await sb.from("pengaturan")
+    .select("verifikasi_wajib").eq("id", "app").maybeSingle();
+  const verifWajib = cfgApp?.verifikasi_wajib !== false; // default true
+  const statusJurnal = verifWajib ? "Menunggu" : "Disetujui";
+
   const btn = $("jBtnSimpan");
   btn.disabled = true; btn.textContent = "Menyimpan...";
 
@@ -1914,7 +1921,7 @@ window.simpanJurnal = async () => {
       jurnalId = _editJurnalId;
       const { error: errUpd } = await sb.from("jurnal").update({
         ...dataJurnal,
-        status: "Menunggu", verifikasi_oleh: "", tgl_verifikasi: "",
+        status: statusJurnal, verifikasi_oleh: "", tgl_verifikasi: "",
         ada_foto: _fotoLamaAda || !!_fotoFile
       }).eq("id", jurnalId);
       if (errUpd) throw new Error(errUpd.message);
@@ -1943,7 +1950,7 @@ window.simpanJurnal = async () => {
       const { data: jur, error: errJur } = await sb.from("jurnal").insert({
         ...dataJurnal,
         guru_id: ME.id, guru_nama: ME.nama || ME.email,
-        status: "Menunggu", ada_foto: true,
+        status: statusJurnal, ada_foto: true,
         tahun_ajaran: periode.tahun_ajaran, semester: periode.semester
       }).select("id").single();
       if (errJur) throw new Error(errJur.message);
@@ -1960,7 +1967,8 @@ window.simpanJurnal = async () => {
         .upload(jurnalId + ".jpg", _fotoFile, { upsert: true });
       if (errFoto) throw new Error("Foto gagal: " + errFoto.message);
 
-      setMsg("Jurnal berhasil disimpan.", true);
+      setMsg(verifWajib ? "Jurnal disimpan, menunggu verifikasi."
+                        : "Jurnal disimpan & langsung disetujui.", true);
     }
 
     // bersihkan form & keluar mode edit
