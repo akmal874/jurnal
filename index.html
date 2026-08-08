@@ -362,6 +362,7 @@ function konfirmasi(judul, pesan, opsi = {}){
     const btnBatal = $("modalBatal");
     btnOk.textContent = opsi.teksYa || "Ya";
     btnOk.style.background = opsi.bahaya ? "var(--merah)" : "var(--aksen)";
+    btnBatal.style.display = opsi.hanyaOk ? "none" : "";  // sembunyikan tombol Batal
 
     overlay.classList.remove("hidden");
 
@@ -1940,6 +1941,28 @@ window.simpanJurnal = async () => {
 
     } else {
       // ===== MODE BARU (insert) =====
+      // Cek duplikat: tanggal + kelas + mapel + jam yang sama
+      const { data: dobel, error: errCek } = await sb.from("jurnal")
+        .select("id")
+        .eq("guru_id", ME.id)
+        .eq("tanggal", tanggal)
+        .eq("kelas_id", kelasId)
+        .eq("mapel_id", mapelId)
+        .eq("jam_ke", jam_ke)
+        .limit(1);
+      if (errCek) throw new Error(errCek.message);
+      if (dobel && dobel.length) {
+        btn.disabled = false;
+        btn.textContent = "Simpan Jurnal";
+        await konfirmasi("Jurnal Sudah Ada",
+          "Jurnal untuk kelas " + (kelasRow?.nama_kelas || "") +
+          ", mapel " + (mapelRow?.nama_mapel || "") +
+          ", jam " + jam_ke + " pada tanggal " + tanggal +
+          " sudah pernah diisi.\n\nTidak bisa mengisi jurnal yang sama dua kali.",
+          { hanyaOk: true });
+        return;
+      }
+
       const { data: jur, error: errJur } = await sb.from("jurnal").insert({
         ...dataJurnal,
         guru_id: ME.id, guru_nama: ME.nama || ME.email,
