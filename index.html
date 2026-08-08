@@ -92,6 +92,30 @@
   .modal-box p { color: var(--modal-p); font-size: 14px; line-height: 1.6; margin-bottom: 20px; white-space: pre-line; }
   .modal-aksi { display: flex; justify-content: flex-end; gap: 10px; }
   .modal-box .btn { margin-top: 0; }
+  /* Modal peringatan modern */
+  @keyframes modalMuncul {
+    from { opacity: 0; transform: translateY(16px) scale(.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes overlayMuncul { from { opacity: 0; } to { opacity: 1; } }
+  .modal-peringatan .modal-box {
+    max-width: 400px; text-align: center; padding: 32px 28px;
+    animation: modalMuncul .25s cubic-bezier(.34,1.3,.64,1);
+  }
+  .modal-peringatan { animation: overlayMuncul .2s ease; }
+  .peringatan-ikon {
+    width: 68px; height: 68px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 18px; font-size: 34px; line-height: 1;
+    background: #fff4e6; color: #f08c00;
+  }
+  [data-dark="1"] .peringatan-ikon { background: #3a2f1a; color: #ffb84d; }
+  .modal-peringatan h3 { font-size: 19px; margin-bottom: 10px; color: var(--ink); }
+  .modal-peringatan p {
+    color: var(--ink-lembut); font-size: 14px; line-height: 1.65;
+    margin-bottom: 24px; white-space: pre-line;
+  }
+  .modal-peringatan .btn { width: 100%; margin-top: 0; padding: 12px; }
 
   .btn-tema {
     flex: 1; min-width: 100px; padding: 12px 14px;
@@ -239,6 +263,15 @@
   </div>
 </div>
 
+<div id="modalPeringatan" class="modal-overlay modal-peringatan hidden">
+  <div class="modal-box">
+    <div class="peringatan-ikon" id="modalPeringatanIkon">⚠️</div>
+    <h3 id="modalPeringatanJudul">Peringatan</h3>
+    <p id="modalPeringatanPesan"></p>
+    <button class="btn" id="modalPeringatanOk">Mengerti</button>
+  </div>
+</div>
+
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -376,6 +409,26 @@ function konfirmasi(judul, pesan, opsi = {}){
     btnBatal.onclick = () => selesai(false);
     // klik area gelap di luar kotak = batal
     overlay.onclick = (e) => { if (e.target === overlay) selesai(false); };
+  });
+}
+
+/* Kotak peringatan modern (satu tombol). opsi: {ikon, teksOk} */
+function peringatan(judul, pesan, opsi = {}){
+  return new Promise(resolve => {
+    const overlay = $("modalPeringatan");
+    $("modalPeringatanJudul").textContent = judul || "Peringatan";
+    $("modalPeringatanPesan").textContent = pesan || "";
+    $("modalPeringatanIkon").textContent = opsi.ikon || "⚠️";
+    const btnOk = $("modalPeringatanOk");
+    btnOk.textContent = opsi.teksOk || "Mengerti";
+    overlay.classList.remove("hidden");
+    const selesai = () => {
+      overlay.classList.add("hidden");
+      btnOk.onclick = null; overlay.onclick = null;
+      resolve(true);
+    };
+    btnOk.onclick = selesai;
+    overlay.onclick = (e) => { if (e.target === overlay) selesai(); };
   });
 }
 
@@ -1954,12 +2007,11 @@ window.simpanJurnal = async () => {
       if (dobel && dobel.length) {
         btn.disabled = false;
         btn.textContent = "Simpan Jurnal";
-        await konfirmasi("Jurnal Sudah Ada",
+        await peringatan("Jurnal Sudah Ada",
           "Jurnal untuk kelas " + (kelasRow?.nama_kelas || "") +
           ", mapel " + (mapelRow?.nama_mapel || "") +
           ", jam " + jam_ke + " pada tanggal " + tanggal +
-          " sudah pernah diisi.\n\nTidak bisa mengisi jurnal yang sama dua kali.",
-          { hanyaOk: true });
+          " sudah pernah diisi.\n\nTidak bisa mengisi jurnal yang sama dua kali.");
         return;
       }
 
