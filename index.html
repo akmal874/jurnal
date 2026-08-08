@@ -566,6 +566,7 @@ function bangunNav(){
   menu.forEach((key, i) => {
     const b = document.createElement("button");
     b.textContent = LABEL[key] || key;
+    b.dataset.key = key;
     b.onclick = () => buka(key, b);
     nav.appendChild(b);
     if (i === 0) buka(key, b);
@@ -2047,6 +2048,12 @@ window.simpanJurnal = async () => {
     $("jFotoPreview").innerHTML="";
     if ($("jJudulForm")) $("jJudulForm").textContent = "Isi Jurnal Mengajar";
     $("jBtnSimpan").textContent = "Simpan Jurnal";
+
+    // Pindah ke halaman Daftar Jurnal setelah simpan
+    const navDaftar = [...document.querySelectorAll("#nav button")]
+      .find(b => b.dataset.key === "daftarjurnal");
+    if (navDaftar) navDaftar.click();
+    else buka("daftarjurnal");
 
   } catch (e) {
     setMsg("Gagal: " + e.message, false);
