@@ -2697,6 +2697,9 @@ window.cetakNilai = async () => {
   // guru mapel + kepsek untuk ttd? app lama cetak nilai hanya guru mapel di kanan
   let namaGuru = ME.nama || ME.email || "(Guru)", nipGuru = ME.nip || "";
   const tglTtd = await kotaTanggalTtd();
+  const info = await ambilInfoApp();
+  const namaSekolah = (info.nama_sekolah || "").trim();
+  const tglCetak = new Date().toLocaleDateString("id-ID", { day:"numeric", month:"long", year:"numeric" });
 
   const rows = baris.map((b,i) =>
     '<tr><td>' + (i+1) + '</td><td>' + esc(b.nis||"-") + '</td><td style="text-align:left">' + esc(b.nama) + '</td>' +
@@ -2715,15 +2718,19 @@ window.cetakNilai = async () => {
   if (!w) return toast("Popup diblokir.");
   w.document.write(
     '<html><head><title>Nilai ' + esc(namaMapel) + ' - ' + esc(namaKelas) + '</title>' +
-    '<style>body{font-family:Arial,sans-serif;padding:24px;color:#000;font-size:12px}' +
+    '<style>@page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;padding:0;color:#000;font-size:12px}' +
     'h2{margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:10px}' +
     'th,td{border:1px solid #999;padding:4px 6px;text-align:center;font-size:11px}th{background:#eee}' +
     '.meta{margin:8px 0;line-height:1.6}' +
+    '.kop{text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:14px}' +
+    '.kop .nm-sek{font-size:18px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px}' +
+    '.kaki-cetak{position:fixed;bottom:0;left:0;right:0;text-align:center;font-size:10px;color:#555;border-top:1px solid #ccc;padding-top:4px}' +
     '.ttd{margin-top:48px;border:none;page-break-inside:avoid;break-inside:avoid}.ttd td{border:none;padding:0 0 2px;font-size:13px}' +
     '.ttd .kolom-kiri{width:60%}.ttd .kolom-kanan{width:40%;text-align:left}' +
     '.ttd .spasi-ttd td{height:60px}.ttd .nama-ttd{font-weight:bold;text-decoration:underline}.ttd .nip-ttd{font-size:11px}' +
-    'tr{page-break-inside:avoid;break-inside:avoid}' +
+    'thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}' +
     '</style></head><body>' +
+    '<div class="kaki-cetak">' + (namaSekolah ? esc(namaSekolah) + ' &middot; ' : '') + 'Dicetak ' + esc(tglCetak) + '</div>' +
     (namaSekolah ? '<div class="kop"><div class="nm-sek">' + esc(namaSekolah) + '</div></div>' : '') +
     '<h2>Daftar Nilai Siswa</h2>' +
     '<div class="meta"><b>Mapel:</b> ' + esc(namaMapel) + ' &nbsp; <b>Kelas:</b> ' + esc(namaKelas) + '<br>' +
@@ -2734,7 +2741,7 @@ window.cetakNilai = async () => {
       '<th>Rata-Rata</th><th>Sumatif</th><th>Rapor</th><th>Ket</th></tr></thead><tbody>' + rows + '</tbody></table>' +
     blokTtd + '</body></html>');
   w.document.close(); w.focus();
-  setTimeout(() => { try { w.print(); } catch(e){} }, 400);
+  w.onload = () => { try { w.print(); } catch(e){} };
 };
 
 window.excelNilai = async () => {
@@ -2786,16 +2793,19 @@ window.cetakRapor = async () => {
 
   const now = new Date();
   const tgl = String(now.getDate()).padStart(2,"0")+"/"+String(now.getMonth()+1).padStart(2,"0")+"/"+now.getFullYear();
+  const tglCetak = now.toLocaleDateString("id-ID", { day:"numeric", month:"long", year:"numeric" });
 
   const html =
     '<html><head><title>Rapor ' + esc(namaMapel) + ' ' + esc(namaKelas) + '</title>' +
-    '<style>body{font-family:Arial,sans-serif;padding:30px;font-size:13px;color:#000}' +
+    '<style>@page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;padding:0;font-size:13px;color:#000}' +
     'h2,h3{margin:2px 0;text-align:center}table{width:100%;border-collapse:collapse;margin-top:14px}' +
     'th,td{border:1px solid #999;padding:5px 7px;font-size:12px}' +
     '.info{margin:12px 0;line-height:1.6}.ttd{margin-top:40px;border:none;width:100%;page-break-inside:avoid;break-inside:avoid}' +
     '.ttd td{border:none;width:50%;vertical-align:top}.nm{margin-top:55px;font-weight:bold;text-decoration:underline}' +
-    'thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}.ttd,.ttd tr{page-break-inside:avoid;break-inside:avoid}</style>' +
+    'thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}.ttd,.ttd tr{page-break-inside:avoid;break-inside:avoid}' +
+    '.kaki-cetak{position:fixed;bottom:0;left:0;right:0;text-align:center;font-size:10px;color:#555;border-top:1px solid #ccc;padding-top:4px}</style>' +
     '</head><body>' +
+    '<div class="kaki-cetak">' + (sekolah ? esc(sekolah) + ' &middot; ' : '') + 'Dicetak ' + esc(tglCetak) + '</div>' +
     (sekolah ? '<h2>' + esc(sekolah) + '</h2>' : '') +
     '<h3>Daftar Nilai Rapor</h3>' +
     '<div class="info"><b>Mapel:</b> ' + esc(namaMapel) + ' &nbsp; <b>Kelas:</b> ' + esc(namaKelas) + '<br>' +
@@ -2811,7 +2821,7 @@ window.cetakRapor = async () => {
   const w = window.open("", "_blank");
   if (!w) return toast("Popup diblokir. Izinkan popup untuk mencetak.");
   w.document.write(html); w.document.close(); w.focus();
-  setTimeout(() => { try { w.print(); } catch(e){} }, 400);
+  w.onload = () => { try { w.print(); } catch(e){} };
 };
 
 /* ---- Ekspor rapor ke Excel ---- */
@@ -3203,6 +3213,7 @@ window.cetakRekapHarian = async () => {
   const tglTtd = await kotaTanggalTtd();
   const info = await ambilInfoApp();
   const namaSekolah = (info.nama_sekolah || "").trim();
+  const tglCetak = new Date().toLocaleDateString("id-ID", { day:"numeric", month:"long", year:"numeric" });
 
   const blokTtd =
     '<table class="ttd"><tr><td class="kolom-kiri"></td><td class="kolom-kanan">' + esc(tglTtd) + '</td></tr>' +
@@ -3225,18 +3236,19 @@ window.cetakRekapHarian = async () => {
   if (!w) return toast("Popup diblokir.");
   w.document.write(
     '<html><head><title>Rekap Harian ' + esc(tgl) + '</title>' +
-    '<style>body{font-family:Arial,sans-serif;padding:24px;color:#000;font-size:12px}' +
+    '<style>@page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;padding:0;color:#000;font-size:12px}' +
     'h2{margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:10px}' +
     '.kop{text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:14px}' +
     '.kop .nm-sek{font-size:18px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px}' +
+    '.kaki-cetak{position:fixed;bottom:0;left:0;right:0;text-align:center;font-size:10px;color:#555;border-top:1px solid #ccc;padding-top:4px}' +
     'th,td{border:1px solid #999;padding:4px 6px;text-align:left;font-size:11px}th{background:#eee}' +
     '.ringkas{margin:10px 0;line-height:1.7}td{vertical-align:top}' +
     '.ttd{margin-top:48px;border:none;page-break-inside:avoid;break-inside:avoid}.ttd td{border:none;padding:0 0 2px;font-size:13px}' +
     '.ttd .kolom-kiri{width:60%}.ttd .kolom-kanan{width:40%}' +
     '.ttd .spasi-ttd td{height:60px}.ttd .nama-ttd{font-weight:bold;text-decoration:underline}.ttd .nip-ttd{font-size:11px}' +
     'thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}' +
-    'thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}' +
     '</style></head><body>' +
+    '<div class="kaki-cetak">' + (namaSekolah ? esc(namaSekolah) + ' &middot; ' : '') + 'Dicetak ' + esc(tglCetak) + '</div>' +
     (namaSekolah ? '<div class="kop"><div class="nm-sek">' + esc(namaSekolah) + '</div></div>' : '') +
     '<h2>Rekap Jurnal Harian</h2>' +
     '<div class="ringkas"><b>Tanggal:</b> ' + esc(tglIndo) + '<br>' +
@@ -3249,7 +3261,7 @@ window.cetakRekapHarian = async () => {
       '<th>Materi</th><th>Ketidakhadiran</th><th>Catatan</th></tr></thead><tbody>' + baris + '</tbody></table>' +
     blokTtd + '</body></html>');
   w.document.close(); w.focus();
-  setTimeout(() => { try { w.print(); } catch(e){} }, 400);
+  w.onload = () => { try { w.print(); } catch(e){} };
 };
 
 window.excelRekapHarian = () => {
@@ -3486,6 +3498,7 @@ window.cetakJurnal = async (id) => {
   const tglTtd = await kotaTanggalTtd();
   const info = await ambilInfoApp();
   const namaSekolah = (info.nama_sekolah || "").trim();
+  const tglCetak = new Date().toLocaleDateString("id-ID", { day:"numeric", month:"long", year:"numeric" });
 
   // foto dokumentasi (bucket privat → signed URL sementara)
   let fotoHtml = "";
@@ -3524,10 +3537,11 @@ window.cetakJurnal = async (id) => {
 
   const html =
     '<html><head><title>Jurnal ' + esc(j.mapel_nama||"") + '</title>' +
-    '<style>body{font-family:Arial,sans-serif;padding:30px;color:#000;font-size:13px}' +
+    '<style>@page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;padding:0;color:#000;font-size:13px}' +
     'h2{margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:10px}' +
     '.kop{text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:14px}' +
     '.kop .nm-sek{font-size:18px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px}' +
+    '.kaki-cetak{position:fixed;bottom:0;left:0;right:0;text-align:center;font-size:10px;color:#555;border-top:1px solid #ccc;padding-top:4px}' +
     'th,td{border:1px solid #999;padding:5px 7px;text-align:left;font-size:12px}' +
     '.meta{margin:10px 0;line-height:1.7}' +
     '.ttd{margin-top:48px;border:none;page-break-inside:avoid;break-inside:avoid}' +
@@ -3535,7 +3549,9 @@ window.cetakJurnal = async (id) => {
     '.ttd .kolom-kiri{width:65%}.ttd .kolom-kanan{width:35%}' +
     '.ttd .spasi-ttd td{height:60px}' +
     '.ttd .nama-ttd{font-weight:bold;text-decoration:underline}.ttd .nip-ttd{font-size:11px}' +
+    'thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}' +
     '</style></head><body>' +
+    '<div class="kaki-cetak">' + (namaSekolah ? esc(namaSekolah) + ' &middot; ' : '') + 'Dicetak ' + esc(tglCetak) + '</div>' +
     (namaSekolah ? '<div class="kop"><div class="nm-sek">' + esc(namaSekolah) + '</div></div>' : '') +
     '<h2>Jurnal Mengajar</h2>' +
     '<div class="meta">' +
@@ -3553,7 +3569,16 @@ window.cetakJurnal = async (id) => {
   const w = window.open("", "_blank");
   if (!w) return toast("Popup diblokir. Izinkan popup untuk mencetak.");
   w.document.write(html); w.document.close(); w.focus();
-  setTimeout(() => { try { w.print(); } catch(e){} }, 400);
+  w.onload = () => {
+    const img = w.document.querySelector("img");
+    const cetak = () => { try { w.print(); } catch(e){} };
+    if (img && !img.complete) {
+      img.onload = cetak;
+      img.onerror = cetak;   // tetap cetak walau foto gagal dimuat
+    } else {
+      cetak();
+    }
+  };
 };
 
 /* ---- Edit: pindah ke form Isi Jurnal dengan data terisi ---- */
