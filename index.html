@@ -590,18 +590,20 @@ async function segarkanIzinMenu(){
   if (!ME || ME.role === "admin") return;   // admin tak terpengaruh izin
   try {
     const { data, error } = await sb.from("profil")
-      .select("izin_nilai, izin_catatan, izin_jadwal, izin_rekapharian, izin_verifikasi").eq("id", ME.id).single();
+      .select("izin_nilai, izin_catatan, izin_jadwal, izin_jadwal_edit, izin_rekapharian, izin_verifikasi").eq("id", ME.id).single();
     if (error || !data) return;
     const berubah =
       ME.izin_nilai   !== data.izin_nilai   ||
       ME.izin_catatan !== data.izin_catatan ||
       ME.izin_jadwal  !== data.izin_jadwal  ||
+      ME.izin_jadwal_edit !== data.izin_jadwal_edit ||
       ME.izin_rekapharian !== data.izin_rekapharian ||
       ME.izin_verifikasi  !== data.izin_verifikasi;
     if (berubah) {
       ME.izin_nilai = data.izin_nilai;
       ME.izin_catatan = data.izin_catatan;
       ME.izin_jadwal = data.izin_jadwal;
+      ME.izin_jadwal_edit = data.izin_jadwal_edit;
       ME.izin_rekapharian = data.izin_rekapharian;
       ME.izin_verifikasi = data.izin_verifikasi;
       const menuAktif = document.querySelector("#nav button.active");
@@ -2115,8 +2117,7 @@ async function muatDaftarJurnal(){
   // ambil daftar kelas untuk dropdown filter
   try { _fKelasList = await ambilSemua("kelas", "nama_kelas"); } catch(e) { _fKelasList = []; }
 
-  const bisaVerif = (ME.role === "admin" || ME.role === "kepsek" || ME.role === "pengawas" ||
-    (ME.role === "guru" && ME.izin_verifikasi));
+  const bisaVerif = (ME.role === "admin" || ME.role === "kepsek" || ME.role === "pengawas");
   const isPengawas = (ME.role === "pengawas");
   const opsiKelas = '<option value="">Semua Kelas</option>' +
     _fKelasList.map(k => '<option value="' + esc(k.id) + '">' + esc(k.nama_kelas) + '</option>').join("");
@@ -4257,34 +4258,155 @@ window.renderRekapHarian = async () => {
     if (!list.length) {
       html += '<div class="empty">Belum ada jurnal pada tanggal ini.</div>';
     } else {
-      html += '<div style="overflow-x:auto"><table style="min-width:820px"><tr>' +
-        '<th>No</th><th>Jam</th><th>Kelas</th><th>Mapel</th><th>Guru</th>' +
-        '<th>Materi</th><th>Ketidakhadiran</th><th>Catatan</th></tr>';
-      list.forEach((j, idx) => {
-        const takHadir = (j._absen||[]).filter(x => x.status.toLowerCase() !== "hadir");
-        const ringkas = takHadir.length
-          ? takHadir.map(x => esc(x.siswa_nama) + " (" + esc(x.status) + ")").join(", ")
-          : "Semua hadir";
-        html += '<tr>' +
-          '<td>' + (idx+1) + '</td>' +
-          '<td>' + esc(j.jam_ke||"-") + '</td>' +
-          '<td><b>' + esc(j.kelas_nama||"-") + '</b></td>' +
-          '<td>' + esc(j.mapel_nama||"-") + '</td>' +
-          '<td>' + esc(j.guru_nama||"-") +
-            (j.guru_asli ? '<br><span style="color:#b78100;font-size:12px">menggantikan ' +
-              esc(j.guru_asli) + '</span>' : '') + '</td>' +
-          '<td style="font-size:12px">' + esc(j.materi||"-") + '</td>' +
-          '<td style="font-size:12px">' + ringkas + '</td>' +
-          '<td style="font-size:12px">' + esc(j.catatan||"-") + '</td>' +
-          '</tr>';
-      });
-      html += '</table></div>';
+      html += '<div id="rkJurnalTabel"></div>';
     }
     html += '</div>';
 
+    // ==== Kartu: Kepatuhan Jurnal per Kelas (bandingkan jadwal vs jurnal) ====
+    const opsiKelasKepatuhan = '<option value="">-- pilih kelas --</option>' +
+      _rekapKelasSemua.map(k => '<option value="' + esc(k.id) + '">' + esc(k.nama_kelas) + '</option>').join("");
+    html += '<div class="card"><h2>Kepatuhan Jurnal per Kelas</h2>' +
+      '<p style="color:#6b7280;font-size:13px;margin-bottom:10px">Bandingkan jadwal kelas pada tanggal ini ' +
+        'dengan jurnal yang masuk. Slot dianggap terisi bila ada jurnal dengan mapel & jam yang sama ' +
+        '(guru pengganti tetap terhitung).</p>' +
+      '<div class="row" style="align-items:flex-end">' +
+        '<div><label>Kelas</label><select id="rkKelasKepatuhan" onchange="renderKepatuhanKelas()">' +
+          opsiKelasKepatuhan + '</select></div>' +
+      '</div>' +
+      '<div id="rkKepatuhanIsi" style="margin-top:12px"><div class="empty">Pilih kelas untuk melihat kepatuhan.</div></div>' +
+    '</div>';
+
     $("rkIsi").innerHTML = html;
+    _pgRekap = 1;
+    gambarHalamanRekapJurnal();
   } catch (e) {
     $("rkIsi").innerHTML = '<div class="card"><div class="page-kosong">Gagal: ' + esc(e.message) + '</div></div>';
+  }
+};
+
+let _pgRekap = 1;
+const PG_REKAP = 15;
+
+function gambarHalamanRekapJurnal(){
+  const wadah = $("rkJurnalTabel");
+  if (!wadah) return;   // tak ada jurnal / elemen belum ada
+  const list = _rekapDataHari || [];
+  const totalHal = Math.ceil(list.length / PG_REKAP);
+  if (_pgRekap > totalHal) _pgRekap = totalHal;
+  if (_pgRekap < 1) _pgRekap = 1;
+  const mulai = (_pgRekap - 1) * PG_REKAP;
+  const potongan = list.slice(mulai, mulai + PG_REKAP);
+
+  let html = '<div style="overflow-x:auto"><table style="min-width:820px"><tr>' +
+    '<th>No</th><th>Jam</th><th>Kelas</th><th>Mapel</th><th>Guru</th>' +
+    '<th>Materi</th><th>Ketidakhadiran</th><th>Catatan</th></tr>';
+  potongan.forEach((j, idx) => {
+    const takHadir = (j._absen||[]).filter(x => x.status.toLowerCase() !== "hadir");
+    const ringkas = takHadir.length
+      ? takHadir.map(x => esc(x.siswa_nama) + " (" + esc(x.status) + ")").join(", ")
+      : "Semua hadir";
+    html += '<tr>' +
+      '<td>' + (mulai + idx + 1) + '</td>' +
+      '<td>' + esc(j.jam_ke||"-") + '</td>' +
+      '<td><b>' + esc(j.kelas_nama||"-") + '</b></td>' +
+      '<td>' + esc(j.mapel_nama||"-") + '</td>' +
+      '<td>' + esc(j.guru_nama||"-") +
+        (j.guru_asli ? '<br><span style="color:#b78100;font-size:12px">menggantikan ' +
+          esc(j.guru_asli) + '</span>' : '') + '</td>' +
+      '<td style="font-size:12px">' + esc(j.materi||"-") + '</td>' +
+      '<td style="font-size:12px">' + ringkas + '</td>' +
+      '<td style="font-size:12px">' + esc(j.catatan||"-") + '</td>' +
+      '</tr>';
+  });
+  html += '</table></div>';
+  html += kontrolHalaman(_pgRekap, totalHal, "gantiHalamanRekap");
+  wadah.innerHTML = html;
+}
+
+window.gantiHalamanRekap = (arah) => { _pgRekap += arah; gambarHalamanRekapJurnal(); };
+
+/* Bandingkan jadwal kelas (hari dari tanggal terpilih) dengan jurnal yang masuk. */
+window.renderKepatuhanKelas = async () => {
+  const kelasId = $("rkKelasKepatuhan") ? $("rkKelasKepatuhan").value : "";
+  const area = $("rkKepatuhanIsi");
+  if (!area) return;
+  if (!kelasId) { area.innerHTML = '<div class="empty">Pilih kelas untuk melihat kepatuhan.</div>'; return; }
+
+  const tgl = $("rkTgl") ? $("rkTgl").value : new Date().toISOString().slice(0,10);
+  // tentukan hari (1=Senin..5=Jumat) dari tanggal
+  const dow = new Date(tgl + "T00:00:00").getDay();   // 0=Min..6=Sab
+  const hari = { 1:1, 2:2, 3:3, 4:4, 5:5 }[dow] || null;
+
+  if (!hari) {
+    area.innerHTML = '<div class="empty" style="color:#b78100">Tanggal ini jatuh pada akhir pekan — tidak ada jadwal.</div>';
+    return;
+  }
+
+  area.innerHTML = '<div class="page-kosong">Memuat...</div>';
+  try {
+    // 1) jadwal kelas pada hari itu (acuan "seharusnya ada")
+    const { data: jadwal, error: errJd } = await sb.from("jadwal")
+      .select("jam_ke, waktu, mapel_id, guru_id, mapel:mapel_id(nama_mapel, kode), guru:guru_id(nama, email)")
+      .eq("kelas_id", kelasId).eq("hari", hari);
+    if (errJd) throw new Error(errJd.message);
+    const slot = (jadwal || []).sort((a,b) =>
+      String(a.jam_ke).localeCompare(String(b.jam_ke), undefined, { numeric:true }));
+
+    if (!slot.length) {
+      area.innerHTML = '<div class="empty">Belum ada jadwal untuk kelas ini pada ' + esc(HARI[hari] || "-") + '.</div>';
+      return;
+    }
+
+    // 2) jurnal kelas pada tanggal itu (yang sudah masuk)
+    const periode = await ambilPeriodeAktif();
+    let qj = sb.from("jurnal").select("jam_ke, mapel_id, mapel_nama, guru_nama, guru_asli, status")
+      .eq("kelas_id", kelasId).eq("tanggal", tgl);
+    if (periode.tahun_ajaran) qj = qj.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+    const { data: jurnal, error: errJr } = await qj;
+    if (errJr) throw new Error(errJr.message);
+    const masuk = jurnal || [];
+
+    // pencocokan longgar: mapel_id + jam_ke sama
+    const cariJurnal = (s) => masuk.find(j =>
+      j.mapel_id === s.mapel_id && String(j.jam_ke) === String(s.jam_ke));
+
+    let terisi = 0;
+    let rows = "";
+    slot.forEach((s, i) => {
+      const j = cariJurnal(s);
+      const namaMapel = (s.mapel && s.mapel.nama_mapel) ? labelMapel(s.mapel) : "-";
+      const namaGuru = (s.guru && (s.guru.nama || s.guru.email)) || "-";
+      if (j) {
+        terisi++;
+        const pengganti = j.guru_asli ? ' <span style="color:#b78100;font-size:12px">(pengganti: ' + esc(j.guru_nama||"-") + ')</span>' : '';
+        rows += '<tr style="background:#ebfbee">' +
+          '<td>' + (i+1) + '</td><td><b>' + esc(s.jam_ke||"-") + '</b></td>' +
+          '<td>' + esc(namaMapel) + '</td><td>' + esc(namaGuru) + '</td>' +
+          '<td style="color:#2b8a3e;font-weight:600">✓ Terisi' + pengganti + '</td></tr>';
+      } else {
+        rows += '<tr style="background:#fff0f0">' +
+          '<td>' + (i+1) + '</td><td><b>' + esc(s.jam_ke||"-") + '</b></td>' +
+          '<td>' + esc(namaMapel) + '</td><td>' + esc(namaGuru) + '</td>' +
+          '<td style="color:#c92a2a;font-weight:600">✗ Belum</td></tr>';
+      }
+    });
+
+    const belum = slot.length - terisi;
+    const persen = slot.length > 0 ? Math.round(terisi/slot.length*100) : 0;
+    const warnaP = persen >= 100 ? "#2b8a3e" : (persen >= 50 ? "#b78100" : "#c92a2a");
+
+    area.innerHTML =
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">' +
+        '<span style="background:#e7ecfb;color:#3b5bdb;padding:4px 12px;border-radius:8px;font-weight:600">' + slot.length + ' slot jadwal</span>' +
+        '<span style="background:#ebfbee;color:#2b8a3e;padding:4px 12px;border-radius:8px;font-weight:600">' + terisi + ' terisi</span>' +
+        '<span style="background:#fff0f0;color:#c92a2a;padding:4px 12px;border-radius:8px;font-weight:600">' + belum + ' belum</span>' +
+        '<span style="background:' + warnaP + '22;color:' + warnaP + ';padding:4px 12px;border-radius:8px;font-weight:700">' + persen + '% patuh</span>' +
+      '</div>' +
+      '<div style="overflow-x:auto"><table><tr><th>No</th><th>Jam</th><th>Mapel</th><th>Guru (jadwal)</th><th>Status</th></tr>' +
+        rows + '</table></div>' +
+      '<p style="color:#6b7280;font-size:12px;margin-top:8px">Hari: ' + esc(HARI[hari] || "-") + ' · Tanggal: ' + esc(tgl) + '</p>';
+  } catch (e) {
+    area.innerHTML = '<div class="empty">Gagal: ' + esc(e.message) + '</div>';
   }
 };
 
@@ -4385,8 +4507,8 @@ const IZIN_MENU_LIST = [
   { key:"nilai",   label:"Nilai",   kolom:"izin_nilai" },
   { key:"walikelas", label:"Wali Kelas", kolom:"izin_catatan" },
   { key:"jadwal",  label:"Jadwal",  kolom:"izin_jadwal" },
-  { key:"rekapharian", label:"Rekap Harian", kolom:"izin_rekapharian" },
-  { key:"verifikasi",  label:"Verifikasi Jurnal", kolom:"izin_verifikasi" }
+  { key:"jadwaledit", label:"Jadwal (Edit/Buat)", kolom:"izin_jadwal_edit" },
+  { key:"rekapharian", label:"Rekap Harian", kolom:"izin_rekapharian" }
 ];
 let _izinCache = [];
 
@@ -4488,8 +4610,7 @@ function gambarHalamanJurnal(){
   if (!_jurnalCache.length) {
     $("jurnalList").innerHTML = '<div class="empty">Tidak ada jurnal yang cocok.</div>'; return;
   }
-  const bisaVerif = (ME.role === "admin" || ME.role === "kepsek" ||
-    (ME.role === "guru" && ME.izin_verifikasi));
+  const bisaVerif = (ME.role === "admin" || ME.role === "kepsek");
   const bisaHapus = (ME.role === "admin");
   const bisaEdit = (ME.role === "admin" || ME.role === "guru");
   const warna = { Menunggu:"#b78100", Disetujui:"#2b8a3e", Ditolak:"#c92a2a" };
@@ -5097,7 +5218,7 @@ window.importPengguna = async (ev) => {
 };
 
 async function muatJadwal(){
-  const bolehEdit = (ME.role === "admin");
+  const bolehEdit = (ME.role === "admin" || ME.izin_jadwal_edit === true);
   _editJadwalId = null;
 
   // Ambil tiga master sekaligus: kelas, mapel, guru
@@ -5148,10 +5269,12 @@ async function muatJadwal(){
         '</div>' +
         '<div class="row">' +
           '<div><label>Waktu (opsional)</label><input id="jdWaktu" placeholder="mis. 07.00-08.30"></div>' +
-          '<div><label>Mapel</label><select id="jdMapel">' + opsiMapel + '</select></div>' +
+          '<div><label>Guru Pengampu</label><select id="jdGuru">' + opsiGuru + '</select></div>' +
         '</div>' +
         '<div class="row">' +
-          '<div><label>Guru Pengampu</label><select id="jdGuru">' + opsiGuru + '</select></div>' +
+          '<div><label>Mapel</label>' +
+            '<input id="jdCariMapel" placeholder="Ketik untuk cari mapel..." oninput="cariMapelJadwal()" style="margin-bottom:6px">' +
+            '<select id="jdMapel">' + opsiMapel + '</select></div>' +
           '<div></div>' +
         '</div>' +
         '<button class="btn" id="jdBtnSimpan" onclick="simpanJadwal()">Simpan Slot</button>' +
@@ -5168,6 +5291,22 @@ window.gantiKelasJadwal = () => {
   _jdKelasAktif = $("jdKelas").value;
   batalEditJadwal();
   renderJadwal();
+};
+
+/* Filter dropdown mapel di form Jadwal sesuai kata kunci. Pertahankan pilihan bila masih cocok. */
+window.cariMapelJadwal = () => {
+  const q = ($("jdCariMapel").value || "").trim().toLowerCase();
+  const sel = $("jdMapel");
+  if (!sel) return;
+  const terpilih = sel.value;
+  const cocok = _jdMapelList.filter(m => {
+    const teks = labelMapel(m).toLowerCase();
+    return !q || teks.includes(q);
+  });
+  sel.innerHTML = '<option value="">-- pilih mapel --</option>' +
+    cocok.map(m => '<option value="' + esc(m.id) + '">' + esc(labelMapel(m)) + '</option>').join("");
+  // pertahankan pilihan lama bila masih ada di daftar hasil
+  if (cocok.find(m => m.id === terpilih)) sel.value = terpilih;
 };
 
 // Ambil jadwal kelas aktif + nama mapel & guru via relasi (dua join sekaligus)
@@ -5189,7 +5328,7 @@ async function renderJadwal(){
 }
 
 function gambarTabelJadwal(){
-  const bolehEdit = (ME.role === "admin");
+  const bolehEdit = (ME.role === "admin" || ME.izin_jadwal_edit === true);
   const namaKelas = (_jdKelasList.find(k => k.id === _jdKelasAktif)||{}).nama_kelas || "-";
 
   if (!_jadwalCache.length) {
