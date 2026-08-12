@@ -571,6 +571,8 @@ function bangunNav(){
     if (!ME.izin_nilai)   menu = menu.filter(k => k !== "nilai");
     if (!ME.izin_catatan) menu = menu.filter(k => k !== "walikelas");
     if (!ME.izin_jadwal)  menu = menu.filter(k => k !== "jadwal");
+    // Rekap Harian hanya untuk guru bila diizinkan (kepsek/pengawas selalu punya)
+    if (ME.role === "guru" && !ME.izin_rekapharian) menu = menu.filter(k => k !== "rekapharian");
   }
   menu.forEach((key, i) => {
     const b = document.createElement("button");
@@ -588,16 +590,20 @@ async function segarkanIzinMenu(){
   if (!ME || ME.role === "admin") return;   // admin tak terpengaruh izin
   try {
     const { data, error } = await sb.from("profil")
-      .select("izin_nilai, izin_catatan, izin_jadwal").eq("id", ME.id).single();
+      .select("izin_nilai, izin_catatan, izin_jadwal, izin_rekapharian, izin_verifikasi").eq("id", ME.id).single();
     if (error || !data) return;
     const berubah =
       ME.izin_nilai   !== data.izin_nilai   ||
       ME.izin_catatan !== data.izin_catatan ||
-      ME.izin_jadwal  !== data.izin_jadwal;
+      ME.izin_jadwal  !== data.izin_jadwal  ||
+      ME.izin_rekapharian !== data.izin_rekapharian ||
+      ME.izin_verifikasi  !== data.izin_verifikasi;
     if (berubah) {
       ME.izin_nilai = data.izin_nilai;
       ME.izin_catatan = data.izin_catatan;
       ME.izin_jadwal = data.izin_jadwal;
+      ME.izin_rekapharian = data.izin_rekapharian;
+      ME.izin_verifikasi = data.izin_verifikasi;
       const menuAktif = document.querySelector("#nav button.active");
       const keyAktif = menuAktif ? menuAktif.textContent : null;
       bangunNav();   // bangun ulang; menu yang dicabut akan hilang
@@ -2109,7 +2115,8 @@ async function muatDaftarJurnal(){
   // ambil daftar kelas untuk dropdown filter
   try { _fKelasList = await ambilSemua("kelas", "nama_kelas"); } catch(e) { _fKelasList = []; }
 
-  const bisaVerif = (ME.role === "admin" || ME.role === "kepsek" || ME.role === "pengawas");
+  const bisaVerif = (ME.role === "admin" || ME.role === "kepsek" || ME.role === "pengawas" ||
+    (ME.role === "guru" && ME.izin_verifikasi));
   const isPengawas = (ME.role === "pengawas");
   const opsiKelas = '<option value="">Semua Kelas</option>' +
     _fKelasList.map(k => '<option value="' + esc(k.id) + '">' + esc(k.nama_kelas) + '</option>').join("");
@@ -4153,9 +4160,11 @@ let _rekapKelasSemua = [];
 let _rekapDataHari = [];   // cache jurnal+absensi hari terpilih (untuk cetak/excel)
 
 async function muatRekapHarian(){
-  if (ME.role !== "admin" && ME.role !== "kepsek" && ME.role !== "pengawas") {
+  const bolehRekap = (ME.role === "admin" || ME.role === "kepsek" || ME.role === "pengawas" ||
+    (ME.role === "guru" && ME.izin_rekapharian));
+  if (!bolehRekap) {
     $("main").innerHTML = '<div class="card"><div class="page-kosong">' +
-      'Menu ini untuk admin & kepala sekolah.</div></div>';
+      'Menu ini untuk admin, kepala sekolah, pengawas, atau guru yang diberi izin.</div></div>';
     return;
   }
   const hariIni = new Date().toISOString().slice(0,10);
@@ -4375,7 +4384,9 @@ window.excelRekapHarian = () => {
 const IZIN_MENU_LIST = [
   { key:"nilai",   label:"Nilai",   kolom:"izin_nilai" },
   { key:"walikelas", label:"Wali Kelas", kolom:"izin_catatan" },
-  { key:"jadwal",  label:"Jadwal",  kolom:"izin_jadwal" }
+  { key:"jadwal",  label:"Jadwal",  kolom:"izin_jadwal" },
+  { key:"rekapharian", label:"Rekap Harian", kolom:"izin_rekapharian" },
+  { key:"verifikasi",  label:"Verifikasi Jurnal", kolom:"izin_verifikasi" }
 ];
 let _izinCache = [];
 
@@ -4477,7 +4488,8 @@ function gambarHalamanJurnal(){
   if (!_jurnalCache.length) {
     $("jurnalList").innerHTML = '<div class="empty">Tidak ada jurnal yang cocok.</div>'; return;
   }
-  const bisaVerif = (ME.role === "admin" || ME.role === "kepsek");
+  const bisaVerif = (ME.role === "admin" || ME.role === "kepsek" ||
+    (ME.role === "guru" && ME.izin_verifikasi));
   const bisaHapus = (ME.role === "admin");
   const bisaEdit = (ME.role === "admin" || ME.role === "guru");
   const warna = { Menunggu:"#b78100", Disetujui:"#2b8a3e", Ditolak:"#c92a2a" };
