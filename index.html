@@ -59,6 +59,13 @@
     color: var(--ink-lembut); cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap; }
   nav button.active { color: var(--aksen); border-bottom-color: var(--aksen); font-weight: 600; }
 
+  /* Sub-tab dalam menu Wali Kelas */
+  .subtab-wk { display: flex; gap: 8px; border-bottom: 2px solid var(--garis); }
+  .subtab-wk button { background: none; border: none; padding: 10px 16px; font-size: 14px;
+    font-weight: 600; color: var(--ink-lembut); cursor: pointer;
+    border-bottom: 3px solid transparent; margin-bottom: -2px; }
+  .subtab-wk button.aktif { color: var(--aksen); border-bottom-color: var(--aksen); }
+
   main { max-width: 900px; margin: 0 auto; padding: 20px; }
   .card { background: var(--card); border: 1px solid var(--garis); border-radius: 12px;
     padding: 20px; margin-bottom: 16px; }
@@ -296,7 +303,7 @@ const esc = s => String(s == null ? "" : s)
 const labelMapel = m => (m && m.kode ? "(" + m.kode + ") " : "") + (m ? (m.nama_mapel || "") : "");
 
 let ME = null;
-const namaRole = r => ({admin:"Admin", kepsek:"Kepala Sekolah", guru:"Guru"}[r] || r);
+const namaRole = r => ({admin:"Admin", kepsek:"Kepala Sekolah", pengawas:"Pengawas", guru:"Guru"}[r] || r);
 
 /* ===== TEMA (light/dark/system) ===== */
 function bacaTema(){ try { return localStorage.getItem("temaAplikasi") || "system"; } catch(e){ return "system"; } }
@@ -545,13 +552,15 @@ sb.auth.onAuthStateChange(async (event, session) => {
 /* ===== NAVIGASI ===== */
 // Menu per role. Untuk sekarang baru "kelas"; kita tambah modul lain nanti.
 const MENU = {
-  admin:  ["beranda", "jadwal", "isijurnal", "daftarjurnal", "rekapharian", "nilai", "catatan", "kelas", "mapel", "siswa", "pengguna", "izinmenu", "pengaturan"],
-  kepsek: ["beranda", "jadwal", "daftarjurnal", "rekapharian", "nilai", "catatan"],
-  guru:   ["beranda", "jadwal", "isijurnal", "daftarjurnal", "nilai", "catatan"]
+  admin:  ["beranda", "jadwal", "isijurnal", "daftarjurnal", "rekapharian", "nilai", "walikelas", "kelas", "mapel", "siswa", "pengguna", "izinmenu", "pengaturan"],
+  kepsek: ["beranda", "jadwal", "daftarjurnal", "rekapharian", "nilai", "walikelas"],
+  pengawas: ["beranda", "jadwal", "daftarjurnal", "rekapharian", "nilai", "walikelas"],
+  guru:   ["beranda", "jadwal", "isijurnal", "daftarjurnal", "rekapharian", "nilai", "walikelas"]
 };
 const LABEL = { beranda:"Beranda", kelas:"Kelas", mapel:"Mapel", siswa:"Siswa", jadwal:"Jadwal",
   pengguna:"Pengguna", isijurnal:"Isi Jurnal", daftarjurnal:"Daftar Jurnal", nilai:"Nilai",
-  catatan:"Catatan", pengaturan:"Pengaturan", rekapharian:"Rekap Harian", izinmenu:"Izin Menu" };
+  catatan:"Catatan", pengaturan:"Pengaturan", rekapharian:"Rekap Harian", izinmenu:"Izin Menu",
+  rekapabsensi:"Rekap Absensi", walikelas:"Wali Kelas" };
 
 function bangunNav(){
   const nav = $("nav");
@@ -560,7 +569,7 @@ function bangunNav(){
   // saring menu yang dikecualikan untuk akun ini (admin tak terpengaruh)
   if (ME.role !== "admin") {
     if (!ME.izin_nilai)   menu = menu.filter(k => k !== "nilai");
-    if (!ME.izin_catatan) menu = menu.filter(k => k !== "catatan");
+    if (!ME.izin_catatan) menu = menu.filter(k => k !== "walikelas");
     if (!ME.izin_jadwal)  menu = menu.filter(k => k !== "jadwal");
   }
   menu.forEach((key, i) => {
@@ -612,6 +621,8 @@ function buka(key, btn){
   if (key === "pengaturan") return muatPengaturan();
   if (key === "catatan") return muatCatatan();
   if (key === "rekapharian") return muatRekapHarian();
+  if (key === "rekapabsensi") return muatRekapAbsensi();
+  if (key === "walikelas") return muatWaliKelas();
   if (key === "izinmenu") return muatIzinMenu();
 }
 
@@ -1436,7 +1447,7 @@ async function muatSiswa(){
 async function ambilSiswaLengkap(){
   const { data, error } = await sb
     .from("siswa")
-    .select("id, nis, nama_siswa, kelas_id, jenis_kelamin, kelas:kelas_id(nama_kelas)")
+    .select("id, nis, nama_siswa, kelas_id, jenis_kelamin, aktif, kelas:kelas_id(nama_kelas)")
     .order("nama_siswa", { ascending: true });
   if (error) throw new Error(error.message);
   return data || [];
@@ -1472,17 +1483,27 @@ window.renderSiswa = () => {
   const mulai = (_pgSiswa - 1) * PG_SISWA;
   const potongan = list.slice(mulai, mulai + PG_SISWA);
 
-  let html = '<table><tr><th>Kelas</th><th>NIS</th><th>Nama</th><th>L/P</th>' +
+  let html = '<table><tr><th>Kelas</th><th>NIS</th><th>Nama</th><th>L/P</th><th>Status</th>' +
     (bolehEdit ? '<th class="aksi-cell">Aksi</th>' : '') + '</tr>';
   potongan.forEach((s) => {
     const namaKelas = (s.kelas && s.kelas.nama_kelas) ? s.kelas.nama_kelas : "-";
     const nmAman = esc(s.nama_siswa).replace(/'/g,"");
-    html += '<tr><td>' + esc(namaKelas) + '</td>' +
+    const nonaktif = (s.aktif === false);
+    const gaya = nonaktif ? ' style="opacity:.5"' : '';
+    const badgeStatus = nonaktif
+      ? '<span style="background:#fff0f0;color:#c92a2a;padding:2px 10px;border-radius:8px;font-size:12px;font-weight:600">Nonaktif</span>'
+      : '<span style="background:#ebfbee;color:#2b8a3e;padding:2px 10px;border-radius:8px;font-size:12px;font-weight:600">Aktif</span>';
+    const btnAktif = nonaktif
+      ? '<button class="aksi-edit" style="background:#ebfbee;color:#2b8a3e" onclick="ubahAktifSiswa(\'' + s.id + '\',true)">Aktifkan</button>'
+      : '<button class="aksi-edit" style="background:#fff9db;color:#b78100" onclick="ubahAktifSiswa(\'' + s.id + '\',false)">Nonaktifkan</button>';
+    html += '<tr' + gaya + '><td>' + esc(namaKelas) + '</td>' +
       '<td>' + esc(s.nis || "-") + '</td>' +
       '<td><b>' + esc(s.nama_siswa) + '</b></td>' +
       '<td>' + esc(s.jenis_kelamin || "-") + '</td>' +
+      '<td>' + badgeStatus + '</td>' +
       (bolehEdit ? '<td class="aksi-cell">' +
         '<button class="aksi-edit" onclick="editSiswa(\'' + s.id + '\')">Edit</button>' +
+        btnAktif +
         '<button class="aksi-hapus" onclick="hapusSiswa(\'' + s.id + '\',\'' + nmAman + '\')">Hapus</button>' +
         '</td>' : '') + '</tr>';
   });
@@ -1492,6 +1513,23 @@ window.renderSiswa = () => {
 };
 
 window.gantiHalamanSiswa = (arah) => { _pgSiswa += arah; renderSiswa(); };
+
+window.ubahAktifSiswa = async (id, jadikanAktif) => {
+  const s = _siswaCache.find(x => x.id === id);
+  const nama = s ? s.nama_siswa : "siswa ini";
+  const pesan = jadikanAktif
+    ? 'Aktifkan kembali "' + nama + '"? Siswa akan muncul lagi di akun guru & kepsek.'
+    : 'Nonaktifkan "' + nama + '"? Siswa disembunyikan dari guru & kepsek, ' +
+      'tapi tetap tampil di sini sampai dihapus. Data lama tidak terpengaruh.';
+  if (!(await konfirmasi(jadikanAktif ? 'Aktifkan Siswa' : 'Nonaktifkan Siswa', pesan))) return;
+  try {
+    const { error } = await sb.from("siswa").update({ aktif: jadikanAktif }).eq("id", id);
+    if (error) throw new Error(error.message);
+    if (s) s.aktif = jadikanAktif;
+    toast(jadikanAktif ? "Siswa diaktifkan." : "Siswa dinonaktifkan.");
+    renderSiswa();
+  } catch (e) { toast("Gagal: " + e.message); }
+};
 
 window.simpanSiswa = async () => {
   const nis = $("sNis").value.trim(), nama_siswa = $("sNama").value.trim();
@@ -1786,7 +1824,7 @@ window.muatAbsensi = async () => {
   area.innerHTML = '<p style="color:#6b7280;font-size:13px;margin-top:14px">Memuat siswa...</p>';
   try {
     const { data, error } = await sb.from("siswa")
-      .select("id, nis, nama_siswa").eq("kelas_id", kelasId).order("nama_siswa");
+      .select("id, nis, nama_siswa").eq("kelas_id", kelasId).eq("aktif", true).order("nama_siswa");
     if (error) throw new Error(error.message);
     _absenSiswa = (data||[]).map(s => ({ siswa_id: s.id, nis: s.nis||"", nama: s.nama_siswa, status: "Hadir", keterangan: "" }));
     if (!_absenSiswa.length) { area.innerHTML =
@@ -2071,25 +2109,32 @@ async function muatDaftarJurnal(){
   // ambil daftar kelas untuk dropdown filter
   try { _fKelasList = await ambilSemua("kelas", "nama_kelas"); } catch(e) { _fKelasList = []; }
 
-  const bisaVerif = (ME.role === "admin" || ME.role === "kepsek");
+  const bisaVerif = (ME.role === "admin" || ME.role === "kepsek" || ME.role === "pengawas");
+  const isPengawas = (ME.role === "pengawas");
   const opsiKelas = '<option value="">Semua Kelas</option>' +
     _fKelasList.map(k => '<option value="' + esc(k.id) + '">' + esc(k.nama_kelas) + '</option>').join("");
 
   // guru default lihat semua miliknya; admin/kepsek default "Menunggu"
-  const statusDefault = bisaVerif ? "Menunggu" : "";
+  const statusDefault = (bisaVerif && !isPengawas) ? "Menunggu" : "";
+  // pengawas: default rentang hari ini
+  const hariIni = new Date().toISOString().slice(0,10);
+  const dariAwal = isPengawas ? hariIni : "";
+  const sampaiAwal = isPengawas ? hariIni : "";
 
   $("main").innerHTML =
     '<div class="card"><h2>Daftar Jurnal</h2>' +
       '<div class="row" style="align-items:flex-end;margin-bottom:12px">' +
-        '<div><label>Status</label><select id="fStatus" onchange="renderDaftarJurnal()">' +
-          '<option value=""' + (statusDefault===""?" selected":"") + '>Semua</option>' +
-          '<option value="Menunggu"' + (statusDefault==="Menunggu"?" selected":"") + '>Menunggu</option>' +
-          '<option value="Disetujui">Disetujui</option>' +
-          '<option value="Ditolak">Ditolak</option>' +
-        '</select></div>' +
+        // Filter Status disembunyikan untuk pengawas
+        (isPengawas ? '' :
+          '<div><label>Status</label><select id="fStatus" onchange="renderDaftarJurnal()">' +
+            '<option value=""' + (statusDefault===""?" selected":"") + '>Semua</option>' +
+            '<option value="Menunggu"' + (statusDefault==="Menunggu"?" selected":"") + '>Menunggu</option>' +
+            '<option value="Disetujui">Disetujui</option>' +
+            '<option value="Ditolak">Ditolak</option>' +
+          '</select></div>') +
         '<div><label>Kelas</label><select id="fKelas" onchange="renderDaftarJurnal()">' + opsiKelas + '</select></div>' +
-        '<div><label>Dari Tanggal</label><input type="date" id="fDari" onchange="renderDaftarJurnal()"></div>' +
-        '<div><label>Sampai</label><input type="date" id="fSampai" onchange="renderDaftarJurnal()"></div>' +
+        '<div><label>Dari Tanggal</label><input type="date" id="fDari" value="' + dariAwal + '" onchange="renderDaftarJurnal()"></div>' +
+        '<div><label>Sampai</label><input type="date" id="fSampai" value="' + sampaiAwal + '" onchange="renderDaftarJurnal()"></div>' +
       '</div>' +
       '<div id="jurnalList"><div class="page-kosong">Memuat...</div></div>' +
     '</div>';
@@ -2182,7 +2227,7 @@ async function muatDataNilai(){
   try {
     // siswa kelas terpilih (selalu dibutuhkan)
     const { data: siswa, error: errS } = await sb.from("siswa")
-      .select("id, nis, nama_siswa").eq("kelas_id", _nKelas).order("nama_siswa");
+      .select("id, nis, nama_siswa").eq("kelas_id", _nKelas).eq("aktif", true).order("nama_siswa");
     if (errS) throw new Error(errS.message);
     _nSiswa = siswa || [];
 
@@ -2649,7 +2694,7 @@ async function hitungRekapNilaiLengkap(){
 
   // siswa kelas
   const { data: siswa } = await sb.from("siswa")
-    .select("id, nis, nama_siswa").eq("kelas_id", _nKelas).order("nama_siswa");
+    .select("id, nis, nama_siswa").eq("kelas_id", _nKelas).eq("aktif", true).order("nama_siswa");
   const listSiswa = siswa || [];
 
   // bobot
@@ -2859,15 +2904,16 @@ let _catKelasList = [];      // kelas yang boleh diakses user ini
 let _catKelasAktif = "";
 let _editCatatanId = null;
 
-async function muatCatatan(){
-  $("main").innerHTML = '<div class="card"><div class="page-kosong">Memuat...</div></div>';
+async function muatCatatan(wadahId){
+  const WADAH = wadahId || "main";
+  $(WADAH).innerHTML = '<div class="card"><div class="page-kosong">Memuat...</div></div>';
   _editCatatanId = null;
 
   // ambil semua kelas, lalu tentukan mana yang boleh diakses
   let kelasSemua = [];
   try { kelasSemua = await ambilSemua("kelas", "nama_kelas"); }
   catch (e) {
-    $("main").innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat kelas: ' +
+    $(WADAH).innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat kelas: ' +
       esc(e.message) + '</div></div>'; return;
   }
 
@@ -2875,7 +2921,7 @@ async function muatCatatan(){
     // guru: hanya kelas tempat ia wali
     _catKelasList = kelasSemua.filter(k => k.wali_kelas_id === ME.id);
     if (!_catKelasList.length) {
-      $("main").innerHTML = '<div class="card"><h2>Catatan Wali Kelas</h2>' +
+      $(WADAH).innerHTML = '<div class="card"><h2>Catatan</h2>' +
         '<div style="color:#b78100;padding:16px">Kamu belum ditetapkan sebagai wali kelas mana pun. ' +
         'Hubungi admin untuk menetapkan wali kelas di menu Kelas.</div></div>';
       return;
@@ -2884,7 +2930,7 @@ async function muatCatatan(){
     // admin & kepsek: semua kelas
     _catKelasList = kelasSemua;
     if (!_catKelasList.length) {
-      $("main").innerHTML = '<div class="card"><h2>Catatan Wali Kelas</h2>' +
+      $(WADAH).innerHTML = '<div class="card"><h2>Catatan</h2>' +
         '<div class="empty">Belum ada kelas.</div></div>'; return;
     }
   }
@@ -2899,8 +2945,8 @@ async function muatCatatan(){
   const bolehTulis = (ME.role === "guru" || ME.role === "admin");
   const opsiKat = KATEGORI_CATATAN.map(k => '<option value="' + k + '">' + k + '</option>').join("");
 
-  $("main").innerHTML =
-    '<div class="card"><h2>Catatan Wali Kelas</h2>' +
+  $(WADAH).innerHTML =
+    '<div class="card"><h2>Catatan Perkembangan Siswa</h2>' +
       '<div class="row" style="align-items:flex-end">' +
         '<div><label>Kelas</label><select id="cKelas" onchange="gantiKelasCatatan()">' + opsiKelas + '</select></div>' +
       '</div>' +
@@ -2934,7 +2980,7 @@ async function isiSiswaCatatan(){
   if (!sel) return;
   try {
     const { data } = await sb.from("siswa").select("id, nis, nama_siswa")
-      .eq("kelas_id", _catKelasAktif).order("nama_siswa");
+      .eq("kelas_id", _catKelasAktif).eq("aktif", true).order("nama_siswa");
     sel.innerHTML = '<option value="">-- pilih siswa --</option>' +
       (data||[]).map(s => '<option value="' + esc(s.id) + '" data-nama="' + esc(s.nama_siswa) + '">' +
         esc(s.nama_siswa) + (s.nis?' ('+esc(s.nis)+')':'') + '</option>').join("");
@@ -3063,12 +3109,1051 @@ window.hapusCatatan = async (id) => {
   } catch (e) { toast("Gagal menghapus: " + e.message); }
 };
 
+/* ============ MODUL WALI KELAS (induk bertab: Rekap Absensi + Catatan) ============ */
+let _wkTab = "absensi";   // tab aktif terakhir
+
+async function muatWaliKelas(){
+  $("main").innerHTML =
+    '<div class="card" style="padding-bottom:0">' +
+      '<h2 style="margin-bottom:12px">Wali Kelas</h2>' +
+      '<div class="subtab-wk">' +
+        '<button id="wkTabAbsensi" class="' + (_wkTab==="absensi"?"aktif":"") + '" onclick="gantiTabWali(\'absensi\')">Rekap Absensi</button>' +
+        '<button id="wkTabCatatan" class="' + (_wkTab==="catatan"?"aktif":"") + '" onclick="gantiTabWali(\'catatan\')">Catatan</button>' +
+        '<button id="wkTabKartu" class="' + (_wkTab==="kartu"?"aktif":"") + '" onclick="gantiTabWali(\'kartu\')">Kartu Siswa</button>' +
+        '<button id="wkTabNilai" class="' + (_wkTab==="nilai"?"aktif":"") + '" onclick="gantiTabWali(\'nilai\')">Rekap Nilai</button>' +
+      '</div>' +
+    '</div>' +
+    '<div id="wkIsi"><div class="card"><div class="page-kosong">Memuat...</div></div></div>';
+  await tampilkanTabWali();
+}
+
+window.gantiTabWali = async (tab) => {
+  _wkTab = tab;
+  document.querySelectorAll(".subtab-wk button").forEach(b => b.classList.remove("aktif"));
+  const idBtn = tab === "catatan" ? "wkTabCatatan" : (tab === "kartu" ? "wkTabKartu" : (tab === "nilai" ? "wkTabNilai" : "wkTabAbsensi"));
+  const btn = $(idBtn);
+  if (btn) btn.classList.add("aktif");
+  await tampilkanTabWali();
+};
+
+async function tampilkanTabWali(){
+  if (_wkTab === "catatan") await muatCatatan("wkIsi");
+  else if (_wkTab === "kartu") await muatKartuSiswa("wkIsi");
+  else if (_wkTab === "nilai") await muatRekapNilai("wkIsi");
+  else await muatRekapAbsensi("wkIsi");
+}
+
+/* ============ TAB KARTU SISWA BINAAN ============ */
+let _ksKelasList = [];
+let _ksKelasAktif = "";
+let _ksSiswaAktif = "";
+let _ksRentang = { dari: "", sampai: "" };
+let _ksData = null;   // {siswa, absensi, catatan} untuk cetak
+
+async function muatKartuSiswa(wadahId){
+  const WADAH = wadahId || "wkIsi";
+  $(WADAH).innerHTML = '<div class="card"><div class="page-kosong">Memuat...</div></div>';
+
+  // kelas yang boleh diakses (sama aturannya dengan tab lain)
+  let kelasSemua = [];
+  try { kelasSemua = await ambilSemua("kelas", "nama_kelas"); }
+  catch (e) {
+    $(WADAH).innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat kelas: ' +
+      esc(e.message) + '</div></div>'; return;
+  }
+  if (ME.role === "guru") {
+    _ksKelasList = kelasSemua.filter(k => k.wali_kelas_id === ME.id);
+    if (!_ksKelasList.length) {
+      $(WADAH).innerHTML = '<div class="card"><h2>Kartu Siswa</h2>' +
+        '<div style="color:#b78100;padding:16px">Kamu belum ditetapkan sebagai wali kelas mana pun.</div></div>';
+      return;
+    }
+  } else {
+    _ksKelasList = kelasSemua;
+    if (!_ksKelasList.length) {
+      $(WADAH).innerHTML = '<div class="card"><h2>Kartu Siswa</h2>' +
+        '<div class="empty">Belum ada kelas.</div></div>'; return;
+    }
+  }
+  if (!_ksKelasList.find(k => k.id === _ksKelasAktif)) _ksKelasAktif = _ksKelasList[0].id;
+
+  // rentang default: awal bulan s/d hari ini
+  const kini = new Date();
+  const awalBulan = new Date(kini.getFullYear(), kini.getMonth(), 1).toISOString().slice(0,10);
+  const hariIni = kini.toISOString().slice(0,10);
+  if (!_ksRentang.dari) _ksRentang = { dari: awalBulan, sampai: hariIni };
+
+  const opsiKelas = _ksKelasList.map(k =>
+    '<option value="' + esc(k.id) + '"' + (k.id===_ksKelasAktif?" selected":"") +
+    '>' + esc(k.nama_kelas) + '</option>').join("");
+
+  $(WADAH).innerHTML =
+    '<div class="card"><h2>Kartu Siswa Binaan</h2>' +
+      '<p style="color:#6b7280;font-size:13px;margin-bottom:6px">Ringkasan satu siswa: identitas, ' +
+        'kehadiran (ikut rentang tanggal), dan riwayat catatan. Bisa dicetak untuk orang tua.</p>' +
+      '<div class="row" style="align-items:flex-end">' +
+        '<div><label>Kelas</label><select id="ksKelas" onchange="gantiKelasKartu()">' + opsiKelas + '</select></div>' +
+        '<div><label>Siswa</label><select id="ksSiswa" onchange="pilihSiswaKartu()"><option value="">Memuat...</option></select></div>' +
+      '</div>' +
+      '<div class="row" style="align-items:flex-end;margin-top:4px">' +
+        '<div><label>Dari Tanggal</label><input type="date" id="ksDari" value="' + esc(_ksRentang.dari) + '" onchange="renderKartuSiswa()"></div>' +
+        '<div><label>Sampai</label><input type="date" id="ksSampai" value="' + esc(_ksRentang.sampai) + '" onchange="renderKartuSiswa()"></div>' +
+        '<div style="flex:0 0 auto;display:flex;gap:8px;align-items:flex-end">' +
+          '<button class="btn btn-sm" style="background:#2b8a3e" onclick="cetakKartuSiswa()">🖨 Cetak Kartu</button>' +
+          '<button class="btn btn-ghost btn-sm" onclick="cetakSemuaKartu()">🖨 Cetak Semua</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div id="ksIsi"><div class="card"><div class="page-kosong">Pilih siswa untuk menampilkan kartu.</div></div></div>';
+
+  await isiSiswaKartu();
+  if (_ksSiswaAktif) await renderKartuSiswa();
+}
+
+async function isiSiswaKartu(){
+  const sel = $("ksSiswa");
+  if (!sel) return;
+  try {
+    const { data } = await sb.from("siswa").select("id, nis, nama_siswa, jenis_kelamin")
+      .eq("kelas_id", _ksKelasAktif).eq("aktif", true).order("nama_siswa");
+    const list = data || [];
+    sel.innerHTML = '<option value="">-- pilih siswa --</option>' +
+      list.map(s => '<option value="' + esc(s.id) + '"' + (s.id===_ksSiswaAktif?" selected":"") + '>' +
+        esc(s.nama_siswa) + (s.nis?' ('+esc(s.nis)+')':'') + '</option>').join("");
+    // kalau siswa aktif tak ada di kelas ini, reset
+    if (!list.find(s => s.id === _ksSiswaAktif)) _ksSiswaAktif = "";
+  } catch (e) { sel.innerHTML = '<option value="">Gagal memuat siswa</option>'; }
+}
+
+window.gantiKelasKartu = async () => {
+  _ksKelasAktif = $("ksKelas").value;
+  _ksSiswaAktif = "";
+  await isiSiswaKartu();
+  $("ksIsi").innerHTML = '<div class="card"><div class="page-kosong">Pilih siswa untuk menampilkan kartu.</div></div>';
+};
+
+window.pilihSiswaKartu = async () => {
+  _ksSiswaAktif = $("ksSiswa").value;
+  if (_ksSiswaAktif) await renderKartuSiswa();
+  else $("ksIsi").innerHTML = '<div class="card"><div class="page-kosong">Pilih siswa untuk menampilkan kartu.</div></div>';
+};
+
+/* Agregat kehadiran satu siswa dalam rentang (mandiri, tak bergantung DOM tab lain). */
+async function hitungAbsensiSiswa(siswaId, kelasId, dari, sampai){
+  const periode = await ambilPeriodeAktif();
+  let qj = sb.from("jurnal").select("id").eq("kelas_id", kelasId);
+  if (periode.tahun_ajaran) qj = qj.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+  if (dari) qj = qj.gte("tanggal", dari);
+  if (sampai) qj = qj.lte("tanggal", sampai);
+  const { data: jurnal, error: errJ } = await qj;
+  if (errJ) throw new Error(errJ.message);
+  const ids = (jurnal || []).map(j => j.id);
+
+  const rek = { hadir:0, sakit:0, izin:0, alpa:0, tercatat:0, persen:null, totalPertemuan: ids.length };
+  if (ids.length) {
+    const potong = (arr,n)=>{const o=[];for(let i=0;i<arr.length;i+=n)o.push(arr.slice(i,i+n));return o;};
+    for (const grup of potong(ids, 200)) {
+      const { data: ab, error: errA } = await sb.from("absensi")
+        .select("status").eq("siswa_id", siswaId).in("jurnal_id", grup);
+      if (errA) throw new Error(errA.message);
+      (ab || []).forEach(a => {
+        const v = String(a.status||"").toLowerCase();
+        if (v==="hadir") rek.hadir++; else if (v==="sakit") rek.sakit++;
+        else if (v==="izin") rek.izin++; else rek.alpa++;
+      });
+    }
+  }
+  rek.tercatat = rek.hadir + rek.sakit + rek.izin + rek.alpa;
+  rek.persen = rek.tercatat>0 ? (rek.hadir/rek.tercatat*100) : null;
+  return rek;
+}
+
+/* Ambil catatan satu siswa (urut terbaru), dalam periode aktif. */
+async function ambilCatatanSiswa(siswaId){
+  const periode = await ambilPeriodeAktif();
+  let qc = sb.from("catatan").select("tanggal, kategori, isi, penulis_nama")
+    .eq("siswa_id", siswaId);
+  if (periode.tahun_ajaran) qc = qc.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+  qc = qc.order("tanggal", { ascending: false });
+  const { data } = await qc;
+  return data || [];
+}
+
+window.renderKartuSiswa = async () => {
+  if (!_ksSiswaAktif) return;
+  const dari = $("ksDari") ? $("ksDari").value : _ksRentang.dari;
+  const sampai = $("ksSampai") ? $("ksSampai").value : _ksRentang.sampai;
+  _ksRentang = { dari, sampai };
+
+  $("ksIsi").innerHTML = '<div class="card"><div class="page-kosong">Memuat kartu...</div></div>';
+  try {
+    // identitas siswa
+    const { data: siswa, error: errS } = await sb.from("siswa")
+      .select("id, nis, nama_siswa, jenis_kelamin, kelas:kelas_id(nama_kelas)")
+      .eq("id", _ksSiswaAktif).single();
+    if (errS) throw new Error(errS.message);
+
+    const rek = await hitungAbsensiSiswa(_ksSiswaAktif, _ksKelasAktif, dari, sampai);
+    const catatan = await ambilCatatanSiswa(_ksSiswaAktif);
+    _ksData = { siswa, rek, catatan, dari, sampai };
+
+    const namaKelas = (siswa.kelas && siswa.kelas.nama_kelas) || "-";
+    const jk = siswa.jenis_kelamin === "P" ? "Perempuan" : (siswa.jenis_kelamin === "L" ? "Laki-laki" : "-");
+    const f = v => v===null ? "-" : v.toFixed(0) + "%";
+    const batasHadir = bacaBatasHadir();
+    const warnaP = rek.persen===null ? "#6b7280" : (rek.persen>=batasHadir ? "#2b8a3e" : "#c92a2a");
+
+    // identitas
+    let html = '<div class="card">' +
+      '<h2>' + esc(siswa.nama_siswa) + '</h2>' +
+      '<table style="margin-top:4px"><tr><td style="border:none;width:130px;color:#6b7280">NIS</td>' +
+        '<td style="border:none"><b>' + esc(siswa.nis||"-") + '</b></td></tr>' +
+      '<tr><td style="border:none;color:#6b7280">Kelas</td><td style="border:none"><b>' + esc(namaKelas) + '</b></td></tr>' +
+      '<tr><td style="border:none;color:#6b7280">Jenis Kelamin</td><td style="border:none">' + esc(jk) + '</td></tr></table>' +
+    '</div>';
+
+    // absensi
+    html += '<div class="card"><h2>Kehadiran (' + esc(dari||"-") + ' s/d ' + esc(sampai||"-") + ')</h2>' +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">' +
+        '<span style="background:#ebfbee;color:#2b8a3e;padding:4px 12px;border-radius:8px;font-weight:600">Hadir ' + rek.hadir + '</span>' +
+        '<span style="background:#fff9db;color:#b78100;padding:4px 12px;border-radius:8px;font-weight:600">Sakit ' + rek.sakit + '</span>' +
+        '<span style="background:#e7ecfb;color:#3b5bdb;padding:4px 12px;border-radius:8px;font-weight:600">Izin ' + rek.izin + '</span>' +
+        '<span style="background:#fff0f0;color:#c92a2a;padding:4px 12px;border-radius:8px;font-weight:600">Alpa ' + rek.alpa + '</span>' +
+      '</div>' +
+      '<div style="font-size:14px">Dari <b>' + rek.totalPertemuan + '</b> pertemuan, kehadiran tercatat <b>' + rek.tercatat + '</b>. ' +
+        'Persentase hadir: <b style="color:' + warnaP + '">' + f(rek.persen) + '</b></div>' +
+    '</div>';
+
+    // catatan
+    html += '<div class="card"><h2>Riwayat Catatan (' + catatan.length + ')</h2>';
+    if (!catatan.length) {
+      html += '<div class="empty">Belum ada catatan untuk siswa ini.</div>';
+    } else {
+      catatan.forEach(c => {
+        html += '<div style="border:1px solid var(--garis);border-radius:10px;padding:12px;margin-bottom:10px">' +
+          '<b>' + esc(c.kategori||"Lainnya") + '</b> ' +
+          '<span style="font-size:12px;color:#6b7280">· ' + esc(c.tanggal||"-") +
+            (c.penulis_nama ? ' · ' + esc(c.penulis_nama) : '') + '</span>' +
+          '<div style="margin-top:6px">' + esc(c.isi||"-") + '</div></div>';
+      });
+    }
+    html += '</div>';
+
+    $("ksIsi").innerHTML = html;
+  } catch (e) {
+    $("ksIsi").innerHTML = '<div class="card"><div class="page-kosong">Gagal: ' + esc(e.message) + '</div></div>';
+  }
+};
+
+window.cetakKartuSiswa = async () => {
+  if (!_ksData || !_ksData.siswa) return toast("Pilih siswa dulu.");
+  toast("Menyiapkan cetakan...");
+  const { siswa, rek, catatan, dari, sampai } = _ksData;
+  const namaKelas = (siswa.kelas && siswa.kelas.nama_kelas) || "-";
+  const jk = siswa.jenis_kelamin === "P" ? "Perempuan" : (siswa.jenis_kelamin === "L" ? "Laki-laki" : "-");
+  const f = v => v===null ? "-" : v.toFixed(0) + "%";
+
+  // wali kelas untuk ttd
+  const kelasObj = _ksKelasList.find(k=>k.id===_ksKelasAktif) || {};
+  let namaWali = "", nipWali = "";
+  if (kelasObj.wali_kelas_id) {
+    const { data: w } = await sb.from("profil").select("nama, nip").eq("id", kelasObj.wali_kelas_id).maybeSingle();
+    if (w) { namaWali = w.nama || ""; nipWali = w.nip || ""; }
+  }
+  const namaTtd = namaWali || (ME.nama || ME.email || "(Wali Kelas)");
+  const nipTtd = nipWali || (ME.nip || "");
+
+  const tglTtd = await kotaTanggalTtd();
+  const info = await ambilInfoApp();
+  const namaSekolah = (info.nama_sekolah || "").trim();
+  const tglCetak = new Date().toLocaleDateString("id-ID", { day:"numeric", month:"long", year:"numeric" });
+
+  const barisCatatan = catatan.length ? catatan.map((c,i) =>
+    '<tr><td>' + (i+1) + '</td><td>' + esc(c.tanggal||"-") + '</td><td>' + esc(c.kategori||"-") +
+    '</td><td style="text-align:left">' + esc(c.isi||"-") + '</td></tr>').join("")
+    : '<tr><td colspan="4" style="text-align:center">Belum ada catatan.</td></tr>';
+
+  const blokTtd =
+    '<table class="ttd"><tr><td class="kolom-kiri"></td><td class="kolom-kanan">' + esc(tglTtd) + '</td></tr>' +
+      '<tr><td class="kolom-kiri"></td><td class="kolom-kanan">Wali Kelas,</td></tr>' +
+      '<tr class="spasi-ttd"><td></td><td></td></tr>' +
+      '<tr><td class="kolom-kiri"></td><td class="kolom-kanan"><span class="nama-ttd">' + esc(namaTtd) + '</span>' +
+        (nipTtd ? '<br><span class="nip-ttd">NIP. ' + esc(nipTtd) + '</span>' : '') + '</td></tr></table>';
+
+  const w = window.open("", "_blank");
+  if (!w) return toast("Popup diblokir.");
+  w.document.write(
+    '<html><head><title>Kartu Siswa ' + esc(siswa.nama_siswa) + '</title>' +
+    '<style>@page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;padding:0;color:#000;font-size:12px}' +
+    'h2{margin:0 0 4px}h3{margin:14px 0 4px;font-size:14px}table{width:100%;border-collapse:collapse;margin-top:8px}' +
+    '.kop{text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:14px}' +
+    '.kop .nm-sek{font-size:18px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px}' +
+    '.kaki-cetak{position:fixed;bottom:0;left:0;right:0;text-align:center;font-size:10px;color:#555;border-top:1px solid #ccc;padding-top:4px}' +
+    'th,td{border:1px solid #999;padding:5px 7px;text-align:center;font-size:11px}th{background:#eee}' +
+    '.idn td{border:none;text-align:left;padding:2px 0}' +
+    '.hadir{margin:8px 0;line-height:1.7}' +
+    '.ttd{margin-top:40px;border:none;page-break-inside:avoid;break-inside:avoid}.ttd td{border:none;padding:0 0 2px;font-size:13px}' +
+    '.ttd .kolom-kiri{width:60%}.ttd .kolom-kanan{width:40%;text-align:left}' +
+    '.ttd .spasi-ttd td{height:60px}.ttd .nama-ttd{font-weight:bold;text-decoration:underline}.ttd .nip-ttd{font-size:11px}' +
+    'thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}' +
+    '</style></head><body>' +
+    '<div class="kaki-cetak">' + (namaSekolah ? esc(namaSekolah) + ' &middot; ' : '') + 'Dicetak ' + esc(tglCetak) + '</div>' +
+    (namaSekolah ? '<div class="kop"><div class="nm-sek">' + esc(namaSekolah) + '</div></div>' : '') +
+    '<h2>Kartu Siswa Binaan</h2>' +
+    '<table class="idn"><tr><td style="width:130px;color:#555">Nama</td><td><b>' + esc(siswa.nama_siswa) + '</b></td></tr>' +
+      '<tr><td style="color:#555">NIS</td><td>' + esc(siswa.nis||"-") + '</td></tr>' +
+      '<tr><td style="color:#555">Kelas</td><td>' + esc(namaKelas) + '</td></tr>' +
+      '<tr><td style="color:#555">Jenis Kelamin</td><td>' + esc(jk) + '</td></tr></table>' +
+    '<h3>Rekap Kehadiran (' + esc(dari||"-") + ' s/d ' + esc(sampai||"-") + ')</h3>' +
+    '<table><thead><tr><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpa</th><th>Tercatat</th><th>% Hadir</th></tr></thead>' +
+      '<tbody><tr><td>' + rek.hadir + '</td><td>' + rek.sakit + '</td><td>' + rek.izin + '</td><td>' + rek.alpa +
+      '</td><td>' + rek.tercatat + '</td><td><b>' + f(rek.persen) + '</b></td></tr></tbody></table>' +
+    '<h3>Riwayat Catatan</h3>' +
+    '<table><thead><tr><th style="width:36px">No</th><th style="width:90px">Tanggal</th><th style="width:90px">Kategori</th><th>Isi</th></tr></thead>' +
+      '<tbody>' + barisCatatan + '</tbody></table>' +
+    blokTtd + '</body></html>');
+  w.document.close(); w.focus();
+  w.onload = () => { try { w.print(); } catch(e){} };
+};
+
+/* Bangun isi satu kartu (identitas + kehadiran + catatan + ttd). Dipakai cetak tunggal & massal. */
+function htmlBadanKartu(siswa, rek, catatan, dari, sampai, namaTtd, nipTtd, tglTtd){
+  const namaKelas = (siswa.kelas && siswa.kelas.nama_kelas) || siswa._namaKelas || "-";
+  const jk = siswa.jenis_kelamin === "P" ? "Perempuan" : (siswa.jenis_kelamin === "L" ? "Laki-laki" : "-");
+  const f = v => v===null||v===undefined ? "-" : v.toFixed(0) + "%";
+  const barisCatatan = catatan.length ? catatan.map((c,i) =>
+    '<tr><td>' + (i+1) + '</td><td>' + esc(c.tanggal||"-") + '</td><td>' + esc(c.kategori||"-") +
+    '</td><td style="text-align:left">' + esc(c.isi||"-") + '</td></tr>').join("")
+    : '<tr><td colspan="4" style="text-align:center">Belum ada catatan.</td></tr>';
+  const blokTtd =
+    '<table class="ttd"><tr><td class="kolom-kiri"></td><td class="kolom-kanan">' + esc(tglTtd) + '</td></tr>' +
+      '<tr><td class="kolom-kiri"></td><td class="kolom-kanan">Wali Kelas,</td></tr>' +
+      '<tr class="spasi-ttd"><td></td><td></td></tr>' +
+      '<tr><td class="kolom-kiri"></td><td class="kolom-kanan"><span class="nama-ttd">' + esc(namaTtd) + '</span>' +
+        (nipTtd ? '<br><span class="nip-ttd">NIP. ' + esc(nipTtd) + '</span>' : '') + '</td></tr></table>';
+  return '<h2>Kartu Siswa Binaan</h2>' +
+    '<table class="idn"><tr><td style="width:130px;color:#555">Nama</td><td><b>' + esc(siswa.nama_siswa) + '</b></td></tr>' +
+      '<tr><td style="color:#555">NIS</td><td>' + esc(siswa.nis||"-") + '</td></tr>' +
+      '<tr><td style="color:#555">Kelas</td><td>' + esc(namaKelas) + '</td></tr>' +
+      '<tr><td style="color:#555">Jenis Kelamin</td><td>' + esc(jk) + '</td></tr></table>' +
+    '<h3>Rekap Kehadiran (' + esc(dari||"-") + ' s/d ' + esc(sampai||"-") + ')</h3>' +
+    '<table><thead><tr><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpa</th><th>Tercatat</th><th>% Hadir</th></tr></thead>' +
+      '<tbody><tr><td>' + rek.hadir + '</td><td>' + rek.sakit + '</td><td>' + rek.izin + '</td><td>' + rek.alpa +
+      '</td><td>' + rek.tercatat + '</td><td><b>' + f(rek.persen) + '</b></td></tr></tbody></table>' +
+    '<h3>Riwayat Catatan</h3>' +
+    '<table><thead><tr><th style="width:36px">No</th><th style="width:90px">Tanggal</th><th style="width:90px">Kategori</th><th>Isi</th></tr></thead>' +
+      '<tbody>' + barisCatatan + '</tbody></table>' +
+    blokTtd;
+}
+
+/* Kepala dokumen cetak kartu (CSS + kop + footer). isiSemua = gabungan badan kartu. */
+function bungkusCetakKartu(judul, namaSekolah, tglCetak, isiSemua){
+  return '<html><head><title>' + esc(judul) + '</title>' +
+    '<style>@page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;padding:0;color:#000;font-size:12px}' +
+    'h2{margin:0 0 4px}h3{margin:14px 0 4px;font-size:14px}table{width:100%;border-collapse:collapse;margin-top:8px}' +
+    '.kop{text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:14px}' +
+    '.kop .nm-sek{font-size:18px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px}' +
+    '.kaki-cetak{position:fixed;bottom:0;left:0;right:0;text-align:center;font-size:10px;color:#555;border-top:1px solid #ccc;padding-top:4px}' +
+    'th,td{border:1px solid #999;padding:5px 7px;text-align:center;font-size:11px}th{background:#eee}' +
+    '.idn td{border:none;text-align:left;padding:2px 0}' +
+    '.ttd{margin-top:40px;border:none;page-break-inside:avoid;break-inside:avoid}.ttd td{border:none;padding:0 0 2px;font-size:13px}' +
+    '.ttd .kolom-kiri{width:60%}.ttd .kolom-kanan{width:40%;text-align:left}' +
+    '.ttd .spasi-ttd td{height:60px}.ttd .nama-ttd{font-weight:bold;text-decoration:underline}.ttd .nip-ttd{font-size:11px}' +
+    'thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}' +
+    '.kartu-hal{page-break-after:always}.kartu-hal:last-child{page-break-after:auto}' +
+    '</style></head><body>' +
+    '<div class="kaki-cetak">' + (namaSekolah ? esc(namaSekolah) + ' &middot; ' : '') + 'Dicetak ' + esc(tglCetak) + '</div>' +
+    isiSemua + '</body></html>';
+}
+
+window.cetakSemuaKartu = async () => {
+  if (!_ksKelasAktif) return toast("Pilih kelas dulu.");
+  toast("Menyiapkan cetak semua kartu...");
+
+  const dari = $("ksDari") ? $("ksDari").value : _ksRentang.dari;
+  const sampai = $("ksSampai") ? $("ksSampai").value : _ksRentang.sampai;
+  const kelasObj = _ksKelasList.find(k=>k.id===_ksKelasAktif) || {};
+  const namaKelas = kelasObj.nama_kelas || "-";
+
+  try {
+    // 1) semua siswa kelas
+    const { data: siswaList, error: errS } = await sb.from("siswa")
+      .select("id, nis, nama_siswa, jenis_kelamin")
+      .eq("kelas_id", _ksKelasAktif).eq("aktif", true).order("nama_siswa");
+    if (errS) throw new Error(errS.message);
+    if (!siswaList || !siswaList.length) return toast("Belum ada siswa di kelas ini.");
+
+    // 2) semua jurnal kelas dalam rentang (sekali ambil)
+    const periode = await ambilPeriodeAktif();
+    let qj = sb.from("jurnal").select("id").eq("kelas_id", _ksKelasAktif);
+    if (periode.tahun_ajaran) qj = qj.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+    if (dari) qj = qj.gte("tanggal", dari);
+    if (sampai) qj = qj.lte("tanggal", sampai);
+    const { data: jurnal, error: errJ } = await qj;
+    if (errJ) throw new Error(errJ.message);
+    const jurnalIds = (jurnal || []).map(j => j.id);
+    const totalPertemuan = jurnalIds.length;
+
+    // 3) semua absensi utk jurnal-jurnal itu (sekali ambil, dipecah 200)
+    const absPerSiswa = {};  // siswa_id -> {hadir,sakit,izin,alpa}
+    siswaList.forEach(s => absPerSiswa[s.id] = { hadir:0, sakit:0, izin:0, alpa:0 });
+    if (jurnalIds.length) {
+      const potong = (arr,n)=>{const o=[];for(let i=0;i<arr.length;i+=n)o.push(arr.slice(i,i+n));return o;};
+      for (const grup of potong(jurnalIds, 200)) {
+        const { data: ab, error: errA } = await sb.from("absensi")
+          .select("siswa_id, status").in("jurnal_id", grup);
+        if (errA) throw new Error(errA.message);
+        (ab || []).forEach(a => {
+          const p = absPerSiswa[a.siswa_id]; if (!p) return;
+          const v = String(a.status||"").toLowerCase();
+          if (v==="hadir") p.hadir++; else if (v==="sakit") p.sakit++;
+          else if (v==="izin") p.izin++; else p.alpa++;
+        });
+      }
+    }
+
+    // 4) semua catatan kelas dalam periode (sekali ambil), kelompokkan per siswa
+    let qc = sb.from("catatan").select("siswa_id, tanggal, kategori, isi, penulis_nama")
+      .eq("kelas_id", _ksKelasAktif);
+    if (periode.tahun_ajaran) qc = qc.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+    qc = qc.order("tanggal", { ascending: false });
+    const { data: catAll } = await qc;
+    const catPerSiswa = {};
+    (catAll || []).forEach(c => { (catPerSiswa[c.siswa_id] = catPerSiswa[c.siswa_id] || []).push(c); });
+
+    // 5) wali kelas untuk ttd (sekali)
+    let namaWali = "", nipWali = "";
+    if (kelasObj.wali_kelas_id) {
+      const { data: w } = await sb.from("profil").select("nama, nip").eq("id", kelasObj.wali_kelas_id).maybeSingle();
+      if (w) { namaWali = w.nama || ""; nipWali = w.nip || ""; }
+    }
+    const namaTtd = namaWali || (ME.nama || ME.email || "(Wali Kelas)");
+    const nipTtd = nipWali || (ME.nip || "");
+    const tglTtd = await kotaTanggalTtd();
+    const info = await ambilInfoApp();
+    const namaSekolah = (info.nama_sekolah || "").trim();
+    const tglCetak = new Date().toLocaleDateString("id-ID", { day:"numeric", month:"long", year:"numeric" });
+
+    // 6) rangkai tiap siswa jadi satu halaman
+    const isiSemua = siswaList.map(s => {
+      const p = absPerSiswa[s.id];
+      const tercatat = p.hadir + p.sakit + p.izin + p.alpa;
+      const rek = { ...p, tercatat, persen: tercatat>0 ? (p.hadir/tercatat*100) : null, totalPertemuan };
+      const siswaObj = { ...s, _namaKelas: namaKelas };
+      const kop = (namaSekolah ? '<div class="kop"><div class="nm-sek">' + esc(namaSekolah) + '</div></div>' : '');
+      const badan = htmlBadanKartu(siswaObj, rek, catPerSiswa[s.id] || [], dari, sampai, namaTtd, nipTtd, tglTtd);
+      return '<div class="kartu-hal">' + kop + badan + '</div>';
+    }).join("");
+
+    const w = window.open("", "_blank");
+    if (!w) return toast("Popup diblokir.");
+    w.document.write(bungkusCetakKartu("Kartu Siswa " + namaKelas, namaSekolah, tglCetak, isiSemua));
+    w.document.close(); w.focus();
+    w.onload = () => { try { w.print(); } catch(e){} };
+    toast(siswaList.length + " kartu disiapkan.");
+  } catch (e) {
+    toast("Gagal: " + e.message);
+  }
+};
+
+/* ============ TAB REKAP NILAI LINTAS MAPEL ============ */
+let _rnKelasList = [];
+let _rnKelasAktif = "";
+let _rnData = null;   // {mapelList, baris} untuk cetak/excel
+
+async function muatRekapNilai(wadahId){
+  const WADAH = wadahId || "wkIsi";
+  $(WADAH).innerHTML = '<div class="card"><div class="page-kosong">Memuat...</div></div>';
+
+  let kelasSemua = [];
+  try { kelasSemua = await ambilSemua("kelas", "nama_kelas"); }
+  catch (e) {
+    $(WADAH).innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat kelas: ' +
+      esc(e.message) + '</div></div>'; return;
+  }
+  if (ME.role === "guru") {
+    _rnKelasList = kelasSemua.filter(k => k.wali_kelas_id === ME.id);
+    if (!_rnKelasList.length) {
+      $(WADAH).innerHTML = '<div class="card"><h2>Rekap Nilai</h2>' +
+        '<div style="color:#b78100;padding:16px">Kamu belum ditetapkan sebagai wali kelas mana pun.</div></div>';
+      return;
+    }
+  } else {
+    _rnKelasList = kelasSemua;
+    if (!_rnKelasList.length) {
+      $(WADAH).innerHTML = '<div class="card"><h2>Rekap Nilai</h2>' +
+        '<div class="empty">Belum ada kelas.</div></div>'; return;
+    }
+  }
+  if (!_rnKelasList.find(k => k.id === _rnKelasAktif)) _rnKelasAktif = _rnKelasList[0].id;
+
+  const opsiKelas = _rnKelasList.map(k =>
+    '<option value="' + esc(k.id) + '"' + (k.id===_rnKelasAktif?" selected":"") +
+    '>' + esc(k.nama_kelas) + '</option>').join("");
+
+  $(WADAH).innerHTML =
+    '<div class="card"><h2>Rekap Nilai Lintas Mapel</h2>' +
+      '<p style="color:#6b7280;font-size:13px;margin-bottom:6px">Nilai rapor tiap mapel per siswa, ' +
+        'ditambah rata-rata & ranking kelas. Nilai dihitung dengan bobot yang ditetapkan guru tiap mapel.</p>' +
+      '<div class="row" style="align-items:flex-end">' +
+        '<div><label>Kelas</label><select id="rnKelas" onchange="gantiKelasRekapNilai()">' + opsiKelas + '</select></div>' +
+        '<div style="flex:0 0 auto;display:flex;gap:8px;align-items:flex-end">' +
+          '<button class="btn btn-sm" style="background:#2b8a3e" onclick="cetakRekapNilai()">🖨 Cetak / PDF</button>' +
+          '<button class="btn btn-ghost btn-sm" onclick="excelRekapNilai()">📊 Excel</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div id="rnIsi"><div class="card"><div class="page-kosong">Memuat...</div></div></div>';
+
+  await renderRekapNilai();
+}
+
+window.gantiKelasRekapNilai = async () => {
+  _rnKelasAktif = $("rnKelas").value;
+  await renderRekapNilai();
+};
+
+/* Hitung nilai rapor semua siswa untuk SATU mapel di kelas aktif.
+   Bobot diambil tanpa filter guru_id (mapel diampu guru mana pun).
+   Rumus identik dengan menu Nilai (renderRapor). */
+async function hitungRaporMapel(kelasId, mapelId, listSiswa, periode){
+  let qn = sb.from("nilai").select("siswa_id, jenis, nilai")
+    .eq("kelas_id", kelasId).eq("mapel_id", mapelId);
+  if (periode.tahun_ajaran) qn = qn.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+  const { data: nilai } = await qn;
+  const dok = nilai || [];
+
+  // bobot: ambil apa adanya untuk kelas+mapel (guru mana pun). Bila >1 baris, pakai yang pertama.
+  let bobot = { harian:33, tugas:33, uh:34, kkm:70 };
+  let bRapor = { rapor_rata:50, rapor_sumatif:50, kkm_rapor:70 };
+  const { data: bdArr } = await sb.from("bobot").select("*")
+    .eq("kelas_id", kelasId).eq("mapel_id", mapelId).limit(1);
+  const bd = bdArr && bdArr[0];
+  if (bd) {
+    bobot = { harian: bd.harian, tugas: bd.tugas, uh: bd.uh, kkm: bd.kkm };
+    bRapor = { rapor_rata: bd.rapor_rata ?? 50, rapor_sumatif: bd.rapor_sumatif ?? 50,
+               kkm_rapor: bd.kkm_rapor ?? bd.kkm ?? 70 };
+  }
+  const rataJenis = (sid, jenis) => {
+    const arr = dok.filter(d => d.siswa_id===sid && d.jenis===jenis && d.nilai!=null).map(d => Number(d.nilai));
+    return arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null;
+  };
+  const hasil = {};
+  listSiswa.forEach(s => {
+    const rh = rataJenis(s.id,"Harian"), rt = rataJenis(s.id,"Tugas"),
+          ru = rataJenis(s.id,"UH"), sum = rataJenis(s.id,"Sumatif");
+    let jml=0,w=0;
+    if (rh!==null){ jml+=rh*bobot.harian; w+=bobot.harian; }
+    if (rt!==null){ jml+=rt*bobot.tugas; w+=bobot.tugas; }
+    if (ru!==null){ jml+=ru*bobot.uh; w+=bobot.uh; }
+    const rataAkhir = w>0 ? jml/w : null;
+    let jr=0,wr=0;
+    if (rataAkhir!==null){ jr+=rataAkhir*bRapor.rapor_rata; wr+=bRapor.rapor_rata; }
+    if (sum!==null){ jr+=sum*bRapor.rapor_sumatif; wr+=bRapor.rapor_sumatif; }
+    hasil[s.id] = wr>0 ? jr/wr : null;
+  });
+  return hasil;   // { siswa_id: nilaiRapor|null }
+}
+
+async function hitungRekapNilaiLintas(){
+  const periode = await ambilPeriodeAktif();
+
+  // siswa kelas
+  const { data: siswa, error: errS } = await sb.from("siswa")
+    .select("id, nis, nama_siswa").eq("kelas_id", _rnKelasAktif).eq("aktif", true).order("nama_siswa");
+  if (errS) throw new Error(errS.message);
+  const listSiswa = siswa || [];
+
+  // semua mapel (yang punya nilai di kelas ini) — supaya kolom tak berisi mapel kosong
+  let qn = sb.from("nilai").select("mapel_id").eq("kelas_id", _rnKelasAktif);
+  if (periode.tahun_ajaran) qn = qn.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+  const { data: nilaiMapel } = await qn;
+  const mapelIdSet = [...new Set((nilaiMapel||[]).map(n => n.mapel_id))];
+
+  // nama mapel
+  let mapelList = [];
+  if (mapelIdSet.length) {
+    const { data: mp } = await sb.from("mapel").select("id, nama_mapel, kode").in("id", mapelIdSet);
+    mapelList = (mp || []).sort((a,b) => String(a.nama_mapel||"").localeCompare(String(b.nama_mapel||"")));
+  }
+
+  // hitung rapor tiap mapel
+  const raporPerMapel = {};   // mapel_id -> {siswa_id: nilai}
+  for (const m of mapelList) {
+    raporPerMapel[m.id] = await hitungRaporMapel(_rnKelasAktif, m.id, listSiswa, periode);
+  }
+
+  // susun baris per siswa + rata-rata
+  const baris = listSiswa.map(s => {
+    const nilaiMapelSiswa = {};
+    let jml = 0, n = 0;
+    mapelList.forEach(m => {
+      const v = raporPerMapel[m.id][s.id];
+      nilaiMapelSiswa[m.id] = v;
+      if (v !== null && v !== undefined) { jml += v; n++; }
+    });
+    const rata = n>0 ? jml/n : null;
+    return { nis: s.nis, nama: s.nama_siswa, nilai: nilaiMapelSiswa, rata };
+  });
+
+  // ranking berdasar rata-rata (null di bawah)
+  const urut = [...baris].filter(b => b.rata !== null).sort((a,b) => b.rata - a.rata);
+  urut.forEach((b, i) => { b.ranking = i+1; });
+  baris.forEach(b => { if (b.rata === null) b.ranking = null; });
+
+  return { mapelList, baris };
+}
+
+window.renderRekapNilai = async () => {
+  $("rnIsi").innerHTML = '<div class="card"><div class="page-kosong">Menghitung nilai semua mapel...</div></div>';
+  try {
+    const { mapelList, baris } = await hitungRekapNilaiLintas();
+    _rnData = { mapelList, baris };
+    const namaKelas = (_rnKelasList.find(k=>k.id===_rnKelasAktif)||{}).nama_kelas || "";
+
+    if (!baris.length) {
+      $("rnIsi").innerHTML = '<div class="card"><div class="empty">Belum ada siswa di kelas ini.</div></div>';
+      return;
+    }
+    if (!mapelList.length) {
+      $("rnIsi").innerHTML = '<div class="card"><div class="empty" style="color:#b78100">' +
+        'Belum ada nilai apa pun untuk kelas ini. Rekap terisi setelah guru menginput nilai.</div></div>';
+      return;
+    }
+
+    const f = v => v===null||v===undefined ? "-" : Number(v).toFixed(1);
+    const lm = m => (m.kode ? "("+m.kode+") " : "") + (m.nama_mapel||"");
+
+    let head = '<tr><th>No</th><th style="text-align:left">Nama</th>' +
+      mapelList.map(m => '<th style="text-align:center">' + esc(m.kode || m.nama_mapel) + '</th>').join("") +
+      '<th style="text-align:center">Rata</th><th style="text-align:center">Rank</th></tr>';
+
+    let body = "";
+    baris.forEach((b, i) => {
+      body += '<tr><td>' + (i+1) + '</td><td><b>' + esc(b.nama) + '</b></td>' +
+        mapelList.map(m => '<td style="text-align:center">' + f(b.nilai[m.id]) + '</td>').join("") +
+        '<td style="text-align:center;font-weight:700">' + f(b.rata) + '</td>' +
+        '<td style="text-align:center;font-weight:700;color:#3b5bdb">' + (b.ranking||"-") + '</td></tr>';
+    });
+
+    const ket = mapelList.map(m => esc(m.kode || "") + (m.kode ? " = " : "") + esc(m.nama_mapel)).join(" · ");
+
+    $("rnIsi").innerHTML =
+      '<div class="card"><h2>Rekap Nilai — ' + esc(namaKelas) + ' (' + baris.length + ' siswa, ' + mapelList.length + ' mapel)</h2>' +
+        '<div style="overflow-x:auto"><table>' + head + body + '</table></div>' +
+        '<p style="color:#6b7280;font-size:12px;margin-top:10px">Kolom = kode mapel. ' + ket + '<br>' +
+          'Rata = rata-rata nilai rapor semua mapel. Rank = urutan berdasar rata-rata.</p>' +
+      '</div>';
+  } catch (e) {
+    $("rnIsi").innerHTML = '<div class="card"><div class="page-kosong">Gagal: ' + esc(e.message) + '</div></div>';
+  }
+};
+
+window.cetakRekapNilai = async () => {
+  if (!_rnData || !_rnData.baris.length) return toast("Belum ada data untuk dicetak.");
+  toast("Menyiapkan cetakan...");
+  const { mapelList, baris } = _rnData;
+  const namaKelas = (_rnKelasList.find(k=>k.id===_rnKelasAktif)||{}).nama_kelas || "";
+
+  // wali kelas untuk ttd
+  const kelasObj = _rnKelasList.find(k=>k.id===_rnKelasAktif) || {};
+  let namaWali = "", nipWali = "";
+  if (kelasObj.wali_kelas_id) {
+    const { data: w } = await sb.from("profil").select("nama, nip").eq("id", kelasObj.wali_kelas_id).maybeSingle();
+    if (w) { namaWali = w.nama || ""; nipWali = w.nip || ""; }
+  }
+  const namaTtd = namaWali || (ME.nama || ME.email || "(Wali Kelas)");
+  const nipTtd = nipWali || (ME.nip || "");
+
+  const tglTtd = await kotaTanggalTtd();
+  const info = await ambilInfoApp();
+  const namaSekolah = (info.nama_sekolah || "").trim();
+  const tglCetak = new Date().toLocaleDateString("id-ID", { day:"numeric", month:"long", year:"numeric" });
+  const f = v => v===null||v===undefined ? "-" : Number(v).toFixed(1);
+
+  const thMapel = mapelList.map(m => '<th>' + esc(m.kode || m.nama_mapel) + '</th>').join("");
+  const rows = baris.map((b,i) =>
+    '<tr><td>' + (i+1) + '</td><td style="text-align:left">' + esc(b.nama) + '</td>' +
+    mapelList.map(m => '<td>' + f(b.nilai[m.id]) + '</td>').join("") +
+    '<td><b>' + f(b.rata) + '</b></td><td>' + (b.ranking||"-") + '</td></tr>').join("");
+  const ket = mapelList.filter(m=>m.kode).map(m => esc(m.kode) + " = " + esc(m.nama_mapel)).join(" · ");
+
+  const blokTtd =
+    '<table class="ttd"><tr><td class="kolom-kiri"></td><td class="kolom-kanan">' + esc(tglTtd) + '</td></tr>' +
+      '<tr><td class="kolom-kiri"></td><td class="kolom-kanan">Wali Kelas,</td></tr>' +
+      '<tr class="spasi-ttd"><td></td><td></td></tr>' +
+      '<tr><td class="kolom-kiri"></td><td class="kolom-kanan"><span class="nama-ttd">' + esc(namaTtd) + '</span>' +
+        (nipTtd ? '<br><span class="nip-ttd">NIP. ' + esc(nipTtd) + '</span>' : '') + '</td></tr></table>';
+
+  const w = window.open("", "_blank");
+  if (!w) return toast("Popup diblokir.");
+  w.document.write(
+    '<html><head><title>Rekap Nilai ' + esc(namaKelas) + '</title>' +
+    '<style>@page{size:A4 landscape;margin:12mm}body{font-family:Arial,sans-serif;padding:0;color:#000;font-size:11px}' +
+    'h2{margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:10px}' +
+    '.kop{text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:14px}' +
+    '.kop .nm-sek{font-size:18px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px}' +
+    '.kaki-cetak{position:fixed;bottom:0;left:0;right:0;text-align:center;font-size:10px;color:#555;border-top:1px solid #ccc;padding-top:4px}' +
+    'th,td{border:1px solid #999;padding:4px 5px;text-align:center;font-size:10px}th{background:#eee}' +
+    '.meta{margin:8px 0;line-height:1.5}' +
+    '.ttd{margin-top:40px;border:none;page-break-inside:avoid;break-inside:avoid}.ttd td{border:none;padding:0 0 2px;font-size:12px}' +
+    '.ttd .kolom-kiri{width:60%}.ttd .kolom-kanan{width:40%;text-align:left}' +
+    '.ttd .spasi-ttd td{height:55px}.ttd .nama-ttd{font-weight:bold;text-decoration:underline}.ttd .nip-ttd{font-size:10px}' +
+    'thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}' +
+    '</style></head><body>' +
+    '<div class="kaki-cetak">' + (namaSekolah ? esc(namaSekolah) + ' &middot; ' : '') + 'Dicetak ' + esc(tglCetak) + '</div>' +
+    (namaSekolah ? '<div class="kop"><div class="nm-sek">' + esc(namaSekolah) + '</div></div>' : '') +
+    '<h2>Rekap Nilai Lintas Mapel</h2>' +
+    '<div class="meta"><b>Kelas:</b> ' + esc(namaKelas) + (ket ? '<br><b>Keterangan:</b> ' + ket : '') + '</div>' +
+    '<table><thead><tr><th>No</th><th style="text-align:left">Nama</th>' + thMapel +
+      '<th>Rata</th><th>Rank</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+    blokTtd + '</body></html>');
+  w.document.close(); w.focus();
+  w.onload = () => { try { w.print(); } catch(e){} };
+};
+
+window.excelRekapNilai = () => {
+  if (!_rnData || !_rnData.baris.length) return toast("Belum ada data untuk diekspor.");
+  const { mapelList, baris } = _rnData;
+  const namaKelas = (_rnKelasList.find(k=>k.id===_rnKelasAktif)||{}).nama_kelas || "kelas";
+  const n1 = v => v===null||v===undefined ? "" : Number(v).toFixed(1);
+  const data = baris.map((b,i) => {
+    const row = { "No": i+1, "NIS": b.nis||"", "Nama": b.nama };
+    mapelList.forEach(m => { row[(m.kode ? m.kode+" - " : "") + m.nama_mapel] = n1(b.nilai[m.id]); });
+    row["Rata-Rata"] = n1(b.rata);
+    row["Ranking"] = b.ranking || "";
+    return row;
+  });
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Rekap Nilai");
+  XLSX.writeFile(wb, ("Rekap-Nilai-" + namaKelas + ".xlsx").replace(/[^\w\-.]/g,"_"));
+  toast("Excel diunduh.");
+};
+
+/* ============ MODUL REKAP ABSENSI (wali kelas / admin / kepsek) ============ */
+let _raKelasList = [];        // kelas yang boleh diakses user ini
+let _raKelasAktif = "";
+let _raDataSiswa = [];        // hasil agregat per siswa (untuk cetak/excel)
+let _raRentang = { dari: "", sampai: "" };
+const RA_AMBANG_ALPA = 3;     // Alpa >= ini → sorot merah (peringatan dini)
+
+/* Batas minimal % kehadiran (bisa diatur, tersimpan di perangkat) */
+function bacaBatasHadir(){
+  try { const v = Number(localStorage.getItem("batasHadir")); return (v>=0 && v<=100) ? v : 75; }
+  catch(e){ return 75; }
+}
+function simpanBatasHadir(v){ try { localStorage.setItem("batasHadir", String(v)); } catch(e){} }
+
+async function muatRekapAbsensi(wadahId){
+  const WADAH = wadahId || "main";
+  $(WADAH).innerHTML = '<div class="card"><div class="page-kosong">Memuat...</div></div>';
+
+  // tentukan kelas yang boleh diakses
+  let kelasSemua = [];
+  try { kelasSemua = await ambilSemua("kelas", "nama_kelas"); }
+  catch (e) {
+    $(WADAH).innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat kelas: ' +
+      esc(e.message) + '</div></div>'; return;
+  }
+
+  if (ME.role === "guru") {
+    _raKelasList = kelasSemua.filter(k => k.wali_kelas_id === ME.id);
+    if (!_raKelasList.length) {
+      $(WADAH).innerHTML = '<div class="card"><h2>Rekap Absensi</h2>' +
+        '<div style="color:#b78100;padding:16px">Kamu belum ditetapkan sebagai wali kelas mana pun. ' +
+        'Hubungi admin untuk menetapkan wali kelas di menu Kelas.</div></div>';
+      return;
+    }
+  } else {
+    _raKelasList = kelasSemua;
+    if (!_raKelasList.length) {
+      $(WADAH).innerHTML = '<div class="card"><h2>Rekap Absensi</h2>' +
+        '<div class="empty">Belum ada kelas.</div></div>'; return;
+    }
+  }
+
+  if (!_raKelasList.find(k => k.id === _raKelasAktif)) _raKelasAktif = _raKelasList[0].id;
+
+  // default rentang: awal bulan ini s/d hari ini
+  const kini = new Date();
+  const awalBulan = new Date(kini.getFullYear(), kini.getMonth(), 1).toISOString().slice(0,10);
+  const hariIni = kini.toISOString().slice(0,10);
+  if (!_raRentang.dari) _raRentang = { dari: awalBulan, sampai: hariIni };
+
+  const opsiKelas = _raKelasList.map(k =>
+    '<option value="' + esc(k.id) + '"' + (k.id===_raKelasAktif?" selected":"") +
+    '>' + esc(k.nama_kelas) + '</option>').join("");
+
+  $(WADAH).innerHTML =
+    '<div class="card"><h2>Rekap Absensi Siswa</h2>' +
+      '<p style="color:#6b7280;font-size:13px;margin-bottom:6px">Ringkasan kehadiran tiap siswa ' +
+        '(Hadir/Sakit/Izin/Alpa) dalam rentang tanggal, dihitung dari jurnal mengajar. ' +
+        'Siswa dengan Alpa ≥ ' + RA_AMBANG_ALPA + ' disorot merah.</p>' +
+      '<div class="row" style="align-items:flex-end">' +
+        '<div><label>Kelas</label><select id="raKelas" onchange="gantiKelasRekapAbsensi()">' + opsiKelas + '</select></div>' +
+        '<div><label>Dari Tanggal</label><input type="date" id="raDari" value="' + esc(_raRentang.dari) + '" onchange="renderRekapAbsensi()"></div>' +
+        '<div><label>Sampai</label><input type="date" id="raSampai" value="' + esc(_raRentang.sampai) + '" onchange="renderRekapAbsensi()"></div>' +
+        '<div style="flex:0 0 120px"><label>Batas % Hadir</label>' +
+          '<input type="number" id="raBatas" min="0" max="100" value="' + bacaBatasHadir() + '" ' +
+          'onchange="ubahBatasHadir(this.value)" title="Di bawah nilai ini disorot merah"></div>' +
+        '<div style="flex:0 0 auto;display:flex;gap:8px;align-items:flex-end">' +
+          '<button class="btn btn-sm" style="background:#2b8a3e" onclick="cetakRekapAbsensi()">🖨 Cetak / PDF</button>' +
+          '<button class="btn btn-ghost btn-sm" onclick="excelRekapAbsensi()">📊 Excel</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div id="raIsi"><div class="card"><div class="page-kosong">Memuat...</div></div></div>';
+
+  await renderRekapAbsensi();
+}
+
+window.gantiKelasRekapAbsensi = () => {
+  _raKelasAktif = $("raKelas").value;
+  renderRekapAbsensi();
+};
+
+window.ubahBatasHadir = (v) => {
+  let n = Math.max(0, Math.min(100, Number(v) || 0));
+  simpanBatasHadir(n);
+  if ($("raBatas")) $("raBatas").value = n;
+  renderRekapAbsensi();   // hitung ulang warna sesuai batas baru
+};
+
+/* Ambil & agregat absensi kelas aktif dalam rentang tanggal. */
+async function hitungRekapAbsensi(){
+  const dari = $("raDari") ? $("raDari").value : _raRentang.dari;
+  const sampai = $("raSampai") ? $("raSampai").value : _raRentang.sampai;
+  _raRentang = { dari, sampai };
+
+  // 1) jurnal kelas ini dalam rentang (untuk dapat daftar jurnal_id + jumlah pertemuan)
+  const periode = await ambilPeriodeAktif();
+  let qj = sb.from("jurnal").select("id, tanggal")
+    .eq("kelas_id", _raKelasAktif);
+  if (periode.tahun_ajaran) qj = qj.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+  if (dari) qj = qj.gte("tanggal", dari);
+  if (sampai) qj = qj.lte("tanggal", sampai);
+  const { data: jurnal, error: errJ } = await qj;
+  if (errJ) throw new Error(errJ.message);
+  const jurnalIds = (jurnal || []).map(j => j.id);
+  const totalPertemuan = jurnalIds.length;
+
+  // 2) siswa kelas ini (agar siswa tanpa catatan absensi tetap tampil)
+  const { data: siswa, error: errS } = await sb.from("siswa")
+    .select("id, nis, nama_siswa").eq("kelas_id", _raKelasAktif).eq("aktif", true).order("nama_siswa");
+  if (errS) throw new Error(errS.message);
+  const listSiswa = siswa || [];
+
+  // peta agregat awal (semua siswa mulai dari 0)
+  const peta = {};
+  listSiswa.forEach(s => {
+    peta[s.id] = { siswa_id: s.id, nis: s.nis || "", nama: s.nama_siswa,
+      hadir: 0, sakit: 0, izin: 0, alpa: 0 };
+  });
+
+  // 3) absensi untuk jurnal-jurnal tsb, lalu agregat
+  if (jurnalIds.length) {
+    // batasi ukuran query .in() bila jurnal sangat banyak (pecah per 200)
+    const potong = (arr, n) => { const out=[]; for(let i=0;i<arr.length;i+=n) out.push(arr.slice(i,i+n)); return out; };
+    for (const grup of potong(jurnalIds, 200)) {
+      const { data: ab, error: errA } = await sb.from("absensi")
+        .select("siswa_id, status").in("jurnal_id", grup);
+      if (errA) throw new Error(errA.message);
+      (ab || []).forEach(a => {
+        const p = peta[a.siswa_id];
+        if (!p) return;   // siswa mungkin pindah kelas; abaikan
+        const v = String(a.status||"").toLowerCase();
+        if (v === "hadir") p.hadir++;
+        else if (v === "sakit") p.sakit++;
+        else if (v === "izin") p.izin++;
+        else p.alpa++;
+      });
+    }
+  }
+
+  const baris = listSiswa.map(s => {
+    const p = peta[s.id];
+    const tercatat = p.hadir + p.sakit + p.izin + p.alpa;
+    const persen = tercatat > 0 ? (p.hadir / tercatat) * 100 : null;
+    return { ...p, tercatat, persen };
+  });
+
+  return { baris, totalPertemuan };
+}
+
+window.renderRekapAbsensi = async () => {
+  $("raIsi").innerHTML = '<div class="card"><div class="page-kosong">Memuat...</div></div>';
+  try {
+    const { baris, totalPertemuan } = await hitungRekapAbsensi();
+    _raDataSiswa = baris;   // simpan untuk cetak/excel
+
+    const namaKelas = (_raKelasList.find(k=>k.id===_raKelasAktif)||{}).nama_kelas || "";
+
+    if (!baris.length) {
+      $("raIsi").innerHTML = '<div class="card"><div class="empty">Belum ada siswa di kelas ini.</div></div>';
+      return;
+    }
+
+    // statistik kelas
+    const batasHadir = bacaBatasHadir();
+    const totalAlpa = baris.reduce((a,b)=>a+b.alpa,0);
+    const totalHadir = baris.reduce((a,b)=>a+b.hadir,0);
+    const totalCatat = baris.reduce((a,b)=>a+b.tercatat,0);
+    const persenKelas = totalCatat>0 ? (totalHadir/totalCatat*100) : null;
+    const perluPerhatian = baris.filter(b => b.alpa >= RA_AMBANG_ALPA);
+    const dibawahBatas = baris.filter(b => b.persen !== null && b.persen < batasHadir);
+
+    const f = v => v===null ? "-" : v.toFixed(0) + "%";
+    const stat = (n,l,warna) => '<div style="background:' + warna + '22;border:1px solid var(--garis);border-radius:12px;padding:16px;text-align:center;flex:1;min-width:120px">' +
+      '<div style="font-size:26px;font-weight:700;color:' + warna + '">' + n + '</div>' +
+      '<div style="font-size:12px;color:' + warna + '">' + l + '</div></div>';
+
+    let html =
+      '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">' +
+        stat(totalPertemuan, "Pertemuan", "#3b5bdb") +
+        stat(f(persenKelas), "Kehadiran Kelas", "#2b8a3e") +
+        stat(totalAlpa, "Total Alpa", "#c92a2a") +
+        stat(dibawahBatas.length, "Di Bawah " + batasHadir + "%", "#e8590c") +
+      '</div>';
+
+    // kartu peringatan dini (#4 menyatu di sini)
+    if (perluPerhatian.length) {
+      html += '<div class="card" style="border:1px solid #e8590c">' +
+        '<h2 style="color:#e8590c">⚠ Siswa Perlu Perhatian (Alpa ≥ ' + RA_AMBANG_ALPA + ')</h2>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+          perluPerhatian.map(b => '<span style="background:#fff0f0;color:#c92a2a;padding:4px 12px;border-radius:8px;font-weight:600">' +
+            esc(b.nama) + ' (' + b.alpa + ' Alpa)</span>').join("") +
+        '</div></div>';
+    }
+
+    // tabel utama
+    let tabel = '<div style="overflow-x:auto"><table>' +
+      '<tr><th>No</th><th>NIS</th><th>Nama</th>' +
+      '<th style="text-align:center" class="absen-h">Hadir</th>' +
+      '<th style="text-align:center" class="absen-s">Sakit</th>' +
+      '<th style="text-align:center" class="absen-i">Izin</th>' +
+      '<th style="text-align:center" class="absen-a">Alpa</th>' +
+      '<th style="text-align:center">% Hadir</th></tr>';
+    baris.forEach((b,i) => {
+      const dibawah = b.persen !== null && b.persen < batasHadir;
+      const sorot = (b.alpa >= RA_AMBANG_ALPA || dibawah) ? ' style="background:#fff0f0"' : '';
+      const warnaP = b.persen===null ? "#6b7280" : (!dibawah ? "#2b8a3e" : "#c92a2a");
+      tabel += '<tr' + sorot + '><td>' + (i+1) + '</td><td>' + esc(b.nis||"-") + '</td>' +
+        '<td><b>' + esc(b.nama) + '</b></td>' +
+        '<td style="text-align:center">' + b.hadir + '</td>' +
+        '<td style="text-align:center">' + b.sakit + '</td>' +
+        '<td style="text-align:center">' + b.izin + '</td>' +
+        '<td style="text-align:center;font-weight:700;color:' + (b.alpa>0?"#c92a2a":"inherit") + '">' + b.alpa + '</td>' +
+        '<td style="text-align:center;font-weight:700;color:' + warnaP + '">' + f(b.persen) + '</td></tr>';
+    });
+    tabel += '</table></div>';
+
+    html += '<div class="card"><h2>Rekap Kehadiran — ' + esc(namaKelas) + ' (' + baris.length + ' siswa)</h2>' +
+      (totalPertemuan===0 ? '<div class="empty" style="color:#b78100">Belum ada jurnal pada rentang ini. ' +
+        'Rekap terisi setelah ada jurnal mengajar.</div>' : tabel) +
+      '<p style="color:#6b7280;font-size:12px;margin-top:10px">% Hadir = Hadir ÷ total kehadiran tercatat. ' +
+        'Hijau ≥ ' + batasHadir + '%, merah < ' + batasHadir + '%.</p>' +
+    '</div>';
+
+    $("raIsi").innerHTML = html;
+  } catch (e) {
+    $("raIsi").innerHTML = '<div class="card"><div class="page-kosong">Gagal: ' + esc(e.message) + '</div></div>';
+  }
+};
+
+window.cetakRekapAbsensi = async () => {
+  const baris = _raDataSiswa;
+  if (!baris.length) return toast("Belum ada data untuk dicetak.");
+  toast("Menyiapkan cetakan...");
+
+  const namaKelas = (_raKelasList.find(k=>k.id===_raKelasAktif)||{}).nama_kelas || "";
+  const dari = _raRentang.dari, sampai = _raRentang.sampai;
+
+  // wali kelas untuk ttd (kalau kelas ini punya wali), fallback kepsek
+  const kelasObj = _raKelasList.find(k=>k.id===_raKelasAktif) || {};
+  let namaWali = "", nipWali = "";
+  if (kelasObj.wali_kelas_id) {
+    const { data: w } = await sb.from("profil").select("nama, nip").eq("id", kelasObj.wali_kelas_id).maybeSingle();
+    if (w) { namaWali = w.nama || ""; nipWali = w.nip || ""; }
+  }
+  const namaTtd = namaWali || (ME.nama || ME.email || "(Wali Kelas)");
+  const nipTtd = nipWali || (ME.nip || "");
+
+  const tglTtd = await kotaTanggalTtd();
+  const info = await ambilInfoApp();
+  const namaSekolah = (info.nama_sekolah || "").trim();
+  const tglCetak = new Date().toLocaleDateString("id-ID", { day:"numeric", month:"long", year:"numeric" });
+
+  const f = v => v===null ? "-" : v.toFixed(0) + "%";
+  const batasHadir = bacaBatasHadir();
+  const rows = baris.map((b,i) => {
+    const ket = b.persen===null ? "-" : (b.persen >= batasHadir ? "Baik" : "Rendah");
+    return '<tr><td>' + (i+1) + '</td><td>' + esc(b.nis||"-") + '</td><td style="text-align:left">' + esc(b.nama) + '</td>' +
+    '<td>' + b.hadir + '</td><td>' + b.sakit + '</td><td>' + b.izin + '</td><td>' + b.alpa + '</td>' +
+    '<td>' + f(b.persen) + '</td><td>' + ket + '</td></tr>';
+  }).join("");
+
+  const blokTtd =
+    '<table class="ttd"><tr><td class="kolom-kiri"></td><td class="kolom-kanan">' + esc(tglTtd) + '</td></tr>' +
+      '<tr><td class="kolom-kiri"></td><td class="kolom-kanan">Wali Kelas,</td></tr>' +
+      '<tr class="spasi-ttd"><td></td><td></td></tr>' +
+      '<tr><td class="kolom-kiri"></td><td class="kolom-kanan"><span class="nama-ttd">' + esc(namaTtd) + '</span>' +
+        (nipTtd ? '<br><span class="nip-ttd">NIP. ' + esc(nipTtd) + '</span>' : '') + '</td></tr></table>';
+
+  const w = window.open("", "_blank");
+  if (!w) return toast("Popup diblokir.");
+  w.document.write(
+    '<html><head><title>Rekap Absensi ' + esc(namaKelas) + '</title>' +
+    '<style>@page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;padding:0;color:#000;font-size:12px}' +
+    'h2{margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:10px}' +
+    '.kop{text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:14px}' +
+    '.kop .nm-sek{font-size:18px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px}' +
+    '.kaki-cetak{position:fixed;bottom:0;left:0;right:0;text-align:center;font-size:10px;color:#555;border-top:1px solid #ccc;padding-top:4px}' +
+    'th,td{border:1px solid #999;padding:4px 6px;text-align:center;font-size:11px}th{background:#eee}' +
+    '.meta{margin:8px 0;line-height:1.6}' +
+    '.ttd{margin-top:48px;border:none;page-break-inside:avoid;break-inside:avoid}.ttd td{border:none;padding:0 0 2px;font-size:13px}' +
+    '.ttd .kolom-kiri{width:60%}.ttd .kolom-kanan{width:40%;text-align:left}' +
+    '.ttd .spasi-ttd td{height:60px}.ttd .nama-ttd{font-weight:bold;text-decoration:underline}.ttd .nip-ttd{font-size:11px}' +
+    'thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}' +
+    '</style></head><body>' +
+    '<div class="kaki-cetak">' + (namaSekolah ? esc(namaSekolah) + ' &middot; ' : '') + 'Dicetak ' + esc(tglCetak) + '</div>' +
+    (namaSekolah ? '<div class="kop"><div class="nm-sek">' + esc(namaSekolah) + '</div></div>' : '') +
+    '<h2>Rekap Absensi Siswa</h2>' +
+    '<div class="meta"><b>Kelas:</b> ' + esc(namaKelas) + ' &nbsp; <b>Periode:</b> ' +
+      esc(dari||"-") + ' s/d ' + esc(sampai||"-") + ' &nbsp; <b>Batas Kehadiran:</b> ' + batasHadir + '%</div>' +
+    '<table><thead><tr><th>No</th><th>NIS</th><th>Nama</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpa</th><th>% Hadir</th><th>Ket</th></tr></thead><tbody>' +
+      rows + '</tbody></table>' +
+    blokTtd + '</body></html>');
+  w.document.close(); w.focus();
+  w.onload = () => { try { w.print(); } catch(e){} };
+};
+
+window.excelRekapAbsensi = () => {
+  const baris = _raDataSiswa;
+  if (!baris.length) return toast("Belum ada data untuk diekspor.");
+  const namaKelas = (_raKelasList.find(k=>k.id===_raKelasAktif)||{}).nama_kelas || "kelas";
+  const f = v => v===null ? "" : v.toFixed(0) + "%";
+  const batasHadir = bacaBatasHadir();
+  const data = baris.map((b,i) => ({
+    "No": i+1, "NIS": b.nis||"", "Nama": b.nama,
+    "Hadir": b.hadir, "Sakit": b.sakit, "Izin": b.izin, "Alpa": b.alpa,
+    "Total Tercatat": b.tercatat, "% Hadir": f(b.persen),
+    "Keterangan": b.persen===null ? "" : (b.persen >= batasHadir ? "Baik" : "Rendah")
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  ws["!cols"] = [{wch:5},{wch:12},{wch:24},{wch:8},{wch:8},{wch:8},{wch:8},{wch:14},{wch:10},{wch:12}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Rekap Absensi");
+  XLSX.writeFile(wb, ("Rekap-Absensi-" + namaKelas + "-" + (_raRentang.dari||"") + ".xlsx").replace(/[^\w\-.]/g,"_"));
+  toast("Excel diunduh.");
+};
+
 /* ============ MODUL REKAP HARIAN (admin & kepsek) ============ */
 let _rekapKelasSemua = [];
 let _rekapDataHari = [];   // cache jurnal+absensi hari terpilih (untuk cetak/excel)
 
 async function muatRekapHarian(){
-  if (ME.role !== "admin" && ME.role !== "kepsek") {
+  if (ME.role !== "admin" && ME.role !== "kepsek" && ME.role !== "pengawas") {
     $("main").innerHTML = '<div class="card"><div class="page-kosong">' +
       'Menu ini untuk admin & kepala sekolah.</div></div>';
     return;
@@ -3289,7 +4374,7 @@ window.excelRekapHarian = () => {
 /* ============ MODUL IZIN MENU (admin) ============ */
 const IZIN_MENU_LIST = [
   { key:"nilai",   label:"Nilai",   kolom:"izin_nilai" },
-  { key:"catatan", label:"Catatan", kolom:"izin_catatan" },
+  { key:"walikelas", label:"Wali Kelas", kolom:"izin_catatan" },
   { key:"jadwal",  label:"Jadwal",  kolom:"izin_jadwal" }
 ];
 let _izinCache = [];
@@ -3660,6 +4745,7 @@ async function muatPengguna(){
         '<div><label>Peran</label><select id="uRole" onchange="ubahPeranPengguna()">' +
           '<option value="guru">Guru</option>' +
           '<option value="kepsek">Kepala Sekolah</option>' +
+          '<option value="pengawas">Pengawas</option>' +
           '<option value="admin">Admin</option>' +
         '</select></div>' +
       '</div>' +
@@ -3688,7 +4774,7 @@ async function muatPengguna(){
     // ---- Import massal Excel ----
     '<div class="card"><h2>Input Massal (Upload Excel)</h2>' +
       '<p style="color:#6b7280;font-size:13px;margin-bottom:10px">Kolom: Nama, Email, Kata Sandi, ' +
-        'Peran (guru/kepsek/admin), NIP. Tiap akun dibuat satu per satu, jadi agak lebih lama. ' +
+        'Peran (guru/kepsek/pengawas/admin), NIP. Tiap akun dibuat satu per satu, jadi agak lebih lama. ' +
         'Jangan tutup halaman sampai laporan muncul.</p>' +
       '<button class="btn btn-ghost btn-sm" onclick="unduhTemplatePengguna()">↓ Unduh Template</button>' +
       '<div style="margin-top:12px"><label>Pilih file Excel</label>' +
@@ -3929,12 +5015,12 @@ window.hapusPengguna = async (id, nama) => {
 window.unduhTemplatePengguna = () => {
   const contoh = [
     { "Nama":"Budi Santoso", "Email":"budi.baru@sekolah.sch.id", "Kata Sandi":"rahasia123",
-      "Peran (guru/kepsek/admin)":"guru", "NIP":"198501012010011001" },
+      "Peran (guru/kepsek/pengawas/admin)":"guru", "NIP":"198501012010011001" },
     { "Nama":"Siti Rahayu", "Email":"siti.baru@sekolah.sch.id", "Kata Sandi":"rahasia123",
-      "Peran (guru/kepsek/admin)":"kepsek", "NIP":"197803052005012002" }
+      "Peran (guru/kepsek/pengawas/admin)":"kepsek", "NIP":"197803052005012002" }
   ];
   const ws = XLSX.utils.json_to_sheet(contoh, {
-    header: ["Nama","Email","Kata Sandi","Peran (guru/kepsek/admin)","NIP"] });
+    header: ["Nama","Email","Kata Sandi","Peran (guru/kepsek/pengawas/admin)","NIP"] });
   ws["!cols"] = [{wch:22},{wch:28},{wch:14},{wch:24},{wch:20}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Pengguna");
@@ -3963,8 +5049,8 @@ window.importPengguna = async (ev) => {
   if (!rows.length) { setMsg("File kosong atau format tak dikenali.", false); ev.target.value=""; return; }
 
   const akun = rows.map(r => {
-    let role = String(r["Peran (guru/kepsek/admin)"] ?? r["Peran"] ?? "guru").trim().toLowerCase();
-    if (!["guru","kepsek","admin"].includes(role)) role = "guru";
+    let role = String(r["Peran (guru/kepsek/pengawas/admin)"] ?? r["Peran"] ?? "guru").trim().toLowerCase();
+    if (!["guru","kepsek","pengawas","admin"].includes(role)) role = "guru";
     return {
       nama: String(r["Nama"] ?? "").trim(),
       email: String(r["Email"] ?? "").trim(),
