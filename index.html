@@ -207,6 +207,42 @@
   input[type="radio"].rb-i { accent-color: #3b5bdb; }
   input[type="radio"].rb-a { accent-color: #c92a2a; }
   .absen-h, .absen-s, .absen-i, .absen-a { font-weight: 600; }
+
+  /* Sorotan "perlu perhatian" — adaptif light/dark */
+  .baris-perhatian { background: #fff0f0; }
+  .baris-perhatian td { color: #c92a2a; }
+  [data-dark="1"] .baris-perhatian { background: #3a2226; }
+  [data-dark="1"] .baris-perhatian td { color: #ff9b9b; }
+
+  /* Kepatuhan Jurnal: baris terisi/belum — adaptif light/dark */
+  .baris-terisi { background: #ebfbee; }
+  .baris-terisi td { color: #2b8a3e; }
+  [data-dark="1"] .baris-terisi { background: #1e3225; }
+  [data-dark="1"] .baris-terisi td { color: #8ce0a3; }
+  .baris-belum { background: #fff0f0; }
+  .baris-belum td { color: #c92a2a; }
+  [data-dark="1"] .baris-belum { background: #3a2226; }
+  [data-dark="1"] .baris-belum td { color: #ff9b9b; }
+
+  .tag-perhatian {
+    background: #fff0f0; color: #c92a2a;
+    padding: 4px 12px; border-radius: 8px; font-weight: 600;
+    display: inline-block;
+  }
+  [data-dark="1"] .tag-perhatian { background: #3a2226; color: #ff9b9b; }
+
+  .kartu-perhatian { border: 1px solid #e8590c; }
+  [data-dark="1"] .kartu-perhatian { border-color: #ff8c42; }
+
+  /* Autocomplete (dropdown hasil pencarian) */
+  .autocomplete-hasil {
+    position: absolute; left: 0; right: 0; top: 100%; z-index: 30;
+    background: var(--card); border: 1px solid var(--garis); border-radius: 8px;
+    margin-top: 2px; max-height: 240px; overflow-y: auto;
+    box-shadow: 0 6px 20px rgba(0,0,0,.12);
+  }
+  .autocomplete-item { padding: 10px 12px; cursor: pointer; font-size: 14px; }
+  .autocomplete-item:hover { background: var(--aksen-lembut); }
 </style>
 </head>
 <body>
@@ -1758,7 +1794,9 @@ async function muatIsiJurnal(){
       '</div>' +
       '<div class="row">' +
         '<div><label>Kelas</label><select id="jKelas" onchange="bersihkanErrorJurnal();muatAbsensi()">' + opsiKelas + '</select></div>' +
-        '<div><label>Mapel</label><select id="jMapel">' + opsiMapel + '</select></div>' +
+        '<div><label>Mapel</label>' +
+          '<input id="jCariMapel" placeholder="Ketik untuk cari mapel..." oninput="cariMapelJurnal()" style="margin-bottom:6px">' +
+          '<select id="jMapel">' + opsiMapel + '</select></div>' +
       '</div>' +
       '<div class="row">' +
         '<div><label>Mengganti Guru (opsional)</label>' +
@@ -4026,10 +4064,10 @@ window.renderRekapAbsensi = async () => {
 
     // kartu peringatan dini (#4 menyatu di sini)
     if (perluPerhatian.length) {
-      html += '<div class="card" style="border:1px solid #e8590c">' +
+      html += '<div class="card kartu-perhatian">' +
         '<h2 style="color:#e8590c">⚠ Siswa Perlu Perhatian (Alpa ≥ ' + RA_AMBANG_ALPA + ')</h2>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-          perluPerhatian.map(b => '<span style="background:#fff0f0;color:#c92a2a;padding:4px 12px;border-radius:8px;font-weight:600">' +
+          perluPerhatian.map(b => '<span class="tag-perhatian">' +
             esc(b.nama) + ' (' + b.alpa + ' Alpa)</span>').join("") +
         '</div></div>';
     }
@@ -4044,15 +4082,19 @@ window.renderRekapAbsensi = async () => {
       '<th style="text-align:center">% Hadir</th></tr>';
     baris.forEach((b,i) => {
       const dibawah = b.persen !== null && b.persen < batasHadir;
-      const sorot = (b.alpa >= RA_AMBANG_ALPA || dibawah) ? ' style="background:#fff0f0"' : '';
+      const perhatian = (b.alpa >= RA_AMBANG_ALPA || dibawah);
+      const cls = perhatian ? ' class="baris-perhatian"' : '';
       const warnaP = b.persen===null ? "#6b7280" : (!dibawah ? "#2b8a3e" : "#c92a2a");
-      tabel += '<tr' + sorot + '><td>' + (i+1) + '</td><td>' + esc(b.nis||"-") + '</td>' +
+      // Bila baris tersorot, warna teks diatur CSS .baris-perhatian td (adaptif). Bila tidak, pakai warna spesifik.
+      const gayaAlpa = perhatian ? "" : ("color:" + (b.alpa>0?"#c92a2a":"inherit") + ";");
+      const gayaP = perhatian ? "" : ("color:" + warnaP + ";");
+      tabel += '<tr' + cls + '><td>' + (i+1) + '</td><td>' + esc(b.nis||"-") + '</td>' +
         '<td><b>' + esc(b.nama) + '</b></td>' +
         '<td style="text-align:center">' + b.hadir + '</td>' +
         '<td style="text-align:center">' + b.sakit + '</td>' +
         '<td style="text-align:center">' + b.izin + '</td>' +
-        '<td style="text-align:center;font-weight:700;color:' + (b.alpa>0?"#c92a2a":"inherit") + '">' + b.alpa + '</td>' +
-        '<td style="text-align:center;font-weight:700;color:' + warnaP + '">' + f(b.persen) + '</td></tr>';
+        '<td style="text-align:center;font-weight:700;' + gayaAlpa + '">' + b.alpa + '</td>' +
+        '<td style="text-align:center;font-weight:700;' + gayaP + '">' + f(b.persen) + '</td></tr>';
     });
     tabel += '</table></div>';
 
@@ -4285,7 +4327,7 @@ window.renderRekapHarian = async () => {
 };
 
 let _pgRekap = 1;
-const PG_REKAP = 15;
+const PG_REKAP = 5;
 
 function gambarHalamanRekapJurnal(){
   const wadah = $("rkJurnalTabel");
@@ -4379,15 +4421,15 @@ window.renderKepatuhanKelas = async () => {
       if (j) {
         terisi++;
         const pengganti = j.guru_asli ? ' <span style="color:#b78100;font-size:12px">(pengganti: ' + esc(j.guru_nama||"-") + ')</span>' : '';
-        rows += '<tr style="background:#ebfbee">' +
+        rows += '<tr class="baris-terisi">' +
           '<td>' + (i+1) + '</td><td><b>' + esc(s.jam_ke||"-") + '</b></td>' +
           '<td>' + esc(namaMapel) + '</td><td>' + esc(namaGuru) + '</td>' +
-          '<td style="color:#2b8a3e;font-weight:600">✓ Terisi' + pengganti + '</td></tr>';
+          '<td style="font-weight:600">✓ Terisi' + pengganti + '</td></tr>';
       } else {
-        rows += '<tr style="background:#fff0f0">' +
+        rows += '<tr class="baris-belum">' +
           '<td>' + (i+1) + '</td><td><b>' + esc(s.jam_ke||"-") + '</b></td>' +
           '<td>' + esc(namaMapel) + '</td><td>' + esc(namaGuru) + '</td>' +
-          '<td style="color:#c92a2a;font-weight:600">✗ Belum</td></tr>';
+          '<td style="font-weight:600">✗ Belum</td></tr>';
       }
     });
 
@@ -5272,9 +5314,12 @@ async function muatJadwal(){
           '<div><label>Guru Pengampu</label><select id="jdGuru">' + opsiGuru + '</select></div>' +
         '</div>' +
         '<div class="row">' +
-          '<div><label>Mapel</label>' +
-            '<input id="jdCariMapel" placeholder="Ketik untuk cari mapel..." oninput="cariMapelJadwal()" style="margin-bottom:6px">' +
-            '<select id="jdMapel">' + opsiMapel + '</select></div>' +
+          '<div style="position:relative"><label>Mapel</label>' +
+            '<input id="jdCariMapel" autocomplete="off" placeholder="Ketik nama/kode mapel..." ' +
+              'oninput="cariMapelJadwal()" onfocus="cariMapelJadwal()">' +
+            '<input type="hidden" id="jdMapel" value="">' +
+            '<div id="jdMapelHasil" class="autocomplete-hasil" style="display:none"></div>' +
+          '</div>' +
           '<div></div>' +
         '</div>' +
         '<button class="btn" id="jdBtnSimpan" onclick="simpanJadwal()">Simpan Slot</button>' +
@@ -5293,21 +5338,45 @@ window.gantiKelasJadwal = () => {
   renderJadwal();
 };
 
-/* Filter dropdown mapel di form Jadwal sesuai kata kunci. Pertahankan pilihan bila masih cocok. */
+/* Autocomplete mapel di form Jadwal: tampilkan daftar hasil sesuai ketikan. */
 window.cariMapelJadwal = () => {
-  const q = ($("jdCariMapel").value || "").trim().toLowerCase();
-  const sel = $("jdMapel");
-  if (!sel) return;
-  const terpilih = sel.value;
+  const inp = $("jdCariMapel");
+  const box = $("jdMapelHasil");
+  if (!inp || !box) return;
+  const q = (inp.value || "").trim().toLowerCase();
   const cocok = _jdMapelList.filter(m => {
     const teks = labelMapel(m).toLowerCase();
     return !q || teks.includes(q);
-  });
-  sel.innerHTML = '<option value="">-- pilih mapel --</option>' +
-    cocok.map(m => '<option value="' + esc(m.id) + '">' + esc(labelMapel(m)) + '</option>').join("");
-  // pertahankan pilihan lama bila masih ada di daftar hasil
-  if (cocok.find(m => m.id === terpilih)) sel.value = terpilih;
+  }).slice(0, 30);   // batasi agar daftar tak terlalu panjang
+
+  if (!cocok.length) {
+    box.innerHTML = '<div class="autocomplete-item" style="color:var(--ink-lembut)">Tidak ada mapel cocok</div>';
+    box.style.display = "block";
+    return;
+  }
+  box.innerHTML = cocok.map(m =>
+    '<div class="autocomplete-item" onmousedown="pilihMapelJadwal(\'' + m.id + '\')">' +
+      esc(labelMapel(m)) + '</div>').join("");
+  box.style.display = "block";
 };
+
+/* Pilih satu mapel dari daftar autocomplete. */
+window.pilihMapelJadwal = (id) => {
+  const m = _jdMapelList.find(x => x.id === id);
+  if (!m) return;
+  if ($("jdMapel")) $("jdMapel").value = id;           // simpan id (dibaca simpanJadwal)
+  if ($("jdCariMapel")) $("jdCariMapel").value = labelMapel(m);  // tampilkan label
+  const box = $("jdMapelHasil");
+  if (box) { box.style.display = "none"; box.innerHTML = ""; }
+};
+
+/* Tutup daftar autocomplete saat klik di luar. */
+document.addEventListener("click", (e) => {
+  const box = $("jdMapelHasil");
+  const inp = $("jdCariMapel");
+  if (!box || !inp) return;
+  if (e.target !== inp && !box.contains(e.target)) box.style.display = "none";
+});
 
 // Ambil jadwal kelas aktif + nama mapel & guru via relasi (dua join sekaligus)
 async function renderJadwal(){
@@ -5394,6 +5463,8 @@ window.simpanJadwal = async () => {
         .insert({ kelas_id: _jdKelasAktif, hari, jam_ke, waktu, mapel_id, guru_id });
       if (error) throw new Error(error.message);
       $("jdJam").value = ""; $("jdWaktu").value = "";
+      if ($("jdCariMapel")) $("jdCariMapel").value = "";
+      if ($("jdMapel")) $("jdMapel").value = "";
       setMsg("Slot ditambahkan.", true);
     }
     await renderJadwal();
@@ -5408,6 +5479,11 @@ window.editJadwal = (id) => {
   $("jdJam").value = j.jam_ke || "";
   $("jdWaktu").value = j.waktu || "";
   $("jdMapel").value = j.mapel_id || "";
+  // tampilkan label mapel di kotak cari autocomplete
+  if ($("jdCariMapel")) {
+    const mp = _jdMapelList.find(x => x.id === j.mapel_id);
+    $("jdCariMapel").value = mp ? labelMapel(mp) : "";
+  }
   $("jdGuru").value = j.guru_id || "";
   $("jdJudulForm").textContent = "Edit Slot Jadwal";
   $("jdBtnSimpan").textContent = "Perbarui Slot";
@@ -5419,6 +5495,8 @@ window.batalEditJadwal = () => {
   _editJadwalId = null;
   if ($("jdJam")) $("jdJam").value = "";
   if ($("jdWaktu")) $("jdWaktu").value = "";
+  if ($("jdCariMapel")) $("jdCariMapel").value = "";
+  if ($("jdMapel")) $("jdMapel").value = "";
   if ($("jdJudulForm")) $("jdJudulForm").textContent = "Tambah Slot Jadwal";
   if ($("jdBtnSimpan")) $("jdBtnSimpan").textContent = "Simpan Slot";
   if ($("jdBtnBatal")) $("jdBtnBatal").style.display = "none";
