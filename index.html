@@ -605,7 +605,7 @@ function bangunNav(){
   // saring menu yang dikecualikan untuk akun ini (admin tak terpengaruh)
   if (ME.role !== "admin") {
     if (!ME.izin_nilai)   menu = menu.filter(k => k !== "nilai");
-    if (!ME.izin_catatan) menu = menu.filter(k => k !== "walikelas");
+    if (!punyaTabWali())  menu = menu.filter(k => k !== "walikelas");
     if (!ME.izin_jadwal)  menu = menu.filter(k => k !== "jadwal");
     // Rekap Harian hanya untuk guru bila diizinkan (kepsek/pengawas selalu punya)
     if (ME.role === "guru" && !ME.izin_rekapharian) menu = menu.filter(k => k !== "rekapharian");
@@ -626,7 +626,7 @@ async function segarkanIzinMenu(){
   if (!ME || ME.role === "admin") return;   // admin tak terpengaruh izin
   try {
     const { data, error } = await sb.from("profil")
-      .select("izin_nilai, izin_catatan, izin_jadwal, izin_jadwal_edit, izin_rekapharian, izin_verifikasi").eq("id", ME.id).single();
+      .select("izin_nilai, izin_catatan, izin_jadwal, izin_jadwal_edit, izin_rekapharian, izin_verifikasi, izin_absensi, izin_kartu, izin_rekapnilai").eq("id", ME.id).single();
     if (error || !data) return;
     const berubah =
       ME.izin_nilai   !== data.izin_nilai   ||
@@ -634,7 +634,10 @@ async function segarkanIzinMenu(){
       ME.izin_jadwal  !== data.izin_jadwal  ||
       ME.izin_jadwal_edit !== data.izin_jadwal_edit ||
       ME.izin_rekapharian !== data.izin_rekapharian ||
-      ME.izin_verifikasi  !== data.izin_verifikasi;
+      ME.izin_verifikasi  !== data.izin_verifikasi ||
+      ME.izin_absensi !== data.izin_absensi ||
+      ME.izin_kartu   !== data.izin_kartu ||
+      ME.izin_rekapnilai !== data.izin_rekapnilai;
     if (berubah) {
       ME.izin_nilai = data.izin_nilai;
       ME.izin_catatan = data.izin_catatan;
@@ -642,6 +645,9 @@ async function segarkanIzinMenu(){
       ME.izin_jadwal_edit = data.izin_jadwal_edit;
       ME.izin_rekapharian = data.izin_rekapharian;
       ME.izin_verifikasi = data.izin_verifikasi;
+      ME.izin_absensi = data.izin_absensi;
+      ME.izin_kartu = data.izin_kartu;
+      ME.izin_rekapnilai = data.izin_rekapnilai;
       const menuAktif = document.querySelector("#nav button.active");
       const keyAktif = menuAktif ? menuAktif.textContent : null;
       bangunNav();   // bangun ulang; menu yang dicabut akan hilang
@@ -3158,22 +3164,46 @@ window.hapusCatatan = async (id) => {
 /* ============ MODUL WALI KELAS (induk bertab: Rekap Absensi + Catatan) ============ */
 let _wkTab = "absensi";   // tab aktif terakhir
 
+/* Cek izin tiap tab Wali Kelas. Admin selalu true. */
+function tabWaliTampil(tab){
+  if (ME.role === "admin") return true;
+  if (tab === "absensi") return !!ME.izin_absensi;
+  if (tab === "catatan") return !!ME.izin_catatan;
+  if (tab === "kartu")   return !!ME.izin_kartu;
+  if (tab === "nilai")   return !!ME.izin_rekapnilai;
+  return false;
+}
+/* True bila punya minimal satu tab Wali Kelas. */
+function punyaTabWali(){
+  return tabWaliTampil("absensi") || tabWaliTampil("catatan") ||
+         tabWaliTampil("kartu") || tabWaliTampil("nilai");
+}
+/* Tab pertama yang diizinkan (untuk default aktif). */
+function tabWaliPertama(){
+  return ["absensi","catatan","kartu","nilai"].find(t => tabWaliTampil(t)) || "absensi";
+}
+
 async function muatWaliKelas(){
+  // pastikan tab aktif adalah tab yang diizinkan
+  if (!tabWaliTampil(_wkTab)) _wkTab = tabWaliPertama();
+
+  const tombol =
+    (tabWaliTampil("absensi") ? '<button id="wkTabAbsensi" class="' + (_wkTab==="absensi"?"aktif":"") + '" onclick="gantiTabWali(\'absensi\')">Rekap Absensi</button>' : '') +
+    (tabWaliTampil("catatan") ? '<button id="wkTabCatatan" class="' + (_wkTab==="catatan"?"aktif":"") + '" onclick="gantiTabWali(\'catatan\')">Catatan</button>' : '') +
+    (tabWaliTampil("kartu")   ? '<button id="wkTabKartu" class="' + (_wkTab==="kartu"?"aktif":"") + '" onclick="gantiTabWali(\'kartu\')">Kartu Siswa</button>' : '') +
+    (tabWaliTampil("nilai")   ? '<button id="wkTabNilai" class="' + (_wkTab==="nilai"?"aktif":"") + '" onclick="gantiTabWali(\'nilai\')">Rekap Nilai</button>' : '');
+
   $("main").innerHTML =
     '<div class="card" style="padding-bottom:0">' +
       '<h2 style="margin-bottom:12px">Wali Kelas</h2>' +
-      '<div class="subtab-wk">' +
-        '<button id="wkTabAbsensi" class="' + (_wkTab==="absensi"?"aktif":"") + '" onclick="gantiTabWali(\'absensi\')">Rekap Absensi</button>' +
-        '<button id="wkTabCatatan" class="' + (_wkTab==="catatan"?"aktif":"") + '" onclick="gantiTabWali(\'catatan\')">Catatan</button>' +
-        '<button id="wkTabKartu" class="' + (_wkTab==="kartu"?"aktif":"") + '" onclick="gantiTabWali(\'kartu\')">Kartu Siswa</button>' +
-        '<button id="wkTabNilai" class="' + (_wkTab==="nilai"?"aktif":"") + '" onclick="gantiTabWali(\'nilai\')">Rekap Nilai</button>' +
-      '</div>' +
+      '<div class="subtab-wk">' + tombol + '</div>' +
     '</div>' +
     '<div id="wkIsi"><div class="card"><div class="page-kosong">Memuat...</div></div></div>';
   await tampilkanTabWali();
 }
 
 window.gantiTabWali = async (tab) => {
+  if (!tabWaliTampil(tab)) return;   // jaga-jaga: tab tak diizinkan
   _wkTab = tab;
   document.querySelectorAll(".subtab-wk button").forEach(b => b.classList.remove("aktif"));
   const idBtn = tab === "catatan" ? "wkTabCatatan" : (tab === "kartu" ? "wkTabKartu" : (tab === "nilai" ? "wkTabNilai" : "wkTabAbsensi"));
@@ -4547,7 +4577,10 @@ window.excelRekapHarian = () => {
 /* ============ MODUL IZIN MENU (admin) ============ */
 const IZIN_MENU_LIST = [
   { key:"nilai",   label:"Nilai",   kolom:"izin_nilai" },
-  { key:"walikelas", label:"Wali Kelas", kolom:"izin_catatan" },
+  { key:"wk_absensi", label:"WK · Rekap Absensi", kolom:"izin_absensi" },
+  { key:"wk_catatan", label:"WK · Catatan", kolom:"izin_catatan" },
+  { key:"wk_kartu",   label:"WK · Kartu Siswa", kolom:"izin_kartu" },
+  { key:"wk_nilai",   label:"WK · Rekap Nilai", kolom:"izin_rekapnilai" },
   { key:"jadwal",  label:"Jadwal",  kolom:"izin_jadwal" },
   { key:"jadwaledit", label:"Jadwal (Edit/Buat)", kolom:"izin_jadwal_edit" },
   { key:"rekapharian", label:"Rekap Harian", kolom:"izin_rekapharian" }
