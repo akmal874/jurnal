@@ -243,6 +243,22 @@
   }
   .autocomplete-item { padding: 10px 12px; cursor: pointer; font-size: 14px; }
   .autocomplete-item:hover { background: var(--aksen-lembut); }
+
+  /* Izin Menu: daftar akun & panel */
+  .akun-baris {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 14px; border: 1px solid var(--garis); border-radius: 10px;
+    margin-bottom: 8px; cursor: pointer; transition: background .15s;
+  }
+  .akun-baris:hover { background: var(--aksen-lembut); }
+  .izin-panel-box {
+    background: var(--card); border-radius: 14px; padding: 22px;
+    max-width: 440px; width: 100%; max-height: 85vh; overflow-y: auto;
+  }
+  .izin-toggle {
+    display: flex; align-items: center; gap: 8px; padding: 8px 0;
+    font-weight: normal; cursor: pointer; font-size: 14px;
+  }
 </style>
 </head>
 <body>
@@ -314,6 +330,8 @@
     <button class="btn" id="modalPeringatanOk">Mengerti</button>
   </div>
 </div>
+
+<div id="izinPanelOverlay" class="modal-overlay hidden"></div>
 
 <div id="toast" class="toast"></div>
 
@@ -4585,7 +4603,29 @@ const IZIN_MENU_LIST = [
   { key:"jadwaledit", label:"Jadwal (Edit/Buat)", kolom:"izin_jadwal_edit" },
   { key:"rekapharian", label:"Rekap Harian", kolom:"izin_rekapharian" }
 ];
+
+/* Pengelompokan izin untuk panel per-akun. Tambah izin baru cukup di sini. */
+const IZIN_GRUP = [
+  { grup:"Wali Kelas", item:[
+    { label:"Rekap Absensi", kolom:"izin_absensi" },
+    { label:"Catatan", kolom:"izin_catatan" },
+    { label:"Kartu Siswa", kolom:"izin_kartu" },
+    { label:"Rekap Nilai", kolom:"izin_rekapnilai" }
+  ]},
+  { grup:"Jadwal", item:[
+    { label:"Lihat Jadwal", kolom:"izin_jadwal" },
+    { label:"Edit/Buat Jadwal", kolom:"izin_jadwal_edit" }
+  ]},
+  { grup:"Lainnya", item:[
+    { label:"Nilai", kolom:"izin_nilai" },
+    { label:"Rekap Harian", kolom:"izin_rekapharian" }
+  ]}
+];
+/* Semua kolom izin (untuk fitur "kosongkan semua"). */
+const IZIN_SEMUA_KOLOM = IZIN_GRUP.flatMap(g => g.item.map(i => i.kolom));
 let _izinCache = [];
+
+let _izinAkunAktif = null;   // id akun yang panelnya sedang dibuka
 
 async function muatIzinMenu(){
   if (ME.role !== "admin") {
@@ -4602,43 +4642,94 @@ async function muatIzinMenu(){
   }
 
   let html = '<div class="card"><h2>Izin Menu per Akun</h2>' +
-    '<p style="color:#6b7280;font-size:13px;margin-bottom:10px">Centang untuk <b>mengizinkan</b> ' +
-      'menu bagi akun tertentu. Tanpa centang, menu tersembunyi. Berlaku setelah pengguna masuk ulang. Admin selalu punya semua menu.</p>';
+    '<p style="color:#6b7280;font-size:13px;margin-bottom:10px">Pilih akun untuk mengatur izinnya. ' +
+      'Tanpa izin, menu tersembunyi. Berlaku setelah pengguna membuka Beranda. Admin selalu punya semua menu.</p>';
 
   if (!_izinCache.length) {
-    html += '<div class="empty">Belum ada pengguna guru/kepsek.</div></div>';
+    html += '<div class="empty">Belum ada pengguna guru/kepsek/pengawas.</div></div>';
     $("main").innerHTML = html; return;
   }
 
-  html += '<div style="overflow-x:auto"><table><tr><th>Nama</th><th>Peran</th>' +
-    IZIN_MENU_LIST.map(m => '<th style="text-align:center">Izinkan ' + m.label + '</th>').join("") + '</tr>';
-  _izinCache.forEach(u => {
-    html += '<tr><td><b>' + esc(u.nama||u.email) + '</b></td><td>' + namaRole(u.role) + '</td>' +
-      IZIN_MENU_LIST.map(m =>
-        '<td style="text-align:center"><input type="checkbox" style="width:18px;height:18px" ' +
-        (u[m.kolom] ? 'checked ' : '') +
-        'onchange="ubahIzin(\'' + u.id + '\',\'' + m.kolom + '\',this.checked)"></td>').join("") + '</tr>';
-  });
-  html += '</table></div>' +
-    '<div style="margin-top:14px;padding-top:14px;border-top:1px solid #e5e8f0">' +
-      '<button class="btn btn-sm" onclick="terapkanIzinSemua()">📢 Terapkan ke Semua Perangkat</button>' +
-      '<p style="color:#6b7280;font-size:12px;margin-top:8px">Perubahan izin sudah tersimpan otomatis saat Anda mencentang. ' +
-        'Guru/kepsek akan melihat menu terbaru saat membuka Beranda—tanpa perlu keluar-masuk.</p>' +
-      '<div id="izinMsg" style="margin-top:10px"></div>' +
-    '</div></div>';
+  // daftar akun (klik untuk buka panel)
+  html += '<div id="izinDaftarAkun">' + _izinCache.map(u => {
+    const jml = IZIN_SEMUA_KOLOM.filter(k => u[k]).length;
+    return '<div class="akun-baris" onclick="bukaPanelIzin(\'' + u.id + '\')">' +
+      '<div><b>' + esc(u.nama||u.email) + '</b>' +
+        '<span style="color:#6b7280;font-size:12px"> · ' + namaRole(u.role) + '</span></div>' +
+      '<div style="display:flex;align-items:center;gap:10px">' +
+        '<span style="font-size:12px;color:' + (jml?'#2b8a3e':'#6b7280') + '">' + jml + ' izin aktif</span>' +
+        '<span style="color:#6b7280">›</span>' +
+      '</div></div>';
+  }).join("") + '</div>';
+
+  html += '<div id="izinMsg" style="margin-top:10px"></div></div>';
   $("main").innerHTML = html;
 }
 
-window.terapkanIzinSemua = () => {
-  const el = $("izinMsg");
-  if (el) el.innerHTML =
-    '<div style="padding:10px;border-radius:8px;font-size:13px;' +
-    'background:#ebfbee;color:#2b8a3e">✓ Semua izin sudah tersimpan. ' +
-    'Perangkat guru/kepsek akan menerapkannya otomatis saat membuka Beranda.</div>';
+/* Buka panel izin untuk satu akun (modal sederhana). */
+window.bukaPanelIzin = (uid) => {
+  const u = _izinCache.find(x => x.id === uid);
+  if (!u) return;
+  _izinAkunAktif = uid;
+
+  const grupHtml = IZIN_GRUP.map(g =>
+    '<div style="margin-bottom:14px">' +
+      '<div style="font-weight:600;font-size:13px;color:#3b5bdb;margin-bottom:6px">' + esc(g.grup) + '</div>' +
+      g.item.map(it =>
+        '<label class="izin-toggle">' +
+          '<input type="checkbox" style="width:18px;height:18px" ' + (u[it.kolom]?'checked ':'') +
+          'onchange="ubahIzin(\'' + uid + '\',\'' + it.kolom + '\',this.checked)"> ' +
+          esc(it.label) +
+        '</label>').join("") +
+    '</div>').join("");
+
+  const isi =
+    '<div class="izin-panel-box">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+        '<h3 style="margin:0">' + esc(u.nama||u.email) + '</h3>' +
+        '<button class="btn btn-ghost btn-sm" onclick="tutupPanelIzin()">✕</button>' +
+      '</div>' +
+      '<p style="color:#6b7280;font-size:12px;margin-bottom:14px">' + namaRole(u.role) +
+        ' · perubahan tersimpan otomatis</p>' +
+      grupHtml +
+      '<div style="border-top:1px solid var(--garis);padding-top:12px;margin-top:4px">' +
+        '<button class="btn btn-ghost btn-sm" onclick="kosongkanIzinAkun(\'' + uid + '\')">Kosongkan Semua Izin</button>' +
+      '</div>' +
+      '<div id="izinPanelMsg" style="margin-top:10px"></div>' +
+    '</div>';
+
+  $("izinPanelOverlay").innerHTML = isi;
+  $("izinPanelOverlay").classList.remove("hidden");
+};
+
+window.tutupPanelIzin = () => {
+  $("izinPanelOverlay").classList.add("hidden");
+  $("izinPanelOverlay").innerHTML = "";
+  _izinAkunAktif = null;
+  muatIzinMenu();   // segarkan jumlah izin di daftar
+};
+
+window.kosongkanIzinAkun = async (uid) => {
+  if (!(await konfirmasi("Kosongkan Izin", "Hapus semua izin untuk akun ini? Semua menu opsional akan tersembunyi."))) return;
+  const patch = {};
+  IZIN_SEMUA_KOLOM.forEach(k => patch[k] = false);
+  try {
+    const { error } = await sb.from("profil").update(patch).eq("id", uid);
+    if (error) throw new Error(error.message);
+    const u = _izinCache.find(x => x.id === uid);
+    if (u) IZIN_SEMUA_KOLOM.forEach(k => u[k] = false);
+    bukaPanelIzin(uid);   // render ulang panel (semua tercabut)
+    const el = $("izinPanelMsg");
+    if (el) el.innerHTML = '<div style="padding:8px 12px;border-radius:8px;font-size:13px;background:#ebfbee;color:#2b8a3e">Semua izin dikosongkan.</div>';
+  } catch (e) {
+    const el = $("izinPanelMsg");
+    if (el) el.innerHTML = '<div style="padding:8px 12px;border-radius:8px;font-size:13px;background:#fff0f0;color:#c92a2a">Gagal: ' + esc(e.message) + '</div>';
+  }
 };
 
 window.ubahIzin = async (uid, kolom, nilai) => {
-  const setMsg = (t, ok) => { $("izinMsg").innerHTML =
+  const target = $("izinPanelMsg") || $("izinMsg");
+  const setMsg = (t, ok) => { if (target) target.innerHTML =
     '<div style="padding:8px 12px;border-radius:8px;font-size:13px;' +
     (ok?'background:#ebfbee;color:#2b8a3e':'background:#fff0f0;color:#c92a2a') + '">' + esc(t) + '</div>'; };
   try {
@@ -4646,7 +4737,7 @@ window.ubahIzin = async (uid, kolom, nilai) => {
     if (error) throw new Error(error.message);
     const u = _izinCache.find(x => x.id === uid);
     if (u) u[kolom] = nilai;
-    setMsg("Tersimpan. Berlaku setelah pengguna masuk ulang.", true);
+    setMsg("Tersimpan. Berlaku setelah pengguna membuka Beranda.", true);
   } catch (e) { setMsg("Gagal: " + e.message, false); }
 };
 
@@ -5403,7 +5494,11 @@ window.pilihMapelJadwal = (id) => {
   if (box) { box.style.display = "none"; box.innerHTML = ""; }
 };
 
-/* Tutup daftar autocomplete saat klik di luar. */
+/* Tutup panel izin saat klik area gelap di luar kotak. */
+document.addEventListener("click", (e) => {
+  const ov = $("izinPanelOverlay");
+  if (ov && !ov.classList.contains("hidden") && e.target === ov) tutupPanelIzin();
+});
 document.addEventListener("click", (e) => {
   const box = $("jdMapelHasil");
   const inp = $("jdCariMapel");
