@@ -2244,6 +2244,21 @@ async function muatNilai(){
     }
   }
 
+  // Guru: hanya kelas yang ia ajar (via jadwal). Admin/kepsek: semua kelas.
+  if (ME.role === "guru") {
+    try {
+      const { data: jd } = await sb.from("jadwal")
+        .select("kelas_id").eq("guru_id", ME.id);
+      const idKelasAjar = new Set((jd || []).map(x => x.kelas_id));
+      if (idKelasAjar.size) {
+        const cocok = kelasList.filter(k => idKelasAjar.has(k.id));
+        if (cocok.length) kelasList = cocok;
+      }
+    } catch (e) {
+      console.warn("Gagal memuat kelas guru:", e.message);
+    }
+  }
+
   const opsiKelas = '<option value="">-- pilih kelas --</option>' +
     kelasList.map(k => '<option value="' + esc(k.id) + '"' + (k.id===_nKelas?" selected":"") +
       '>' + esc(k.nama_kelas) + '</option>').join("");
