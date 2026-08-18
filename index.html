@@ -259,6 +259,29 @@
     display: flex; align-items: center; gap: 8px; padding: 8px 0;
     font-weight: normal; cursor: pointer; font-size: 14px;
   }
+
+    /* Rekap Absensi — link nama & modal detail per mapel */
+  .ra-nama-link { color:var(--aksen); cursor:pointer; font-weight:700;
+    border-bottom:1px dashed var(--aksen); }
+  .ra-nama-link:hover { opacity:.8; }
+  .ra-modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.45);
+    display:none; place-items:center; z-index:120; padding:20px; }
+  .ra-modal-bg.show { display:grid; }
+  .ra-modal { background:var(--card); border:1px solid var(--garis);
+    border-radius:14px; width:100%; max-width:580px; max-height:88vh; overflow:auto;
+    animation:raPop .18s ease; }
+  @keyframes raPop { from{transform:scale(.96);opacity:0} to{transform:scale(1);opacity:1} }
+  .ra-modal-head { padding:18px 20px; border-bottom:1px solid var(--garis);
+    display:flex; justify-content:space-between; align-items:flex-start; gap:12px;
+    position:sticky; top:0; background:var(--card); }
+  .ra-modal-head h3 { font-size:16px; }
+  .ra-sub { font-size:12px; color:var(--ink-lembut); margin-top:2px; }
+  .ra-tutup { background:none; border:none; font-size:22px; cursor:pointer;
+    color:var(--ink-lembut); line-height:1; }
+  .ra-modal-body { padding:16px 20px 22px; }
+  .ra-badge { display:inline-block; background:var(--aksen); color:#fff;
+    font-size:12px; padding:3px 10px; border-radius:20px; margin-right:6px; }
+  .ra-badge-alpa { background:var(--merah); }
 </style>
 </head>
 <body>
@@ -4090,6 +4113,130 @@ async function hitungRekapAbsensi(){
   return { baris, totalPertemuan };
 }
 
+/* ====== Opsi A: Drill-down kehadiran per mapel (klik nama siswa) ====== */
+window.detailAbsensiSiswa = async (siswaId) => {
+  const siswa = _raDataSiswa.find(s => s.siswa_id === siswaId);
+  const namaSiswa = siswa ? siswa.nama : "";
+  const nisSiswa  = siswa ? (siswa.nis || "-") : "-";
+  const dari   = _raRentang.dari, sampai = _raRentang.sampai;
+  const namaKelas = (_raKelasList.find(k=>k.id===_raKelasAktif)||{}).nama_kelas || "";
+
+  // tampilkan modal + loading
+  bukaModalDetailAbsensi(namaSiswa, nisSiswa, namaKelas,
+    '<div class="page-kosong">Memuat rincian...</div>');
+
+  try {
+    // ambil jurnal kelas ini + mapel/guru, dalam rentang & periode aktif
+    const periode = await ambilPeriodeAktif();
+    let qj = sb.from("jurnal")
+      .select("id, mapel_id, guru_id, mapel:mapel_id(nama_mapel), guru:guru_id(nama)")
+      .eq("kelas_id", _raKelasAktif);
+    if (periode.tahun_ajaran) qj = qj.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+    if (dari)   qj = qj.gte("tanggal", dari);
+    if (sampai) qj = qj.lte("tanggal", sampai);
+    const { data: jurnal, error: errJ } = await qj;
+    if (errJ) throw new Error(errJ.message);
+
+    const petaJurnal = {};
+    (jurnal || []).forEach(j => {
+      petaJurnal[j.id] = {
+        mapel_id: j.mapel_id || "-",
+        nama_mapel: (j.mapel && j.mapel.nama_mapel) || "(tanpa mapel)",
+        guru: (j.guru && j.guru.nama) || "-"
+      };
+    });
+    const jurnalIds = Object.keys(petaJurnal);
+
+    // absensi siswa ini pada jurnal-jurnal tsb
+    const petaMapel = {};   // mapel_id -> {nama_mapel, guru, hadir,sakit,izin,alpa}
+    if (jurnalIds.length) {
+      const potong = (arr,n)=>{const o=[];for(let i=0;i<arr.length;i+=n)o.push(arr.slice(i,i+n));return o;};
+      for (const grup of potong(jurnalIds, 200)) {
+        const { data: ab, error: errA } = await sb.from("absensi")
+          .select("status, jurnal_id").eq("siswa_id", siswaId).in("jurnal_id", grup);
+        if (errA) throw new Error(errA.message);
+        (ab || []).forEach(a => {
+          const j = petaJurnal[a.jurnal_id]; if (!j) return;
+          const key = j.mapel_id;
+          if (!petaMapel[key]) petaMapel[key] = {
+            nama_mapel:j.nama_mapel, guru:j.guru, hadir:0,sakit:0,izin:0,alpa:0 };
+          const v = String(a.status||"").toLowerCase();
+          if (v==="hadir") petaMapel[key].hadir++;
+          else if (v==="sakit") petaMapel[key].sakit++;
+          else if (v==="izin") petaMapel[key].izin++;
+          else petaMapel[key].alpa++;
+        });
+      }
+    }
+
+    const rows = Object.values(petaMapel)
+      .sort((a,b)=> a.nama_mapel.localeCompare(b.nama_mapel));
+
+    if (!rows.length) {
+      bukaModalDetailAbsensi(namaSiswa, nisSiswa, namaKelas,
+        '<div class="empty">Belum ada catatan absensi untuk siswa ini pada rentang tsb.</div>');
+      return;
+    }
+
+    let totH=0, totA=0;
+    let tbl = '<div style="overflow-x:auto"><table>' +
+      '<tr><th>Mapel</th><th>Guru</th>' +
+      '<th style="text-align:center">H</th><th style="text-align:center">S</th>' +
+      '<th style="text-align:center">I</th><th style="text-align:center">A</th>' +
+      '<th style="text-align:center">% Hadir</th></tr>';
+    rows.forEach(r => {
+      const total = r.hadir+r.sakit+r.izin+r.alpa;
+      const persen = total ? Math.round(r.hadir/total*100) : 0;
+      const rendah = persen < 80;
+      totH += r.hadir; totA += r.alpa;
+      tbl += '<tr>' +
+        '<td><b>' + esc(r.nama_mapel) + '</b></td>' +
+        '<td style="color:var(--ink-lembut);font-size:13px">' + esc(r.guru) + '</td>' +
+        '<td style="text-align:center">' + r.hadir + '</td>' +
+        '<td style="text-align:center">' + r.sakit + '</td>' +
+        '<td style="text-align:center">' + r.izin + '</td>' +
+        '<td style="text-align:center;font-weight:700;' + (r.alpa>0?'color:var(--merah)':'') + '">' + r.alpa + '</td>' +
+        '<td style="text-align:center;font-weight:700;' + (rendah?'color:var(--merah)':'') + '">' + persen + '%</td>' +
+      '</tr>';
+    });
+    tbl += '</table></div>';
+
+    const ringkas = '<div style="margin-bottom:14px">' +
+      '<span class="ra-badge">Total Hadir: ' + totH + '</span>' +
+      '<span class="ra-badge ra-badge-alpa">Total Alpa: ' + totA + '</span></div>';
+
+    bukaModalDetailAbsensi(namaSiswa, nisSiswa, namaKelas, ringkas + tbl);
+  } catch (e) {
+    bukaModalDetailAbsensi(namaSiswa, nisSiswa, namaKelas,
+      '<div class="empty" style="color:var(--merah)">Gagal memuat: ' + esc(e.message) + '</div>');
+  }
+};
+
+function bukaModalDetailAbsensi(nama, nis, kelas, isiHtml){
+  let bg = document.getElementById("raModalDetail");
+  if (!bg) {
+    bg = document.createElement("div");
+    bg.id = "raModalDetail";
+    bg.className = "ra-modal-bg";
+    bg.onclick = (e)=>{ if(e.target===bg) tutupModalDetailAbsensi(); };
+    document.body.appendChild(bg);
+  }
+  bg.innerHTML =
+    '<div class="ra-modal">' +
+      '<div class="ra-modal-head">' +
+        '<div><h3>' + esc(nama) + '</h3>' +
+          '<div class="ra-sub">Rincian per mapel · NIS ' + esc(nis) + ' · ' + esc(kelas) + '</div></div>' +
+        '<button class="ra-tutup" onclick="tutupModalDetailAbsensi()">×</button>' +
+      '</div>' +
+      '<div class="ra-modal-body">' + isiHtml + '</div>' +
+    '</div>';
+  bg.classList.add("show");
+}
+window.tutupModalDetailAbsensi = () => {
+  const bg = document.getElementById("raModalDetail");
+  if (bg) bg.classList.remove("show");
+};
+
 window.renderRekapAbsensi = async () => {
   $("raIsi").innerHTML = '<div class="card"><div class="page-kosong">Memuat...</div></div>';
   try {
@@ -4152,7 +4299,7 @@ window.renderRekapAbsensi = async () => {
       const gayaAlpa = perhatian ? "" : ("color:" + (b.alpa>0?"#c92a2a":"inherit") + ";");
       const gayaP = perhatian ? "" : ("color:" + warnaP + ";");
       tabel += '<tr' + cls + '><td>' + (i+1) + '</td><td>' + esc(b.nis||"-") + '</td>' +
-        '<td><b>' + esc(b.nama) + '</b></td>' +
+        '<td><a class="ra-nama-link" onclick="detailAbsensiSiswa(\'' + esc(b.siswa_id) + '\')">' + esc(b.nama) + '</a></td>' +
         '<td style="text-align:center">' + b.hadir + '</td>' +
         '<td style="text-align:center">' + b.sakit + '</td>' +
         '<td style="text-align:center">' + b.izin + '</td>' +
