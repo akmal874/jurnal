@@ -282,6 +282,26 @@
   .ra-badge { display:inline-block; background:var(--aksen); color:#fff;
     font-size:12px; padding:3px 10px; border-radius:20px; margin-right:6px; }
   .ra-badge-alpa { background:var(--merah); }
+
+  /* Overlay Loading Global */
+  #globalLoading {
+    position: fixed; inset: 0; background: rgba(20,22,30,0.55);
+    display: none; place-items: center; z-index: 999998;
+  }
+  #globalLoading.show { display: grid; }
+  .gl-box {
+    background: var(--card); border-radius: 14px; padding: 26px 32px;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    min-width: 220px; box-shadow: 0 10px 30px rgba(0,0,0,.25);
+  }
+  .gl-spinner {
+    width: 38px; height: 38px; border-radius: 50%;
+    border: 4px solid var(--garis); border-top-color: var(--aksen);
+    animation: gl-spin .8s linear infinite;
+  }
+  @keyframes gl-spin { to { transform: rotate(360deg); } }
+  .gl-teks { font-size: 13.5px; color: var(--ink); text-align: center; font-weight: 600; }
+  .gl-sub { font-size: 11.5px; color: var(--ink-lembut); text-align:center; margin-top:-6px; }
 </style>
 </head>
 <body>
@@ -515,6 +535,29 @@ function peringatan(judul, pesan, opsi = {}){
     overlay.onclick = (e) => { if (e.target === overlay) selesai(); };
   });
 }
+
+/* ===== Overlay Loading Global (untuk simpan/upload, koneksi lambat) ===== */
+window.tampilkanLoading = (teks, sub) => {
+  let ov = document.getElementById("globalLoading");
+  if (!ov) {
+    ov = document.createElement("div");
+    ov.id = "globalLoading";
+    ov.innerHTML =
+      '<div class="gl-box">' +
+        '<div class="gl-spinner"></div>' +
+        '<div class="gl-teks" id="glTeks"></div>' +
+        '<div class="gl-sub" id="glSub"></div>' +
+      '</div>';
+    document.body.appendChild(ov);
+  }
+  $("glTeks").textContent = teks || "Memproses...";
+  $("glSub").textContent = sub || "";
+  ov.classList.add("show");
+};
+window.sembunyikanLoading = () => {
+  const ov = document.getElementById("globalLoading");
+  if (ov) ov.classList.remove("show");
+};
 
 /* ===== INFO APLIKASI (versi, pembuat, sekolah) ===== */
 let _infoApp = null;
@@ -2085,6 +2128,7 @@ window.simpanJurnal = async () => {
   const periode = await ambilPeriodeAktif();
   const btn = $("jBtnSimpan");
   btn.disabled = true; btn.textContent = "Menyimpan...";
+  tampilkanLoading("Menyimpan data jurnal...", "Tahap 1 dari 3");
 
   try {
     const dataJurnal = {
@@ -2106,6 +2150,7 @@ window.simpanJurnal = async () => {
       if (errUpd) throw new Error(errUpd.message);
 
       // ganti absensi: hapus lama, insert baru
+      tampilkanLoading("Menyimpan absensi siswa...", "Tahap 2 dari 3");
       const { error: errDel } = await sb.from("absensi").delete().eq("jurnal_id", jurnalId);
       if (errDel) throw new Error("Gagal hapus absensi lama: " + errDel.message);
       const barisAbsen = _absenSiswa.map(x => ({
@@ -2117,6 +2162,7 @@ window.simpanJurnal = async () => {
 
       // foto: upload hanya bila guru memilih file baru
       if (_fotoFile) {
+        tampilkanLoading("Mengunggah foto dokumentasi...", "Tahap 3 dari 3 · mohon tunggu, jangan tutup halaman");
         const { error: errFoto } = await sb.storage.from("dokumentasi")
           .upload(jurnalId + ".jpg", _fotoFile, { upsert: true, contentType: "image/jpeg" });
         if (errFoto) throw new Error("Foto gagal: " + errFoto.message);
@@ -2156,6 +2202,7 @@ window.simpanJurnal = async () => {
       if (errJur) throw new Error(errJur.message);
       jurnalId = jur.id;
 
+      tampilkanLoading("Menyimpan absensi siswa...", "Tahap 2 dari 3");
       const barisAbsen = _absenSiswa.map(x => ({
         jurnal_id: jurnalId, siswa_id: x.siswa_id, siswa_nis: x.nis, siswa_nama: x.nama,
         status: x.status, keterangan: (x.status !== "Hadir" ? (x.keterangan || "").trim() : "")
@@ -2163,6 +2210,7 @@ window.simpanJurnal = async () => {
       const { error: errAb } = await sb.from("absensi").insert(barisAbsen);
       if (errAb) throw new Error("Absensi gagal: " + errAb.message);
 
+      tampilkanLoading("Mengunggah foto dokumentasi...", "Tahap 3 dari 3 · mohon tunggu, jangan tutup halaman");
       const { error: errFoto } = await sb.storage.from("dokumentasi")
         .upload(jurnalId + ".jpg", _fotoFile, { upsert: true });
       if (errFoto) throw new Error("Foto gagal: " + errFoto.message);
@@ -2189,6 +2237,7 @@ window.simpanJurnal = async () => {
   } catch (e) {
     setMsg("Gagal: " + e.message, false);
   } finally {
+    sembunyikanLoading();
     btn.disabled = false;
     btn.textContent = _editJurnalId ? "Perbarui Jurnal" : "Simpan Jurnal";
   }
@@ -3159,6 +3208,7 @@ window.simpanCatatan = async () => {
 
   const btn = $("cBtnSimpan");
   btn.disabled = true; btn.textContent = "Menyimpan...";
+  tampilkanLoading("Menyimpan catatan...");
   try {
     if (_editCatatanId) {
       const { error } = await sb.from("catatan")
@@ -3181,6 +3231,7 @@ window.simpanCatatan = async () => {
   } catch (e) {
     setMsg("Gagal menyimpan: " + e.message, false);
   } finally {
+    sembunyikanLoading();
     btn.disabled = false; btn.textContent = _editCatatanId ? "Perbarui Catatan" : "Simpan Catatan";
   }
 };
@@ -5345,6 +5396,7 @@ window.buatPengguna = async () => {
 
   const btn = $("uBtnSimpan");
   btn.disabled = true; btn.textContent = "Membuat akun...";
+  tampilkanLoading("Membuat akun pengguna...");
   try {
     const hasil = await panggilFungsi("buat-pengguna", { nama, email, pass, role, nip });
 
@@ -5367,6 +5419,7 @@ window.buatPengguna = async () => {
   } catch (e) {
     setMsg("Gagal: " + e.message, false);
   } finally {
+    sembunyikanLoading();
     btn.disabled = false; btn.textContent = "Buat Akun";
   }
 };
@@ -5417,6 +5470,7 @@ window.simpanEditPengguna = async () => {
 
   const btn = $("uBtnSimpan");
   btn.disabled = true; btn.textContent = "Menyimpan...";
+  tampilkanLoading("Menyimpan perubahan pengguna...");
   try {
     // update profil
     const { error } = await sb.from("profil")
@@ -5443,6 +5497,7 @@ window.simpanEditPengguna = async () => {
   } catch (e) {
     setMsg("Gagal memperbarui: " + e.message, false);
   } finally {
+    sembunyikanLoading();
     btn.disabled = false;
   }
 };
