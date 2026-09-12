@@ -1858,14 +1858,40 @@ async function muatIsiJurnal(){
   }
   window._mapelSaya = mapelSaya;
 
+  // Guru: kelas dibatasi ke yang ia ajar (via jadwal). Bila jadwalnya kosong,
+  // biarkan semua kelas tampil (fallback seperti perilaku lama). Admin: semua kelas.
+  if (ME.role === "guru") {
+    try {
+      const { data: jd } = await sb.from("jadwal")
+        .select("kelas_id").eq("guru_id", ME.id);
+      const idKelasAjar = new Set((jd || []).map(x => x.kelas_id));
+      if (idKelasAjar.size) {
+        const cocok = kelasList.filter(k => idKelasAjar.has(k.id));
+        if (cocok.length) kelasList = cocok;
+      }
+    } catch (e) {
+      console.warn("Gagal memuat kelas guru:", e.message);
+    }
+  }
+
   // simpan semua mapel + peta guru->mapel_id yang diampu (untuk filter dropdown)
   window._mapelSemuaIsi = mapelList;
   window._mapelSaya = mapelSaya;
   window._mapelPerGuru = {};
+  window._guruNamaKeId = {};   // nama/email guru -> id (untuk cari jadwalnya)
   guruList.forEach(g => {
     const nama = g.nama || g.email;
     window._mapelPerGuru[nama] = (g.guru_mapel || []).map(x => x.mapel_id);
+    window._guruNamaKeId[nama] = g.id;
   });
+
+  // Jadwal seluruh guru (untuk filter mapel per kelas, termasuk guru yang digantikan).
+  // Diambil sekali di sini, lalu difilter di klien saat kelas/guru pengganti berubah.
+  window._jadwalSemua = [];
+  try {
+    const { data: jdAll } = await sb.from("jadwal").select("kelas_id, mapel_id, guru_id");
+    window._jadwalSemua = jdAll || [];
+  } catch (e) { console.warn("Gagal memuat jadwal untuk filter mapel:", e.message); }
 
   const opsiKelas = '<option value="">-- pilih kelas --</option>' +
     kelasList.map(k => '<option value="' + esc(k.id) + '">' + esc(k.nama_kelas) + '</option>').join("");
@@ -1883,7 +1909,7 @@ async function muatIsiJurnal(){
         '<div><label>Jam Ke- *</label><input id="jJam" placeholder="Wajib, mis. 1-2"></div>' +
       '</div>' +
       '<div class="row">' +
-        '<div><label>Kelas</label><select id="jKelas" onchange="bersihkanErrorJurnal();muatAbsensi()">' + opsiKelas + '</select></div>' +
+        '<div><label>Kelas</label><select id="jKelas" onchange="bersihkanErrorJurnal();muatAbsensi();gantiGuruAsli()">' + opsiKelas + '</select></div>' +
         '<div><label>Mapel</label>' +
           '<select id="jMapel">' + opsiMapel + '</select></div>' +
       '</div>' +
@@ -1917,17 +1943,41 @@ window.gantiGuruAsli = () => {
   const sel = $("jMapel");
   if (!sel) return;
   const terpilih = sel.value;
+  const kelasId = $("jKelas") ? $("jKelas").value : "";
   const menggantikan = $("jGuruAsli") ? $("jGuruAsli").value : "";
   const semua = window._mapelSemuaIsi || [];
+  const jadwal = window._jadwalSemua || [];
+
+  // Kumpulan mapel_id yang dijadwalkan untuk guru tertentu di kelas terpilih.
+  const mapelJadwal = (guruId) => {
+    if (!kelasId || !guruId) return new Set();
+    return new Set(jadwal
+      .filter(j => j.kelas_id === kelasId && j.guru_id === guruId)
+      .map(j => j.mapel_id));
+  };
+
   let daftar;
   if (menggantikan) {
-    // mapel_id yang diampu guru yang digantikan
-    const idAmpu = new Set((window._mapelPerGuru || {})[menggantikan] || []);
-    const cocok = semua.filter(m => idAmpu.has(m.id));
-    daftar = cocok.length ? cocok : semua;  // kalau guru itu tak punya mapel, tampilkan semua
+    // Menggantikan guru lain: pakai jadwal guru itu di kelas ini.
+    // Bila jadwalnya belum diinput (nol), tampilkan SEMUA mapel.
+    const guruId = (window._guruNamaKeId || {})[menggantikan] || null;
+    const idJadwal = mapelJadwal(guruId);
+    if (idJadwal.size) {
+      daftar = semua.filter(m => idJadwal.has(m.id));
+    } else {
+      daftar = semua;   // fallback: jadwal guru yang digantikan belum ada
+    }
   } else {
-    daftar = window._mapelSaya || semua;  // tidak menggantikan → mapel yang diampu sendiri
+    // Tidak menggantikan: pakai jadwal SAYA di kelas ini.
+    // Fallback (nol) → mapel yang saya ampu.
+    const idJadwal = mapelJadwal(ME.id);
+    if (idJadwal.size) {
+      daftar = semua.filter(m => idJadwal.has(m.id));
+    } else {
+      daftar = window._mapelSaya || semua;
+    }
   }
+
   sel.innerHTML = '<option value="">-- pilih mapel --</option>' +
     daftar.map(m => '<option value="' + esc(m.id) + '">' + esc(labelMapel(m)) + '</option>').join("");
   // pertahankan pilihan lama bila masih ada di daftar baru
@@ -2316,10 +2366,13 @@ async function muatNilai(){
   }
 
   // Guru: hanya kelas yang ia ajar (via jadwal). Admin/kepsek: semua kelas.
+  window._nMapelAmpuan = mapelList;   // mapel ampuan guru (fallback bila jadwal kelas kosong)
+  window._nJadwalSaya = [];           // jadwal guru: {kelas_id, mapel_id}
   if (ME.role === "guru") {
     try {
       const { data: jd } = await sb.from("jadwal")
-        .select("kelas_id").eq("guru_id", ME.id);
+        .select("kelas_id, mapel_id").eq("guru_id", ME.id);
+      window._nJadwalSaya = jd || [];
       const idKelasAjar = new Set((jd || []).map(x => x.kelas_id));
       if (idKelasAjar.size) {
         const cocok = kelasList.filter(k => idKelasAjar.has(k.id));
@@ -2346,7 +2399,7 @@ async function muatNilai(){
   $("main").innerHTML =
     '<div class="card"><h2>Nilai</h2>' +
       '<div class="row" style="align-items:flex-end">' +
-        '<div><label>Kelas</label><select id="nKelas" onchange="pilihKelasMapelNilai()">' + opsiKelas + '</select></div>' +
+        '<div><label>Kelas</label><select id="nKelas" onchange="gantiKelasNilai()">' + opsiKelas + '</select></div>' +
         '<div><label>Mapel</label><select id="nMapel" onchange="pilihKelasMapelNilai()">' + opsiMapel + '</select></div>' +
         '<div style="flex:0 0 auto;display:flex;gap:8px;align-items:flex-end">' +
           '<button class="btn btn-sm" style="background:#2b8a3e" onclick="cetakNilai()">🖨 Cetak</button>' +
@@ -2359,6 +2412,33 @@ async function muatNilai(){
 
   if (_nKelas && _nMapel) await muatDataNilai();
 }
+
+/* Guru: saat ganti kelas, mapel dipersempit ke jadwal guru di kelas itu.
+   Fallback (nol jadwal) → mapel ampuan. Admin/kepsek: tak diubah. */
+window.gantiKelasNilai = async () => {
+  const selKelas = $("nKelas"), selMapel = $("nMapel");
+  if (!selKelas || !selMapel) return;
+  const kelasId = selKelas.value;
+
+  if (ME.role === "guru") {
+    const semuaAmpuan = window._nMapelAmpuan || [];
+    const jadwal = window._nJadwalSaya || [];
+    const idJadwal = new Set(jadwal
+      .filter(j => j.kelas_id === kelasId).map(j => j.mapel_id));
+    let daftar = (kelasId && idJadwal.size)
+      ? semuaAmpuan.filter(m => idJadwal.has(m.id))
+      : semuaAmpuan;   // fallback: jadwal kelas ini kosong
+
+    const terpilih = selMapel.value;
+    selMapel.innerHTML = '<option value="">-- pilih mapel --</option>' +
+      daftar.map(m => '<option value="' + esc(m.id) + '">' + esc(labelMapel(m)) + '</option>').join("");
+    // pertahankan pilihan bila masih ada; kalau tidak, reset
+    if (daftar.find(m => m.id === terpilih)) selMapel.value = terpilih;
+    else _nMapel = "";
+  }
+
+  await pilihKelasMapelNilai();
+};
 
 window.pilihKelasMapelNilai = async () => {
   _nKelas = $("nKelas").value;
@@ -5202,6 +5282,16 @@ window.editJurnal = async (id) => {
   // set guru pengganti DULU, lalu filter mapel, baru set mapel
   if ($("jGuruAsli")) $("jGuruAsli").value = j.guru_asli || "";
   gantiGuruAsli();
+  // Pengaman: bila mapel jurnal lama tak ada di daftar hasil filter jadwal,
+  // sisipkan agar tetap bisa dipilih saat edit (jadwal mungkin berubah setelahnya).
+  if ($("jMapel") && j.mapel_id && !$("jMapel").querySelector('option[value="' + j.mapel_id + '"]')) {
+    const mp = (window._mapelSemuaIsi || []).find(m => m.id === j.mapel_id);
+    if (mp) {
+      const opt = document.createElement("option");
+      opt.value = mp.id; opt.textContent = labelMapel(mp);
+      $("jMapel").appendChild(opt);
+    }
+  }
   if ($("jMapel")) $("jMapel").value = j.mapel_id || "";
   $("jMateri").value = j.materi || "";
   $("jCatatan").value = j.catatan || "";
