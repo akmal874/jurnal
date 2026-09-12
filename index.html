@@ -111,10 +111,21 @@
   .login-msg { padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-top: 12px;
     background: var(--login-error-bg); color: var(--merah); }
 
-  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-    background: var(--toast-bg); color: #fff; padding: 12px 20px; border-radius: 8px;
-    font-size: 14px; opacity: 0; transition: opacity .3s; pointer-events: none; }
-  .toast.show { opacity: 1; }
+  /* ===== Toast (Gaya 3: kartu + aksen garis kiri) ===== */
+  #toastWrap { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    z-index: 1000002; pointer-events: none; width: max-content; max-width: 90vw; }
+  .toast3 { display:flex; align-items:center; gap:12px; background:var(--card); color:var(--ink);
+    padding:12px 18px 12px 15px; border-radius:10px; font-size:14px;
+    border-left:4px solid var(--aksen); box-shadow:0 10px 30px rgba(0,0,0,.15);
+    opacity:0; transform:translateY(14px); transition:.32s cubic-bezier(.2,.8,.2,1); }
+  .toast3.show { opacity:1; transform:translateY(0); }
+  .toast3 .ik { width:24px; height:24px; border-radius:50%; display:grid; place-items:center;
+    color:#fff; font-size:14px; flex:0 0 auto; }
+  .toast3.sukses { border-left-color:#2b8a3e; }   .toast3.sukses .ik { background:#2b8a3e; }
+  .toast3.gagal  { border-left-color:var(--merah); } .toast3.gagal .ik { background:var(--merah); }
+  .toast3.warning{ border-left-color:#b78100; }    .toast3.warning .ik { background:#b78100; }
+  .toast3.info   { border-left-color:var(--aksen); } .toast3.info .ik { background:var(--aksen); }
 
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45);
     display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
@@ -401,7 +412,7 @@
 
 <div id="izinPanelOverlay" class="modal-overlay hidden"></div>
 
-<div id="toast" class="toast"></div>
+<div id="toastWrap"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
@@ -505,11 +516,29 @@ if (window.matchMedia) {
   });
 }
 
-function toast(teks){
-  const t = $("toast");
-  t.textContent = teks;
-  t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 2500);
+/* Toast Gaya 3 (kartu + garis kiri). tipe: "info"(default) | "sukses" | "gagal" | "warning".
+   Backward-compatible: toast("teks") tetap jalan (tampil netral/info).
+   Auto-deteksi ringan: teks diawali "Gagal" → gagal. */
+function toast(teks, tipe){
+  const wrap = $("toastWrap");
+  if (!wrap) return;
+  if (!tipe) {
+    const t = String(teks || "").toLowerCase();
+    if (t.startsWith("gagal") || t.startsWith("error")) tipe = "gagal";
+    else tipe = "info";
+  }
+  const ICON = { sukses:"✓", gagal:"✕", warning:"⚠", info:"ℹ" };
+  const el = document.createElement("div");
+  el.className = "toast3 " + tipe;
+  const ik = document.createElement("span"); ik.className = "ik"; ik.textContent = ICON[tipe] || "ℹ";
+  const tx = document.createElement("span"); tx.textContent = teks;
+  el.appendChild(ik); el.appendChild(tx);
+  wrap.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("show"));
+  setTimeout(() => {
+    el.classList.remove("show");
+    setTimeout(() => el.remove(), 320);
+  }, 2600);
 }
 
 /* Modal konfirmasi. Mengembalikan Promise<boolean>: true bila "Ya", false bila "Batal".
@@ -6495,20 +6524,24 @@ async function bpRenderRekap(){
   isi.innerHTML =
     '<div class="bp-catatan">Rekap per kelas untuk periode aktif. Bisa dicetak dengan tanda tangan Kepala Sekolah &amp; Guru BP/BK.</div>' +
     '<div class="row" style="margin-bottom:16px;align-items:flex-end">' +
-      '<div><label>Kelas</label><select id="bprKelas" onchange="bpMuatRekap()">' +
+      '<div><label>Kelas</label><select id="bprKelas" onchange="bpMuatRekap(this.value)">' +
         '<option value="">Semua Kelas</option>' + opsiKelas + '</select></div>' +
       '<div style="flex:0 0 auto"><button class="btn btn-ghost" onclick="bpCetakRekap()">🖨 Cetak</button></div>' +
     '</div>' +
     '<div id="bprIsi"><div class="page-kosong">Memuat...</div></div>';
-  await bpMuatRekap();
+  await bpMuatRekap($("bprKelas") ? $("bprKelas").value : "");
 }
 
 let _bpRekapBaris = [];      // baris terfilter (untuk cetak & tabel)
 let _bpPgRekap = 1;
-async function bpMuatRekap(){
+let _bpRekapKelas = "";      // kelas terpilih terakhir
+window.bpMuatRekap = async function(kelasIdArg){
   try {
     const periode = await ambilPeriodeAktif();
-    const kelasId = $("bprKelas") ? $("bprKelas").value : "";
+    const kelasId = (kelasIdArg !== undefined && kelasIdArg !== null)
+      ? kelasIdArg
+      : ($("bprKelas") ? $("bprKelas").value : "");
+    _bpRekapKelas = kelasId;
     let q = sb.from("bp_catatan").select("siswa_id, tipe, poin");
     if (periode.tahun_ajaran) q = q.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
     const { data, error } = await q;
@@ -6518,6 +6551,10 @@ async function bpMuatRekap(){
     const siswaFilter = kelasId
       ? _bpSiswa.filter(s => String(s.kelas_id) === String(kelasId))
       : _bpSiswa;
+    // DIAGNOSTIK SEMENTARA — hapus setelah filter terbukti benar
+    console.log("[BP Rekap] kelasId:", JSON.stringify(kelasId),
+      "| contoh siswa.kelas_id:", _bpSiswa[0] && JSON.stringify(_bpSiswa[0].kelas_id),
+      "| jml semua:", _bpSiswa.length, "| jml terfilter:", siswaFilter.length);
     const idSet = new Set(siswaFilter.map(s => s.id));
 
     const per = {};
@@ -6578,8 +6615,8 @@ window.bpGantiHalRekap = (arah) => { _bpPgRekap += arah; bpGambarRekap(); };
 window.bpCetakRekap = async () => {
   if (!_bpRekapBaris.length) return toast("Belum ada data untuk dicetak.");
   toast("Menyiapkan cetakan...");
-  const kelasId = $("bprKelas") ? $("bprKelas").value : "";
-  const namaKelas = kelasId ? (_bpKelas.find(k => k.id === kelasId)?.nama_kelas || "-") : "Semua Kelas";
+  const kelasId = _bpRekapKelas || "";
+  const namaKelas = kelasId ? (_bpKelas.find(k => String(k.id) === String(kelasId))?.nama_kelas || "-") : "Semua Kelas";
   const periode = await ambilPeriodeAktif();
   const info = await ambilInfoApp();
   const namaSekolah = (info.nama_sekolah || "").trim();
