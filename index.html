@@ -66,6 +66,31 @@
     border-bottom: 3px solid transparent; margin-bottom: -2px; }
   .subtab-wk button.aktif { color: var(--aksen); border-bottom-color: var(--aksen); }
 
+  /* ===== Menu BP ===== */
+  .bp-pil { padding:2px 9px; border-radius:20px; font-size:12px; font-weight:600; display:inline-block; }
+  .bp-minus { background:#c92a2a22; color:var(--merah); }
+  .bp-plus  { background:#2b8a3e22; color:#2b8a3e; }
+  .bp-kasus { background:#b7810022; color:#b78100; }
+  .bp-kons  { background:#3b5bdb22; color:var(--aksen); }
+  .bp-btn-aksi { background:none; border:1px solid var(--aksen); color:var(--aksen);
+    border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer; margin-right:4px; white-space:nowrap; }
+  .bp-btn-aksi:hover { background:var(--aksen); color:#fff; }
+  .bp-btn-hapus { background:none; border:1px solid var(--merah); color:var(--merah);
+    border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer; white-space:nowrap; }
+  .bp-btn-hapus:hover { background:var(--merah); color:#fff; }
+  .bp-sel-aksi { white-space:nowrap; text-align:right; }
+  th.bp-th-aksi { text-align:right; }
+  .bp-link-dok { color:var(--aksen); font-weight:600; text-decoration:none; font-size:13px; }
+  .bp-link-dok:hover { text-decoration:underline; }
+  .bp-catatan { background:var(--aksen-lembut); border-radius:8px; padding:10px 12px;
+    font-size:13px; color:var(--ink-lembut); margin-bottom:14px; }
+  .bp-stat { flex:1; min-width:120px; background:var(--aksen-lembut); border-radius:10px; padding:14px; }
+  .bp-stat b { font-size:24px; display:block; }
+  @media (max-width: 640px) {
+    .bp-sel-aksi .lbl { display:none; }
+    .bp-btn-aksi, .bp-btn-hapus { padding:6px 9px; margin-right:2px; }
+  }
+
   main { max-width: 900px; margin: 0 auto; padding: 20px; }
   .card { background: var(--card); border: 1px solid var(--garis); border-radius: 12px;
     padding: 20px; margin-bottom: 16px; }
@@ -354,7 +379,7 @@
   <div class="app-footer" id="appFooter"></div>
 </div>
 
-<div id="modalKonfirmasi" class="modal-overlay hidden">
+<div id="modalKonfirmasi" class="modal-overlay hidden" style="z-index:1000001">
   <div class="modal-box">
     <h3 id="modalJudul">Konfirmasi</h3>
     <p id="modalPesan"></p>
@@ -672,15 +697,15 @@ sb.auth.onAuthStateChange(async (event, session) => {
 /* ===== NAVIGASI ===== */
 // Menu per role. Untuk sekarang baru "kelas"; kita tambah modul lain nanti.
 const MENU = {
-  admin:  ["beranda", "jadwal", "isijurnal", "daftarjurnal", "rekapharian", "nilai", "walikelas", "kelas", "mapel", "siswa", "pengguna", "izinmenu", "pengaturan"],
+  admin:  ["beranda", "jadwal", "isijurnal", "daftarjurnal", "rekapharian", "nilai", "walikelas", "bp", "kelas", "mapel", "siswa", "pengguna", "izinmenu", "pengaturan"],
   kepsek: ["beranda", "jadwal", "daftarjurnal", "rekapharian", "nilai", "walikelas"],
   pengawas: ["beranda", "jadwal", "daftarjurnal", "rekapharian", "nilai", "walikelas"],
-  guru:   ["beranda", "jadwal", "isijurnal", "daftarjurnal", "rekapharian", "nilai", "walikelas"]
+  guru:   ["beranda", "jadwal", "isijurnal", "daftarjurnal", "rekapharian", "nilai", "walikelas", "bp"]
 };
 const LABEL = { beranda:"Beranda", kelas:"Kelas", mapel:"Mapel", siswa:"Siswa", jadwal:"Jadwal",
   pengguna:"Pengguna", isijurnal:"Isi Jurnal", daftarjurnal:"Daftar Jurnal", nilai:"Nilai",
   catatan:"Catatan", pengaturan:"Pengaturan", rekapharian:"Rekap Harian", izinmenu:"Izin Menu",
-  rekapabsensi:"Rekap Absensi", walikelas:"Wali Kelas" };
+  rekapabsensi:"Rekap Absensi", walikelas:"Wali Kelas", bp:"Bimbingan Konseling" };
 
 function bangunNav(){
   const nav = $("nav");
@@ -693,6 +718,7 @@ function bangunNav(){
     if (!ME.izin_jadwal)  menu = menu.filter(k => k !== "jadwal");
     // Rekap Harian hanya untuk guru bila diizinkan (kepsek/pengawas selalu punya)
     if (ME.role === "guru" && !ME.izin_rekapharian) menu = menu.filter(k => k !== "rekapharian");
+    if (!ME.izin_bp) menu = menu.filter(k => k !== "bp");
   }
   menu.forEach((key, i) => {
     const b = document.createElement("button");
@@ -710,7 +736,7 @@ async function segarkanIzinMenu(){
   if (!ME || ME.role === "admin") return;   // admin tak terpengaruh izin
   try {
     const { data, error } = await sb.from("profil")
-      .select("izin_nilai, izin_catatan, izin_jadwal, izin_jadwal_edit, izin_rekapharian, izin_verifikasi, izin_absensi, izin_kartu, izin_rekapnilai").eq("id", ME.id).single();
+      .select("izin_nilai, izin_catatan, izin_jadwal, izin_jadwal_edit, izin_rekapharian, izin_verifikasi, izin_absensi, izin_kartu, izin_rekapnilai, izin_bp").eq("id", ME.id).single();
     if (error || !data) return;
     const berubah =
       ME.izin_nilai   !== data.izin_nilai   ||
@@ -721,7 +747,8 @@ async function segarkanIzinMenu(){
       ME.izin_verifikasi  !== data.izin_verifikasi ||
       ME.izin_absensi !== data.izin_absensi ||
       ME.izin_kartu   !== data.izin_kartu ||
-      ME.izin_rekapnilai !== data.izin_rekapnilai;
+      ME.izin_rekapnilai !== data.izin_rekapnilai ||
+      ME.izin_bp !== data.izin_bp;
     if (berubah) {
       ME.izin_nilai = data.izin_nilai;
       ME.izin_catatan = data.izin_catatan;
@@ -732,6 +759,7 @@ async function segarkanIzinMenu(){
       ME.izin_absensi = data.izin_absensi;
       ME.izin_kartu = data.izin_kartu;
       ME.izin_rekapnilai = data.izin_rekapnilai;
+      ME.izin_bp = data.izin_bp;
       const menuAktif = document.querySelector("#nav button.active");
       const keyAktif = menuAktif ? menuAktif.textContent : null;
       bangunNav();   // bangun ulang; menu yang dicabut akan hilang
@@ -757,6 +785,7 @@ function buka(key, btn){
   if (key === "rekapharian") return muatRekapHarian();
   if (key === "rekapabsensi") return muatRekapAbsensi();
   if (key === "walikelas") return muatWaliKelas();
+  if (key === "bp") return muatBP();
   if (key === "izinmenu") return muatIzinMenu();
 }
 
@@ -4911,6 +4940,9 @@ const IZIN_GRUP = [
   { grup:"Lainnya", item:[
     { label:"Nilai", kolom:"izin_nilai" },
     { label:"Rekap Harian", kolom:"izin_rekapharian" }
+  ]},
+  { grup:"Bimbingan Konseling", item:[
+    { label:"Menu BP", kolom:"izin_bp" }
   ]}
 ];
 /* Semua kolom izin (untuk fitur "kosongkan semua"). */
@@ -5944,6 +5976,787 @@ window.hapusJadwal = async (id) => {
     toast("Slot dihapus."); await renderJadwal();
   } catch (e) { toast("Gagal menghapus: " + e.message); }
 };
+/* ==================== MODUL BP (Bimbingan Konseling) ==================== */
+const BP_PER_HAL = 20;
+let _bpTab = "kasus";
+let _bpJenis = [];          // master bp_jenis
+let _bpSiswa = [];          // {id, nama_siswa, nis, kelas_id, nama_kelas}
+let _bpKelas = [];          // {id, nama_kelas}
+let _bpData = { kasus: [], konseling: [] };  // cache baris tabel
+let _bpPoinAgg = [];        // agregat poin per siswa
+let _bpPg = { kasus: 1, poin: 1, konseling: 1 };
+
+/* Label & pil status */
+const bpNamaSiswa = id => {
+  const s = _bpSiswa.find(x => x.id === id);
+  return s ? s.nama_siswa : "-";
+};
+const bpKelasSiswa = id => {
+  const s = _bpSiswa.find(x => x.id === id);
+  return s ? (s.nama_kelas || "") : "";
+};
+
+async function muatBP(){
+  if (!(ME.role === "admin" || ME.izin_bp)) {
+    $("main").innerHTML = '<div class="card"><div class="page-kosong">Menu ini khusus Guru BP & Admin.</div></div>';
+    return;
+  }
+  $("main").innerHTML = '<div class="card"><div class="page-kosong">Memuat...</div></div>';
+
+  // muat master: siswa aktif + kelas + jenis, sekali di awal
+  try {
+    const [sw, kl, jn] = await Promise.all([
+      sb.from("siswa").select("id, nis, nama_siswa, kelas_id").eq("aktif", true).order("nama_siswa"),
+      sb.from("kelas").select("id, nama_kelas").order("nama_kelas"),
+      sb.from("bp_jenis").select("*").order("kategori").order("nama")
+    ]);
+    if (sw.error) throw new Error(sw.error.message);
+    _bpKelas = kl.data || [];
+    const petaKelas = Object.fromEntries(_bpKelas.map(k => [k.id, k.nama_kelas]));
+    _bpSiswa = (sw.data || []).map(s => ({ ...s, nama_kelas: petaKelas[s.kelas_id] || "" }));
+    _bpJenis = jn.data || [];
+  } catch (e) {
+    $("main").innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat: ' + esc(e.message) + '</div></div>';
+    return;
+  }
+
+  $("main").innerHTML =
+    '<div class="card"><h2>Bimbingan &amp; Konseling (BP)</h2>' +
+      '<p style="color:var(--ink-lembut);font-size:13px;margin:-6px 0 14px">Kelola kasus, poin, konseling, dan rekap siswa.</p>' +
+      '<div class="subtab-wk" id="bpSubtab">' +
+        '<button data-t="kasus" onclick="bpGantiTab(\'kasus\')">Kasus / Pelanggaran</button>' +
+        '<button data-t="poin" onclick="bpGantiTab(\'poin\')">Poin</button>' +
+        '<button data-t="konseling" onclick="bpGantiTab(\'konseling\')">Konseling</button>' +
+        '<button data-t="rekap" onclick="bpGantiTab(\'rekap\')">Rekap / Laporan</button>' +
+        '<button data-t="jenis" onclick="bpGantiTab(\'jenis\')">Kelola Jenis</button>' +
+      '</div>' +
+      '<div id="bpIsi" style="margin-top:16px"></div>' +
+    '</div>';
+
+  bpGantiTab(_bpTab);
+}
+
+window.bpGantiTab = (t) => {
+  _bpTab = t;
+  document.querySelectorAll("#bpSubtab button").forEach(b =>
+    b.classList.toggle("aktif", b.dataset.t === t));
+  if (t === "kasus")     return bpRenderKasus();
+  if (t === "poin")      return bpRenderPoin();
+  if (t === "konseling") return bpRenderKonseling();
+  if (t === "rekap")     return bpRenderRekap();
+  if (t === "jenis")     return bpRenderJenis();
+};
+
+/* opsi dropdown siswa & jenis (dipakai berulang) */
+function bpOpsiSiswa(terpilih){
+  return '<option value="">-- pilih siswa --</option>' +
+    _bpSiswa.map(s => '<option value="' + esc(s.id) + '"' + (s.id===terpilih?" selected":"") + '>' +
+      esc(s.nama_siswa) + (s.nama_kelas ? " (" + esc(s.nama_kelas) + ")" : "") + '</option>').join("");
+}
+function bpOpsiJenis(kategori, terpilih, denganPoin){
+  const list = _bpJenis.filter(j => j.aktif && (!kategori || j.kategori === kategori));
+  return '<option value="">-- pilih jenis --</option>' +
+    list.map(j => '<option value="' + esc(j.id) + '"' + (j.id===terpilih?" selected":"") + '>' +
+      esc(j.nama) + (denganPoin ? "  (" + (j.poin>0?"+":"") + j.poin + ")" : "") + '</option>').join("");
+}
+
+/* ---------- TAB KASUS ---------- */
+async function bpRenderKasus(){
+  const isi = $("bpIsi");
+  isi.innerHTML =
+    '<div class="bp-catatan">Catat kejadian/pelanggaran per siswa beserta tindak lanjutnya.</div>' +
+    '<div class="row" style="margin-bottom:12px">' +
+      '<div><label>Siswa</label><select id="bpkSiswa">' + bpOpsiSiswa() + '</select></div>' +
+      '<div><label>Tanggal</label><input type="date" id="bpkTgl" value="' + new Date().toISOString().slice(0,10) + '"></div>' +
+      '<div><label>Jenis (opsional)</label><select id="bpkJenis">' + bpOpsiJenis("pelanggaran", "", true) + '</select></div>' +
+    '</div>' +
+    '<div class="row" style="margin-bottom:12px">' +
+      '<div><label>Deskripsi kejadian</label><textarea id="bpkDesk" rows="2" placeholder="Uraikan kejadian…"></textarea></div>' +
+      '<div><label>Tindak lanjut</label><textarea id="bpkTindak" rows="2" placeholder="Pembinaan / panggilan ortu / dsb…"></textarea></div>' +
+    '</div>' +
+    '<button class="btn" id="bpkBtnSimpan" onclick="bpSimpanKasus()">Simpan kasus</button>' +
+    '<button class="btn btn-ghost btn-sm" id="bpkBtnBatal" style="margin-left:8px;display:none" onclick="bpBatalEditKasus()">Batal Edit</button>' +
+    '<p style="font-size:12px;color:var(--ink-lembut);margin-top:8px">Jika jenis dipilih & berpoin, poinnya otomatis tercatat sekaligus.</p>' +
+    '<h3 style="margin:22px 0 8px;font-size:15px">Riwayat kasus</h3>' +
+    '<div id="bpkList"><div class="page-kosong">Memuat...</div></div>';
+  await bpMuatKasus();
+}
+
+async function bpMuatKasus(){
+  try {
+    const periode = await ambilPeriodeAktif();
+    let q = sb.from("bp_catatan").select("*").eq("tipe","kasus");
+    if (periode.tahun_ajaran) q = q.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+    q = q.order("tanggal", { ascending:false }).order("dibuat", { ascending:false });
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    _bpData.kasus = data || [];
+    _bpPg.kasus = 1;
+    bpGambarKasus();
+  } catch (e) {
+    $("bpkList").innerHTML = '<div class="empty">Gagal memuat: ' + esc(e.message) + '</div>';
+  }
+}
+
+function bpGambarKasus(){
+  const arr = _bpData.kasus;
+  if (!arr.length) { $("bpkList").innerHTML = '<div class="empty">Belum ada kasus.</div>'; return; }
+  const totalHal = Math.ceil(arr.length / BP_PER_HAL);
+  if (_bpPg.kasus > totalHal) _bpPg.kasus = totalHal;
+  const mulai = (_bpPg.kasus - 1) * BP_PER_HAL;
+  const potong = arr.slice(mulai, mulai + BP_PER_HAL);
+
+  let html = '<table><thead><tr><th>Tanggal</th><th>Siswa</th><th>Jenis</th><th>Deskripsi</th>' +
+    '<th>Tindak lanjut</th><th class="bp-th-aksi">Aksi</th></tr></thead><tbody>';
+  potong.forEach(r => {
+    const jn = _bpJenis.find(j => j.id === r.jenis_id);
+    html += '<tr><td>' + esc(bpTglRingkas(r.tanggal)) + '</td>' +
+      '<td>' + esc(bpNamaSiswa(r.siswa_id)) + '<div style="font-size:11px;color:var(--ink-lembut)">' + esc(bpKelasSiswa(r.siswa_id)) + '</div></td>' +
+      '<td>' + (jn ? '<span class="bp-pil bp-kasus">' + esc(jn.nama) + '</span>' : '<span style="color:var(--ink-lembut)">–</span>') + '</td>' +
+      '<td>' + esc(r.deskripsi || "-") + '</td>' +
+      '<td>' + esc(r.tindak_lanjut || "-") + '</td>' +
+      '<td class="bp-sel-aksi">' +
+        '<button class="bp-btn-aksi" onclick="bpEditKasus(\'' + r.id + '\')">✎<span class="lbl"> Edit</span></button>' +
+        '<button class="bp-btn-hapus" onclick="bpHapus(\'' + r.id + '\',\'kasus\')">🗑<span class="lbl"> Hapus</span></button>' +
+      '</td></tr>';
+  });
+  html += '</tbody></table>' + kontrolHalaman(_bpPg.kasus, totalHal, "bpGantiHalKasus");
+  $("bpkList").innerHTML = html;
+}
+window.bpGantiHalKasus = (arah) => { _bpPg.kasus += arah; bpGambarKasus(); };
+
+let _bpEditKasusId = null;
+window.bpSimpanKasus = async () => {
+  const siswa_id = $("bpkSiswa").value;
+  const tanggal = $("bpkTgl").value;
+  const jenis_id = $("bpkJenis").value || null;
+  const deskripsi = $("bpkDesk").value.trim();
+  const tindak = $("bpkTindak").value.trim();
+  if (!siswa_id) return toast("Pilih siswa dulu.");
+  if (!tanggal) return toast("Tanggal belum diisi.");
+  if (!deskripsi) return toast("Deskripsi belum diisi.");
+
+  const periode = await ambilPeriodeAktif();
+  const jn = jenis_id ? _bpJenis.find(j => j.id === jenis_id) : null;
+  const baris = {
+    siswa_id, tipe:"kasus", tanggal, jenis_id,
+    poin: jn ? jn.poin : null,
+    deskripsi, tindak_lanjut: tindak || null,
+    tahun_ajaran: periode.tahun_ajaran || null, semester: periode.semester || null,
+    dibuat_oleh: ME.id, dibuat_oleh_nama: ME.nama || ME.email
+  };
+
+  tampilkanLoading("Menyimpan kasus...");
+  try {
+    if (_bpEditKasusId) {
+      const { error } = await sb.from("bp_catatan").update({
+        siswa_id, tanggal, jenis_id, poin: jn ? jn.poin : null,
+        deskripsi, tindak_lanjut: tindak || null
+      }).eq("id", _bpEditKasusId);
+      if (error) throw new Error(error.message);
+      _bpEditKasusId = null;
+      toast("Kasus diperbarui.");
+    } else {
+      const { error } = await sb.from("bp_catatan").insert(baris);
+      if (error) throw new Error(error.message);
+      toast("Kasus tersimpan.");
+    }
+    await bpRenderKasus();
+  } catch (e) {
+    toast("Gagal: " + e.message);
+  } finally { sembunyikanLoading(); }
+};
+
+window.bpEditKasus = (id) => {
+  const r = _bpData.kasus.find(x => x.id === id);
+  if (!r) return;
+  _bpEditKasusId = id;
+  $("bpkSiswa").value = r.siswa_id || "";
+  $("bpkTgl").value = r.tanggal || "";
+  $("bpkJenis").value = r.jenis_id || "";
+  $("bpkDesk").value = r.deskripsi || "";
+  $("bpkTindak").value = r.tindak_lanjut || "";
+  if ($("bpkBtnSimpan")) $("bpkBtnSimpan").textContent = "Perbarui kasus";
+  if ($("bpkBtnBatal")) $("bpkBtnBatal").style.display = "";
+  window.scrollTo({ top:0, behavior:"smooth" });
+  toast("Mode edit — ubah lalu Simpan.");
+};
+
+window.bpBatalEditKasus = () => {
+  _bpEditKasusId = null;
+  $("bpkSiswa").value = "";
+  $("bpkTgl").value = new Date().toISOString().slice(0,10);
+  $("bpkJenis").value = "";
+  $("bpkDesk").value = "";
+  $("bpkTindak").value = "";
+  if ($("bpkBtnSimpan")) $("bpkBtnSimpan").textContent = "Simpan kasus";
+  if ($("bpkBtnBatal")) $("bpkBtnBatal").style.display = "none";
+  toast("Edit dibatalkan.");
+};
+
+/* ---------- TAB POIN ---------- */
+async function bpRenderPoin(){
+  const isi = $("bpIsi");
+  isi.innerHTML =
+    '<div class="bp-catatan">Tambah poin pelanggaran (minus) atau penghargaan (plus). Bobot diambil otomatis dari jenis.</div>' +
+    '<div class="row" style="margin-bottom:12px;align-items:flex-end">' +
+      '<div><label>Siswa</label><select id="bppSiswa">' + bpOpsiSiswa() + '</select></div>' +
+      '<div><label>Tanggal</label><input type="date" id="bppTgl" value="' + new Date().toISOString().slice(0,10) + '"></div>' +
+      '<div><label>Jenis (poin otomatis)</label><select id="bppJenis">' + bpOpsiJenis("", "", true) + '</select></div>' +
+      '<div style="flex:0 0 auto"><button class="btn" onclick="bpTambahPoin()">Tambah poin</button></div>' +
+    '</div>' +
+    '<h3 style="margin:22px 0 8px;font-size:15px">Poin per siswa (periode aktif)</h3>' +
+    '<div id="bppList"><div class="page-kosong">Memuat...</div></div>';
+  await bpMuatPoin();
+}
+
+async function bpMuatPoin(){
+  try {
+    const periode = await ambilPeriodeAktif();
+    let q = sb.from("bp_catatan").select("siswa_id, poin, jenis_id, tipe");
+    if (periode.tahun_ajaran) q = q.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+
+    // agregasi poin per siswa (dari semua baris berpoin: kasus & poin)
+    const agg = {};
+    (data || []).forEach(r => {
+      if (r.poin === null || r.poin === undefined) return;
+      if (!agg[r.siswa_id]) agg[r.siswa_id] = { siswa_id:r.siswa_id, minus:0, plus:0 };
+      if (r.poin < 0) agg[r.siswa_id].minus += r.poin; else agg[r.siswa_id].plus += r.poin;
+    });
+    _bpPoinAgg = Object.values(agg)
+      .map(a => ({ ...a, total: a.plus + a.minus }))
+      .sort((a,b) => a.total - b.total);   // paling bermasalah di atas
+    _bpPg.poin = 1;
+    bpGambarPoin();
+  } catch (e) {
+    $("bppList").innerHTML = '<div class="empty">Gagal memuat: ' + esc(e.message) + '</div>';
+  }
+}
+
+function bpGambarPoin(){
+  const arr = _bpPoinAgg;
+  if (!arr.length) { $("bppList").innerHTML = '<div class="empty">Belum ada poin.</div>'; return; }
+  const totalHal = Math.ceil(arr.length / BP_PER_HAL);
+  if (_bpPg.poin > totalHal) _bpPg.poin = totalHal;
+  const mulai = (_bpPg.poin - 1) * BP_PER_HAL;
+  const potong = arr.slice(mulai, mulai + BP_PER_HAL);
+
+  let html = '<table><thead><tr><th>Siswa</th><th>Pelanggaran</th><th>Penghargaan</th><th>Total</th><th class="bp-th-aksi">Aksi</th></tr></thead><tbody>';
+  potong.forEach(a => {
+    const warnaTotal = a.total < 0 ? "var(--merah)" : "#2b8a3e";
+    html += '<tr><td>' + esc(bpNamaSiswa(a.siswa_id)) + '<div style="font-size:11px;color:var(--ink-lembut)">' + esc(bpKelasSiswa(a.siswa_id)) + '</div></td>' +
+      '<td><span class="bp-pil bp-minus">' + a.minus + '</span></td>' +
+      '<td><span class="bp-pil bp-plus">+' + a.plus + '</span></td>' +
+      '<td><b style="color:' + warnaTotal + '">' + (a.total>0?"+":"") + a.total + '</b></td>' +
+      '<td class="bp-sel-aksi">' +
+        '<button class="bp-btn-aksi" onclick="bpRincianPoin(\'' + a.siswa_id + '\')">🔍<span class="lbl"> Rincian</span></button>' +
+      '</td></tr>';
+  });
+  html += '</tbody></table>' + kontrolHalaman(_bpPg.poin, totalHal, "bpGantiHalPoin");
+  $("bppList").innerHTML = html;
+}
+window.bpGantiHalPoin = (arah) => { _bpPg.poin += arah; bpGambarPoin(); };
+
+window.bpTambahPoin = async () => {
+  const siswa_id = $("bppSiswa").value;
+  const tanggal = $("bppTgl").value;
+  const jenis_id = $("bppJenis").value;
+  if (!siswa_id) return toast("Pilih siswa dulu.");
+  if (!jenis_id) return toast("Pilih jenis dulu.");
+  const jn = _bpJenis.find(j => j.id === jenis_id);
+  if (!jn) return toast("Jenis tidak valid.");
+  const periode = await ambilPeriodeAktif();
+
+  tampilkanLoading("Menambah poin...");
+  try {
+    const { error } = await sb.from("bp_catatan").insert({
+      siswa_id, tipe:"poin", tanggal, jenis_id, poin: jn.poin,
+      deskripsi: jn.nama,
+      tahun_ajaran: periode.tahun_ajaran || null, semester: periode.semester || null,
+      dibuat_oleh: ME.id, dibuat_oleh_nama: ME.nama || ME.email
+    });
+    if (error) throw new Error(error.message);
+    toast("Poin ditambahkan.");
+    await bpMuatPoin();
+  } catch (e) {
+    toast("Gagal: " + e.message);
+  } finally { sembunyikanLoading(); }
+};
+
+window.bpRincianPoin = async (siswa_id) => {
+  try {
+    const periode = await ambilPeriodeAktif();
+    let q = sb.from("bp_catatan").select("*").eq("siswa_id", siswa_id).not("poin","is",null);
+    if (periode.tahun_ajaran) q = q.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+    q = q.order("tanggal", { ascending:false });
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    const rows = (data||[]).map(r => {
+      const jn = _bpJenis.find(j => j.id === r.jenis_id);
+      const w = r.poin < 0 ? "var(--merah)" : "#2b8a3e";
+      return '<tr><td>' + esc(bpTglRingkas(r.tanggal)) + '</td>' +
+        '<td>' + esc(jn ? jn.nama : (r.deskripsi||"-")) + '</td>' +
+        '<td><b style="color:' + w + '">' + (r.poin>0?"+":"") + r.poin + '</b></td>' +
+        '<td class="bp-sel-aksi"><button class="bp-btn-hapus" onclick="bpHapusRincian(\'' + r.id + '\',\'' + siswa_id + '\')">🗑<span class="lbl"> Hapus</span></button></td></tr>';
+    }).join("") || '<tr><td colspan="4" style="text-align:center;color:var(--ink-lembut)">Tidak ada.</td></tr>';
+    const isi =
+      '<div class="izin-panel-box" style="max-width:520px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+          '<h3 style="margin:0">Rincian Poin — ' + esc(bpNamaSiswa(siswa_id)) + '</h3>' +
+          '<button class="btn btn-ghost btn-sm" onclick="bpTutupRincian()">✕</button>' +
+        '</div>' +
+        '<table><thead><tr><th>Tanggal</th><th>Jenis</th><th>Poin</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '</div>';
+    $("izinPanelOverlay").innerHTML = isi;
+    $("izinPanelOverlay").classList.remove("hidden");
+  } catch (e) { toast("Gagal: " + e.message); }
+};
+window.bpTutupRincian = () => {
+  $("izinPanelOverlay").classList.add("hidden");
+  $("izinPanelOverlay").innerHTML = "";
+};
+window.bpHapusRincian = async (id, siswa_id) => {
+  if (!(await konfirmasi("Hapus Poin", "Hapus catatan poin ini?", {bahaya:true}))) return;
+  try {
+    const { error } = await sb.from("bp_catatan").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+    toast("Dihapus.");
+    bpTutupRincian();
+    await bpMuatPoin();
+  } catch (e) { toast("Gagal: " + e.message); }
+};
+
+/* ---------- TAB KONSELING ---------- */
+async function bpRenderKonseling(){
+  const isi = $("bpIsi");
+  const now = new Date();
+  const localDT = new Date(now.getTime() - now.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  isi.innerHTML =
+    '<div class="bp-catatan">Jadwalkan sesi konseling dan simpan catatan hasil sesi. Dokumentasi berupa link Google Drive (hemat storage).</div>' +
+    '<div class="row" style="margin-bottom:12px">' +
+      '<div><label>Siswa</label><select id="bpcSiswa">' + bpOpsiSiswa() + '</select></div>' +
+      '<div><label>Tanggal &amp; jam</label><input type="datetime-local" id="bpcWaktu" value="' + localDT + '"></div>' +
+      '<div><label>Status</label><select id="bpcStatus">' +
+        '<option>Terjadwal</option><option>Selesai</option><option>Batal</option></select></div>' +
+    '</div>' +
+    '<div class="row" style="margin-bottom:12px">' +
+      '<div><label>Topik / keluhan</label><textarea id="bpcTopik" rows="2" placeholder="mis. motivasi belajar menurun"></textarea></div>' +
+      '<div><label>Catatan sesi</label><textarea id="bpcCatatan" rows="2" placeholder="Hasil & kesimpulan sesi…"></textarea></div>' +
+    '</div>' +
+    '<div class="row" style="margin-bottom:12px">' +
+      '<div><label>Dokumentasi (link Google Drive)</label><input id="bpcDok" placeholder="https://drive.google.com/…"></div>' +
+    '</div>' +
+    '<button class="btn" id="bpcBtnSimpan" onclick="bpSimpanKonseling()">Simpan konseling</button>' +
+    '<button class="btn btn-ghost btn-sm" id="bpcBtnBatal" style="margin-left:8px;display:none" onclick="bpBatalEditKonseling()">Batal Edit</button>' +
+    '<h3 style="margin:22px 0 8px;font-size:15px">Jadwal &amp; riwayat konseling</h3>' +
+    '<div id="bpcList"><div class="page-kosong">Memuat...</div></div>';
+  await bpMuatKonseling();
+}
+
+async function bpMuatKonseling(){
+  try {
+    const periode = await ambilPeriodeAktif();
+    let q = sb.from("bp_catatan").select("*").eq("tipe","konseling");
+    if (periode.tahun_ajaran) q = q.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+    q = q.order("waktu", { ascending:false });
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    _bpData.konseling = data || [];
+    _bpPg.konseling = 1;
+    bpGambarKonseling();
+  } catch (e) {
+    $("bpcList").innerHTML = '<div class="empty">Gagal memuat: ' + esc(e.message) + '</div>';
+  }
+}
+
+function bpGambarKonseling(){
+  const arr = _bpData.konseling;
+  if (!arr.length) { $("bpcList").innerHTML = '<div class="empty">Belum ada konseling.</div>'; return; }
+  const totalHal = Math.ceil(arr.length / BP_PER_HAL);
+  if (_bpPg.konseling > totalHal) _bpPg.konseling = totalHal;
+  const mulai = (_bpPg.konseling - 1) * BP_PER_HAL;
+  const potong = arr.slice(mulai, mulai + BP_PER_HAL);
+  const warna = { Terjadwal:"bp-kons", Selesai:"bp-plus", Batal:"bp-minus" };
+
+  let html = '<table><thead><tr><th>Waktu</th><th>Siswa</th><th>Topik</th><th>Status</th>' +
+    '<th>Dokumentasi</th><th class="bp-th-aksi">Aksi</th></tr></thead><tbody>';
+  potong.forEach(r => {
+    const kls = warna[r.status] || "bp-kons";
+    const dok = (r.dokumentasi && /^https?:\/\//.test(r.dokumentasi))
+      ? '<a class="bp-link-dok" href="' + esc(r.dokumentasi) + '" target="_blank" rel="noopener">📎 Buka</a>'
+      : '<span style="color:var(--ink-lembut)">–</span>';
+    html += '<tr><td>' + esc(bpWaktuRingkas(r.waktu)) + '</td>' +
+      '<td>' + esc(bpNamaSiswa(r.siswa_id)) + '<div style="font-size:11px;color:var(--ink-lembut)">' + esc(bpKelasSiswa(r.siswa_id)) + '</div></td>' +
+      '<td>' + esc(r.topik || "-") + '</td>' +
+      '<td><span class="bp-pil ' + kls + '">' + esc(r.status || "-") + '</span></td>' +
+      '<td>' + dok + '</td>' +
+      '<td class="bp-sel-aksi">' +
+        '<button class="bp-btn-aksi" onclick="bpEditKonseling(\'' + r.id + '\')">✎<span class="lbl"> Edit</span></button>' +
+        '<button class="bp-btn-hapus" onclick="bpHapus(\'' + r.id + '\',\'konseling\')">🗑<span class="lbl"> Hapus</span></button>' +
+      '</td></tr>';
+  });
+  html += '</tbody></table>' + kontrolHalaman(_bpPg.konseling, totalHal, "bpGantiHalKonseling");
+  $("bpcList").innerHTML = html;
+}
+window.bpGantiHalKonseling = (arah) => { _bpPg.konseling += arah; bpGambarKonseling(); };
+
+let _bpEditKonsId = null;
+window.bpSimpanKonseling = async () => {
+  const siswa_id = $("bpcSiswa").value;
+  const waktu = $("bpcWaktu").value;
+  const status = $("bpcStatus").value;
+  const topik = $("bpcTopik").value.trim();
+  const catatan = $("bpcCatatan").value.trim();
+  const dok = $("bpcDok").value.trim();
+  if (!siswa_id) return toast("Pilih siswa dulu.");
+  if (!waktu) return toast("Tanggal & jam belum diisi.");
+  if (dok && !/^https?:\/\//.test(dok)) return toast("Link dokumentasi harus diawali http.");
+  const periode = await ambilPeriodeAktif();
+
+  tampilkanLoading("Menyimpan konseling...");
+  try {
+    if (_bpEditKonsId) {
+      const { error } = await sb.from("bp_catatan").update({
+        siswa_id, waktu: new Date(waktu).toISOString(),
+        tanggal: waktu.slice(0,10), status, topik: topik||null,
+        catatan_sesi: catatan||null, dokumentasi: dok||null
+      }).eq("id", _bpEditKonsId);
+      if (error) throw new Error(error.message);
+      _bpEditKonsId = null;
+      toast("Konseling diperbarui.");
+    } else {
+      const { error } = await sb.from("bp_catatan").insert({
+        siswa_id, tipe:"konseling", waktu: new Date(waktu).toISOString(),
+        tanggal: waktu.slice(0,10), status, topik: topik||null,
+        catatan_sesi: catatan||null, dokumentasi: dok||null,
+        tahun_ajaran: periode.tahun_ajaran || null, semester: periode.semester || null,
+        dibuat_oleh: ME.id, dibuat_oleh_nama: ME.nama || ME.email
+      });
+      if (error) throw new Error(error.message);
+      toast("Konseling tersimpan.");
+    }
+    await bpRenderKonseling();
+  } catch (e) {
+    toast("Gagal: " + e.message);
+  } finally { sembunyikanLoading(); }
+};
+
+window.bpEditKonseling = (id) => {
+  const r = _bpData.konseling.find(x => x.id === id);
+  if (!r) return;
+  _bpEditKonsId = id;
+  $("bpcSiswa").value = r.siswa_id || "";
+  if (r.waktu) {
+    const d = new Date(r.waktu);
+    $("bpcWaktu").value = new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  }
+  $("bpcStatus").value = r.status || "Terjadwal";
+  $("bpcTopik").value = r.topik || "";
+  $("bpcCatatan").value = r.catatan_sesi || "";
+  $("bpcDok").value = r.dokumentasi || "";
+  if ($("bpcBtnSimpan")) $("bpcBtnSimpan").textContent = "Perbarui konseling";
+  if ($("bpcBtnBatal")) $("bpcBtnBatal").style.display = "";
+  window.scrollTo({ top:0, behavior:"smooth" });
+  toast("Mode edit — ubah lalu Simpan.");
+};
+
+window.bpBatalEditKonseling = () => {
+  _bpEditKonsId = null;
+  $("bpcSiswa").value = "";
+  const now = new Date();
+  $("bpcWaktu").value = new Date(now.getTime() - now.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  $("bpcStatus").value = "Terjadwal";
+  $("bpcTopik").value = "";
+  $("bpcCatatan").value = "";
+  $("bpcDok").value = "";
+  if ($("bpcBtnSimpan")) $("bpcBtnSimpan").textContent = "Simpan konseling";
+  if ($("bpcBtnBatal")) $("bpcBtnBatal").style.display = "none";
+  toast("Edit dibatalkan.");
+};
+
+/* ---------- HAPUS umum (kasus & konseling) ---------- */
+window.bpHapus = async (id, tipe) => {
+  const label = tipe === "kasus" ? "kasus" : "konseling";
+  if (!(await konfirmasi("Hapus", "Hapus catatan " + label + " ini?", {bahaya:true}))) return;
+  try {
+    const { error } = await sb.from("bp_catatan").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+    toast("Dihapus.");
+    if (tipe === "kasus") await bpMuatKasus(); else await bpMuatKonseling();
+  } catch (e) { toast("Gagal: " + e.message); }
+};
+
+/* ---------- TAB REKAP ---------- */
+async function bpRenderRekap(){
+  const isi = $("bpIsi");
+  const opsiKelas = _bpKelas.map(k => '<option value="' + esc(k.id) + '">' + esc(k.nama_kelas) + '</option>').join("");
+  isi.innerHTML =
+    '<div class="bp-catatan">Rekap per kelas untuk periode aktif. Bisa dicetak dengan tanda tangan Kepala Sekolah &amp; Guru BP/BK.</div>' +
+    '<div class="row" style="margin-bottom:16px;align-items:flex-end">' +
+      '<div><label>Kelas</label><select id="bprKelas" onchange="bpMuatRekap()">' +
+        '<option value="">Semua Kelas</option>' + opsiKelas + '</select></div>' +
+      '<div style="flex:0 0 auto"><button class="btn btn-ghost" onclick="bpCetakRekap()">🖨 Cetak</button></div>' +
+    '</div>' +
+    '<div id="bprIsi"><div class="page-kosong">Memuat...</div></div>';
+  await bpMuatRekap();
+}
+
+let _bpRekapBaris = [];      // baris terfilter (untuk cetak & tabel)
+let _bpPgRekap = 1;
+async function bpMuatRekap(){
+  try {
+    const periode = await ambilPeriodeAktif();
+    const kelasId = $("bprKelas") ? $("bprKelas").value : "";
+    let q = sb.from("bp_catatan").select("siswa_id, tipe, poin");
+    if (periode.tahun_ajaran) q = q.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+
+    // siswa terpilih (sesuai filter kelas)
+    const siswaFilter = kelasId
+      ? _bpSiswa.filter(s => String(s.kelas_id) === String(kelasId))
+      : _bpSiswa;
+    const idSet = new Set(siswaFilter.map(s => s.id));
+
+    const per = {};
+    siswaFilter.forEach(s => per[s.id] = { siswa_id:s.id, nama:s.nama_siswa, kasus:0, konseling:0, poin:0 });
+    (data || []).forEach(r => {
+      if (!idSet.has(r.siswa_id)) return;
+      if (r.tipe === "kasus") per[r.siswa_id].kasus++;
+      if (r.tipe === "konseling") per[r.siswa_id].konseling++;
+      if (r.poin !== null && r.poin !== undefined) per[r.siswa_id].poin += r.poin;
+    });
+    _bpRekapBaris = Object.values(per).sort((a,b) => a.nama.localeCompare(b.nama));
+    _bpPgRekap = 1;
+    bpGambarRekap();
+  } catch (e) {
+    $("bprIsi").innerHTML = '<div class="empty">Gagal memuat: ' + esc(e.message) + '</div>';
+  }
+}
+
+function bpGambarRekap(){
+  // statistik total (dari seluruh baris terfilter, bukan per halaman)
+  let totKasus=0, totKons=0, totMinus=0, totPlus=0;
+  _bpRekapBaris.forEach(b => {
+    totKasus += b.kasus; totKons += b.konseling;
+    if (b.poin < 0) totMinus += b.poin; else totPlus += b.poin;
+  });
+
+  const statHtml =
+    '<div class="row" style="margin-bottom:18px">' +
+      '<div class="bp-stat"><span style="font-size:12px;color:var(--ink-lembut)">Total kasus</span><b>' + totKasus + '</b></div>' +
+      '<div class="bp-stat"><span style="font-size:12px;color:var(--ink-lembut)">Sesi konseling</span><b>' + totKons + '</b></div>' +
+      '<div class="bp-stat"><span style="font-size:12px;color:var(--ink-lembut)">Poin pelanggaran</span><b style="color:var(--merah)">' + totMinus + '</b></div>' +
+      '<div class="bp-stat"><span style="font-size:12px;color:var(--ink-lembut)">Poin penghargaan</span><b style="color:#2b8a3e">+' + totPlus + '</b></div>' +
+    '</div>';
+
+  if (!_bpRekapBaris.length) {
+    $("bprIsi").innerHTML = statHtml + '<div class="empty">Tidak ada data.</div>';
+    return;
+  }
+
+  const totalHal = Math.ceil(_bpRekapBaris.length / BP_PER_HAL);
+  if (_bpPgRekap > totalHal) _bpPgRekap = totalHal;
+  if (_bpPgRekap < 1) _bpPgRekap = 1;
+  const mulai = (_bpPgRekap - 1) * BP_PER_HAL;
+  const potong = _bpRekapBaris.slice(mulai, mulai + BP_PER_HAL);
+
+  const rows = potong.map((b,i) => {
+    const w = b.poin < 0 ? "var(--merah)" : "#2b8a3e";
+    return '<tr><td>' + (mulai+i+1) + '</td><td>' + esc(b.nama) + '</td><td>' + b.kasus + '</td><td>' + b.konseling + '</td>' +
+      '<td><b style="color:' + w + '">' + (b.poin>0?"+":"") + b.poin + '</b></td></tr>';
+  }).join("");
+
+  $("bprIsi").innerHTML = statHtml +
+    '<table><thead><tr><th>No</th><th>Siswa</th><th>Kasus</th><th>Konseling</th><th>Total poin</th></tr></thead><tbody>' +
+    rows + '</tbody></table>' + kontrolHalaman(_bpPgRekap, totalHal, "bpGantiHalRekap");
+}
+window.bpGantiHalRekap = (arah) => { _bpPgRekap += arah; bpGambarRekap(); };
+
+window.bpCetakRekap = async () => {
+  if (!_bpRekapBaris.length) return toast("Belum ada data untuk dicetak.");
+  toast("Menyiapkan cetakan...");
+  const kelasId = $("bprKelas") ? $("bprKelas").value : "";
+  const namaKelas = kelasId ? (_bpKelas.find(k => k.id === kelasId)?.nama_kelas || "-") : "Semua Kelas";
+  const periode = await ambilPeriodeAktif();
+  const info = await ambilInfoApp();
+  const namaSekolah = (info.nama_sekolah || "").trim();
+  const tglTtd = await kotaTanggalTtd();
+  const tglCetak = new Date().toLocaleDateString("id-ID", { day:"numeric", month:"long", year:"numeric" });
+  const namaBP = ME.nama || ME.email || "(Guru BP/BK)";
+  const nipBP = ME.nip || "";
+
+  // kepsek (tanda tangan kiri) — pola persis cetak jurnal
+  const { data: kepsekRows } = await sb.from("profil")
+    .select("nama, nip").eq("role", "kepsek").limit(1);
+  const kepsek = (kepsekRows && kepsekRows[0]) || null;
+  const namaKepsek = kepsek?.nama || "(Kepala Sekolah)";
+  const nipKepsek = kepsek?.nip || "";
+
+  const rows = _bpRekapBaris.map((b,i) =>
+    '<tr><td>' + (i+1) + '</td><td style="text-align:left">' + esc(b.nama) + '</td>' +
+    '<td>' + b.kasus + '</td><td>' + b.konseling + '</td>' +
+    '<td>' + (b.poin>0?"+":"") + b.poin + '</td></tr>').join("");
+
+  // blok tanda tangan dua kolom — pola persis cetak jurnal (kiri Kepsek, kanan Guru BP/BK)
+  const blokTtd =
+    '<table class="ttd">' +
+      '<tr><td class="kolom-kiri"></td><td class="kolom-kanan">' + esc(tglTtd) + '</td></tr>' +
+      '<tr><td class="kolom-kiri">Mengetahui:<br>Kepala Sekolah,</td>' +
+        '<td class="kolom-kanan">&nbsp;<br>Guru BP/BK,</td></tr>' +
+      '<tr class="spasi-ttd"><td></td><td></td></tr>' +
+      '<tr><td class="kolom-kiri"><span class="nama-ttd">' + esc(namaKepsek) + '</span>' +
+        (nipKepsek ? '<br><span class="nip-ttd">NIP. ' + esc(nipKepsek) + '</span>' : '') + '</td>' +
+        '<td class="kolom-kanan"><span class="nama-ttd">' + esc(namaBP) + '</span>' +
+        (nipBP ? '<br><span class="nip-ttd">NIP. ' + esc(nipBP) + '</span>' : '') + '</td></tr>' +
+    '</table>';
+
+  const w = window.open("", "_blank");
+  if (!w) return toast("Popup diblokir.");
+  w.document.write(
+    '<html><head><title>Rekap BP - ' + esc(namaKelas) + '</title>' +
+    '<style>@page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;padding:0 0 34px;color:#000;font-size:12px}' +
+    'h2{margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:10px}' +
+    'th,td{border:1px solid #999;padding:4px 6px;text-align:center;font-size:11px}th{background:#eee}' +
+    '.meta{margin:8px 0;line-height:1.6}' +
+    '.kop{text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:14px}' +
+    '.kop .nm-sek{font-size:18px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px}' +
+    '.kaki-cetak{position:fixed;bottom:0;left:0;right:0;text-align:center;font-size:10px;color:#555;border-top:1px solid #ccc;padding-top:4px;background:#fff}' +
+    '.ttd{margin-top:48px;border:none;page-break-inside:avoid;break-inside:avoid}' +
+    '.ttd td{border:none;padding:0 0 2px;vertical-align:top;text-align:left;font-size:13px}' +
+    '.ttd .kolom-kiri{width:65%}.ttd .kolom-kanan{width:35%}' +
+    '.ttd .spasi-ttd td{height:60px}.ttd .nama-ttd{font-weight:bold;text-decoration:underline}.ttd .nip-ttd{font-size:11px}' +
+    'thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}' +
+    '</style></head><body>' +
+    '<div class="kaki-cetak">' + (namaSekolah ? esc(namaSekolah) + ' &middot; ' : '') + 'Dicetak ' + esc(tglCetak) + '</div>' +
+    (namaSekolah ? '<div class="kop"><div class="nm-sek">' + esc(namaSekolah) + '</div></div>' : '') +
+    '<h2>Rekap Bimbingan &amp; Konseling</h2>' +
+    '<div class="meta"><b>Kelas:</b> ' + esc(namaKelas) +
+      ' &nbsp; <b>Periode:</b> ' + esc(periode.tahun_ajaran || "-") + ' ' + esc(periode.semester || "") + '</div>' +
+    '<table><thead><tr><th>No</th><th>Nama</th><th>Kasus</th><th>Konseling</th><th>Total Poin</th></tr></thead><tbody>' +
+      rows + '</tbody></table>' +
+    blokTtd + '</body></html>');
+  w.document.close(); w.focus();
+  w.onload = () => { try { w.print(); } catch(e){} };
+};
+
+/* ---------- TAB KELOLA JENIS ---------- */
+function bpRenderJenis(){
+  const isi = $("bpIsi");
+  isi.innerHTML =
+    '<div class="bp-catatan">Master jenis pelanggaran &amp; penghargaan beserta bobot poin. Dipakai di tab Kasus &amp; Poin.</div>' +
+    '<div class="row" style="margin-bottom:12px;align-items:flex-end">' +
+      '<div><label>Nama jenis</label><input id="bpjNama" placeholder="mis. Merokok"></div>' +
+      '<div><label>Kategori</label><select id="bpjKategori"><option value="pelanggaran">Pelanggaran</option><option value="penghargaan">Penghargaan</option></select></div>' +
+      '<div><label>Poin</label><input type="number" id="bpjPoin" placeholder="mis. -20 atau 15"></div>' +
+      '<div style="flex:0 0 auto"><button class="btn" id="bpjBtnSimpan" onclick="bpSimpanJenis()">Tambah jenis</button>' +
+        '<button class="btn btn-ghost btn-sm" id="bpjBtnBatal" style="margin-left:8px;display:none" onclick="bpBatalEditJenis()">Batal Edit</button></div>' +
+    '</div>' +
+    '<div id="bpjList"></div>';
+  bpGambarJenis();
+}
+
+function bpGambarJenis(){
+  if (!_bpJenis.length) { $("bpjList").innerHTML = '<div class="empty">Belum ada jenis.</div>'; return; }
+  let html = '<table><thead><tr><th>Nama</th><th>Kategori</th><th>Poin</th><th>Status</th><th class="bp-th-aksi">Aksi</th></tr></thead><tbody>';
+  _bpJenis.forEach(j => {
+    const kls = j.kategori === "penghargaan" ? "bp-plus" : "bp-minus";
+    html += '<tr><td>' + esc(j.nama) + '</td>' +
+      '<td><span class="bp-pil ' + kls + '">' + (j.kategori==="penghargaan"?"Penghargaan":"Pelanggaran") + '</span></td>' +
+      '<td>' + (j.poin>0?"+":"") + j.poin + '</td>' +
+      '<td>' + (j.aktif ? "Aktif" : '<span style="color:var(--ink-lembut)">Nonaktif</span>') + '</td>' +
+      '<td class="bp-sel-aksi">' +
+        '<button class="bp-btn-aksi" onclick="bpEditJenis(\'' + j.id + '\')">✎<span class="lbl"> Edit</span></button>' +
+        '<button class="bp-btn-hapus" onclick="bpHapusJenis(\'' + j.id + '\')">🗑<span class="lbl"> Hapus</span></button>' +
+      '</td></tr>';
+  });
+  html += '</tbody></table>';
+  $("bpjList").innerHTML = html;
+}
+
+let _bpEditJenisId = null;
+window.bpSimpanJenis = async () => {
+  const nama = $("bpjNama").value.trim();
+  const kategori = $("bpjKategori").value;
+  let poin = parseInt($("bpjPoin").value, 10);
+  if (!nama) return toast("Nama jenis belum diisi.");
+  if (isNaN(poin)) poin = 0;
+  // normalisasi tanda: pelanggaran = minus, penghargaan = plus
+  poin = kategori === "pelanggaran" ? -Math.abs(poin) : Math.abs(poin);
+
+  tampilkanLoading("Menyimpan jenis...");
+  try {
+    if (_bpEditJenisId) {
+      const { error } = await sb.from("bp_jenis").update({ nama, kategori, poin }).eq("id", _bpEditJenisId);
+      if (error) throw new Error(error.message);
+      _bpEditJenisId = null;
+      toast("Jenis diperbarui.");
+    } else {
+      const { error } = await sb.from("bp_jenis").insert({ nama, kategori, poin, aktif:true });
+      if (error) throw new Error(error.message);
+      toast("Jenis ditambahkan.");
+    }
+    // muat ulang jenis
+    const { data } = await sb.from("bp_jenis").select("*").order("kategori").order("nama");
+    _bpJenis = data || [];
+    $("bpjNama").value = ""; $("bpjPoin").value = "";
+    if ($("bpjBtnSimpan")) $("bpjBtnSimpan").textContent = "Tambah jenis";
+    if ($("bpjBtnBatal")) $("bpjBtnBatal").style.display = "none";
+    bpGambarJenis();
+  } catch (e) {
+    toast("Gagal: " + e.message);
+  } finally { sembunyikanLoading(); }
+};
+
+window.bpEditJenis = (id) => {
+  const j = _bpJenis.find(x => x.id === id);
+  if (!j) return;
+  _bpEditJenisId = id;
+  $("bpjNama").value = j.nama;
+  $("bpjKategori").value = j.kategori;
+  $("bpjPoin").value = Math.abs(j.poin);
+  if ($("bpjBtnSimpan")) $("bpjBtnSimpan").textContent = "Perbarui jenis";
+  if ($("bpjBtnBatal")) $("bpjBtnBatal").style.display = "";
+  window.scrollTo({ top:0, behavior:"smooth" });
+  toast("Mode edit — ubah lalu Simpan.");
+};
+
+window.bpBatalEditJenis = () => {
+  _bpEditJenisId = null;
+  $("bpjNama").value = ""; $("bpjPoin").value = "";
+  $("bpjKategori").value = "pelanggaran";
+  if ($("bpjBtnSimpan")) $("bpjBtnSimpan").textContent = "Tambah jenis";
+  if ($("bpjBtnBatal")) $("bpjBtnBatal").style.display = "none";
+  toast("Edit dibatalkan.");
+};
+
+window.bpHapusJenis = async (id) => {
+  if (!(await konfirmasi("Hapus Jenis", "Hapus jenis ini? Catatan lama yang memakainya tetap ada tapi kehilangan label jenis.", {bahaya:true}))) return;
+  try {
+    const { error } = await sb.from("bp_jenis").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+    _bpJenis = _bpJenis.filter(j => j.id !== id);
+    toast("Jenis dihapus.");
+    bpGambarJenis();
+  } catch (e) { toast("Gagal: " + e.message); }
+};
+
+/* ---------- util tanggal ringkas ---------- */
+function bpTglRingkas(t){
+  if (!t) return "-";
+  const d = new Date(t + "T00:00:00");
+  return d.toLocaleDateString("id-ID", { day:"numeric", month:"short", year:"numeric" });
+}
+function bpWaktuRingkas(t){
+  if (!t) return "-";
+  const d = new Date(t);
+  return d.toLocaleDateString("id-ID", { day:"numeric", month:"short", year:"numeric" }) +
+    " · " + d.toLocaleTimeString("id-ID", { hour:"2-digit", minute:"2-digit" });
+}
+/* ==================== AKHIR MODUL BP ==================== */
+
 </script>
 </body>
 </html>
