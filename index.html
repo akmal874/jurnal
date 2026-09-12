@@ -6551,10 +6551,6 @@ window.bpMuatRekap = async function(kelasIdArg){
     const siswaFilter = kelasId
       ? _bpSiswa.filter(s => String(s.kelas_id) === String(kelasId))
       : _bpSiswa;
-    // DIAGNOSTIK SEMENTARA — hapus setelah filter terbukti benar
-    console.log("[BP Rekap] kelasId:", JSON.stringify(kelasId),
-      "| contoh siswa.kelas_id:", _bpSiswa[0] && JSON.stringify(_bpSiswa[0].kelas_id),
-      "| jml semua:", _bpSiswa.length, "| jml terfilter:", siswaFilter.length);
     const idSet = new Set(siswaFilter.map(s => s.id));
 
     const per = {};
