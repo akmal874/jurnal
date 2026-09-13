@@ -338,6 +338,43 @@
   @keyframes gl-spin { to { transform: rotate(360deg); } }
   .gl-teks { font-size: 13.5px; color: var(--ink); text-align: center; font-weight: 600; }
   .gl-sub { font-size: 11.5px; color: var(--ink-lembut); text-align:center; margin-top:-6px; }
+
+  /* ===== Mode Pemeliharaan ===== */
+  #maintOverlay { position:fixed; inset:0; width:100%; height:100%; z-index:1000005;
+    color:#fff; font-family:Arial,Helvetica,sans-serif; background:#031710; overflow:hidden; }
+  #maintOverlay .mt-brand { position:absolute; top:5%; left:4%; display:flex; align-items:center; gap:12px; z-index:15; }
+  #maintOverlay .mt-brand svg { width:38px; height:38px; }
+  #maintOverlay .mt-brand span { font-size:clamp(20px,2.6vw,30px); font-weight:700; letter-spacing:.5px; }
+  #maintOverlay .mt-nav { position:absolute; top:6.5%; right:4%; font-size:clamp(9px,1vw,13px); letter-spacing:3px; color:#7f9c8f; font-weight:600; z-index:15; }
+  #maintOverlay .mt-nav b { color:#3ecf8e; padding:0 4px; }
+  #maintOverlay .mt-center { position:absolute; left:50%; top:56%; transform:translateX(-50%); text-align:center; width:90%; max-width:640px; z-index:15; padding-bottom:20px; }
+  #maintOverlay .mt-title-row { display:flex; align-items:center; justify-content:center; gap:12px; }
+  #maintOverlay .mt-title-row svg { width:clamp(28px,3.4vw,42px); height:clamp(28px,3.4vw,42px); }
+  #maintOverlay .mt-title-row h1 { font-size:clamp(28px,4.2vw,54px); font-weight:700; }
+  #maintOverlay .mt-subtitle { font-size:clamp(24px,3.8vw,48px); font-weight:700; color:#3ecf8e; margin-top:2px; }
+  #maintOverlay .mt-desc { margin-top:18px; font-size:clamp(13px,1.5vw,19px); color:#c3d4cc; line-height:1.5; }
+  #maintOverlay .mt-countdown { margin-top:24px; display:flex; justify-content:center; gap:clamp(10px,2vw,20px); }
+  #maintOverlay .mt-cd-box { background:rgba(20,50,38,.45); border:1px solid rgba(62,207,142,.35); border-radius:12px; padding:clamp(10px,1.6vw,16px) clamp(12px,2vw,22px); min-width:clamp(58px,9vw,90px); }
+  #maintOverlay .mt-cd-num { font-size:clamp(24px,4vw,44px); font-weight:700; color:#3ecf8e; line-height:1; }
+  #maintOverlay .mt-cd-label { margin-top:6px; font-size:clamp(8px,1vw,12px); letter-spacing:2px; color:#9fbcae; text-transform:uppercase; }
+  #maintOverlay .mt-btn { margin-top:26px; display:inline-flex; align-items:center; gap:12px; background:rgba(20,50,38,.55); border:1px solid rgba(62,207,142,.4); border-radius:40px; padding:12px 26px; color:#fff; font-size:clamp(13px,1.4vw,17px); font-weight:600; }
+  #maintOverlay .mt-spinner { width:20px; height:20px; border:3px solid rgba(62,207,142,.25); border-top-color:#3ecf8e; border-radius:50%; animation:mtspin 1s linear infinite; }
+  @keyframes mtspin { to { transform:rotate(360deg); } }
+  #maintOverlay .mt-corner { position:absolute; left:4%; bottom:6%; z-index:15; }
+  #maintOverlay .mt-dots { display:flex; gap:6px; margin-bottom:10px; }
+  #maintOverlay .mt-dots i { width:7px; height:7px; border-radius:50%; background:#3ecf8e; display:block; }
+  #maintOverlay .mt-corner p { font-size:clamp(9px,1vw,13px); letter-spacing:2px; color:#3ecf8e; line-height:1.7; font-weight:600; }
+  #maintOverlay .mt-slider { position:absolute; right:4%; bottom:8%; display:flex; gap:8px; align-items:center; z-index:15; }
+  #maintOverlay .mt-slider i { display:block; height:4px; border-radius:2px; background:#2a4c3d; }
+  #maintOverlay .mt-slider i.on { width:34px; background:#3ecf8e; }
+  #maintOverlay .mt-slider i.off { width:22px; }
+  @media (max-width:768px) {
+    #maintOverlay::before { content:''; position:absolute; inset:0; background:linear-gradient(180deg, rgba(3,23,16,.45) 0%, rgba(3,23,16,.25) 40%, rgba(3,23,16,.75) 78%, rgba(3,23,16,.95) 100%); z-index:1; }
+    #maintOverlay .mt-nav { display:none; }
+    #maintOverlay .mt-center { top:54%; }
+    #maintOverlay .mt-corner { bottom:4%; }
+    #maintOverlay .mt-slider { bottom:5%; }
+  }
 </style>
 </head>
 <body>
@@ -411,6 +448,36 @@
 </div>
 
 <div id="izinPanelOverlay" class="modal-overlay hidden"></div>
+
+<!-- ===== OVERLAY MODE PEMELIHARAAN (desain Supabase, teks Inggris dipertahankan) ===== -->
+<div id="maintOverlay" style="display:none">
+  <div class="mt-brand">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" fill="#3ecf8e"/></svg>
+    <span>supabase</span>
+  </div>
+  <div class="mt-nav">BUILD <b>&#8226;</b> MANAGE <b>&#8226;</b> SCALE</div>
+  <div class="mt-center">
+    <div class="mt-title-row">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" fill="#3ecf8e"/></svg>
+      <h1>Supabase</h1>
+    </div>
+    <div class="mt-subtitle">Under Maintenance</div>
+    <p class="mt-desc" id="mtPesan">Our database is currently undergoing scheduled maintenance to improve performance and reliability.</p>
+    <div class="mt-countdown" id="mtCountdown">
+      <div class="mt-cd-box"><div class="mt-cd-num" id="mtDays">00</div><div class="mt-cd-label">Days</div></div>
+      <div class="mt-cd-box"><div class="mt-cd-num" id="mtHours">00</div><div class="mt-cd-label">Hours</div></div>
+      <div class="mt-cd-box"><div class="mt-cd-num" id="mtMins">00</div><div class="mt-cd-label">Minutes</div></div>
+      <div class="mt-cd-box"><div class="mt-cd-num" id="mtSecs">00</div><div class="mt-cd-label">Seconds</div></div>
+    </div>
+    <div class="mt-btn"><span class="mt-spinner"></span> We'll be back soon</div>
+  </div>
+  <div class="mt-corner">
+    <div class="mt-dots"><i></i><i></i><i></i></div>
+    <p>SUPABASE<br/>THE OPEN SOURCE<br/>FIREBASE ALTERNATIVE</p>
+  </div>
+  <div class="mt-slider"><i class="on"></i><i class="off"></i><i class="off"></i></div>
+</div>
+
 
 <div id="toastWrap"></div>
 
@@ -707,6 +774,12 @@ sb.auth.onAuthStateChange(async (event, session) => {
     return sb.auth.signOut();
   }
   ME = { id: session.user.id, email: session.user.email, ...profil };
+
+  // ===== Cek Mode Pemeliharaan (admin dikecualikan) =====
+  try {
+    if (await cekMaintenanceLaluBlokir()) return;  // bila aktif & bukan admin: overlay tampil, hentikan
+  } catch (e) { /* bila gagal cek, jangan kunci pengguna */ }
+
   $("login").classList.add("hidden");
   $("app").classList.remove("hidden");
   $("whoNama").textContent = ME.nama || ME.email;
@@ -1016,6 +1089,53 @@ async function muatPengaturan(){
         '(perilaku normal). Tidak dicentang = jurnal langsung disetujui otomatis.</p>' +
       '<button class="btn" onclick="simpanVerifikasi()">Simpan Pengaturan Verifikasi</button>' +
       '<div id="setVerifMsg"></div>' +
+    '</div>' +
+    // ---- Mode Pemeliharaan ----
+    '<div class="card"><h2>Mode Pemeliharaan</h2>' +
+      '<p style="color:#6b7280;font-size:13px;margin-bottom:10px">Saat aktif, guru/kepsek/pengawas melihat ' +
+        'halaman pemeliharaan setelah login. <b>Admin tetap bisa masuk penuh.</b> Waktu memakai jam server ' +
+        '(tidak bisa diakali dengan mengubah jam perangkat).</p>' +
+      '<label style="display:flex;align-items:center;gap:8px;font-weight:normal;cursor:pointer;margin-bottom:6px">' +
+        '<input type="checkbox" id="mtManual" ' + (cfg.maintenance_manual?"checked":"") +
+        ' style="width:18px;height:18px"> <b>Aktifkan sekarang (manual/darurat)</b></label>' +
+      '<p style="color:#6b7280;font-size:12px;margin:0 0 14px">Nyalakan untuk maintenance dadakan; matikan untuk mengakhiri.</p>' +
+
+      '<div style="border-top:1px solid var(--garis);padding-top:12px">' +
+      '<label style="display:flex;align-items:center;gap:8px;font-weight:normal;cursor:pointer;margin-bottom:8px">' +
+        '<input type="checkbox" id="mtMgAktif" ' + (cfg.maintenance_mg_aktif?"checked":"") +
+        ' style="width:18px;height:18px"> Jadwal mingguan berulang</label>' +
+      '<div class="row">' +
+        '<div><label>Mulai hari</label><select id="mtMgHari">' +
+          [["0","Minggu"],["1","Senin"],["2","Selasa"],["3","Rabu"],["4","Kamis"],["5","Jumat"],["6","Sabtu"]]
+            .map(h => '<option value="'+h[0]+'"'+((cfg.maintenance_mg_hari??6)==+h[0]?" selected":"")+'>'+h[1]+'</option>').join("") +
+        '</select></div>' +
+        '<div><label>Jam mulai (0–23)</label><input type="number" id="mtMgJam" min="0" max="23" value="' + (cfg.maintenance_mg_jam??1) + '"></div>' +
+        '<div><label>Durasi (jam)</label><input type="number" id="mtMgDurasi" min="1" value="' + (cfg.maintenance_mg_durasi??48) + '"></div>' +
+      '</div>' +
+      '<p style="color:#6b7280;font-size:12px;margin-top:6px">Contoh: Sabtu, jam 1, durasi 48 → aktif Sabtu 01.00 s/d Senin 01.00.</p>' +
+      '</div>' +
+
+      '<div style="border-top:1px solid var(--garis);padding-top:12px;margin-top:12px">' +
+      '<label style="display:flex;align-items:center;gap:8px;font-weight:normal;cursor:pointer;margin-bottom:8px">' +
+        '<input type="checkbox" id="mtSkAktif" ' + (cfg.maintenance_sk_aktif?"checked":"") +
+        ' style="width:18px;height:18px"> Jadwal sekali (tanggal tertentu)</label>' +
+      '<div class="row">' +
+        '<div><label>Mulai</label><input type="datetime-local" id="mtSkMulai" value="' + (cfg.maintenance_sk_mulai?_mtKeInputLokal(cfg.maintenance_sk_mulai):"") + '"></div>' +
+        '<div><label>Selesai</label><input type="datetime-local" id="mtSkSelesai" value="' + (cfg.maintenance_sk_selesai?_mtKeInputLokal(cfg.maintenance_sk_selesai):"") + '"></div>' +
+      '</div>' +
+      '</div>' +
+
+      '<div style="border-top:1px solid var(--garis);padding-top:12px;margin-top:12px">' +
+      '<label>Link gambar latar (opsional)</label>' +
+      '<input id="mtBg" value="' + esc(cfg.maintenance_bg||"") + '" placeholder="https://… (link gambar langsung .png/.jpg)">' +
+      '<p style="color:#6b7280;font-size:12px;margin:6px 0 12px">Kosongkan untuk latar hijau polos. Teks halaman tetap bahasa Inggris (desain Supabase).</p>' +
+      '<label>Pesan tambahan (opsional)</label>' +
+      '<input id="mtPesanInput" value="' + esc(cfg.maintenance_pesan||"") + '" placeholder="Kosongkan untuk teks default bahasa Inggris">' +
+      '</div>' +
+
+      '<button class="btn" style="margin-top:14px" onclick="simpanMaintenance()">Simpan Mode Pemeliharaan</button>' +
+      '<button class="btn btn-ghost" style="margin-left:8px" onclick="pratinjauMaintenance()">Pratinjau</button>' +
+      '<div id="setMaintMsg"></div>' +
     '</div>' +
     // ---- Info sekolah ----
     '<div class="card"><h2>Info Sekolah</h2>' +
@@ -6005,6 +6125,179 @@ window.hapusJadwal = async (id) => {
     toast("Slot dihapus."); await renderJadwal();
   } catch (e) { toast("Gagal menghapus: " + e.message); }
 };
+
+/* ==================== MODE PEMELIHARAAN ==================== */
+let _mtTimer = null;
+async function ambilWaktuServer(){
+  try {
+    const { data, error } = await sb.rpc("now_wita");
+    if (error) throw error;
+    // data berupa string timestamp tanpa tz (sudah WITA) → parse sebagai lokal
+    const d = new Date(String(data).replace(" ", "T"));
+    if (!isNaN(d)) return d;
+  } catch (e) {}
+  return new Date();  // fallback aman
+}
+
+function _mtMenitPekan(hari, jam, menit){ return hari*1440 + jam*60 + (menit||0); }
+
+function _mtCekMingguan(now, hariMulai, jamMulai, durasiJam){
+  const startWM = _mtMenitPekan(hariMulai, jamMulai, 0);
+  const endWM = startWM + durasiJam*60;
+  const nowWM = _mtMenitPekan(now.getDay(), now.getHours(), now.getMinutes());
+  for (let off = -10080; off <= 0; off += 10080){
+    const s = startWM + off, e = endWM + off;
+    if (nowWM >= s && nowWM < e){
+      const selesai = new Date(now.getTime() + (e - nowWM)*60000);
+      selesai.setSeconds(0,0);
+      return { aktif:true, selesai };
+    }
+  }
+  return { aktif:false, selesai:null };
+}
+
+function _mtCekSekali(now, mulai, selesai){
+  if (!mulai || !selesai) return { aktif:false, selesai:null };
+  const m = new Date(mulai), s = new Date(selesai);
+  if (isNaN(m) || isNaN(s)) return { aktif:false, selesai:null };
+  if (now >= m && now < s) return { aktif:true, selesai:s };
+  return { aktif:false, selesai:null };
+}
+
+/* Hitung status maintenance dari aturan + waktu server + peran. */
+function hitungMaintenance(a, now, peran){
+  if (peran === "admin") return { aktif:false, selesai:null };
+  if (a.maintenance_manual) return { aktif:true, selesai:null };
+  if (a.maintenance_mg_aktif){
+    const r = _mtCekMingguan(now, a.maintenance_mg_hari|0, a.maintenance_mg_jam|0, a.maintenance_mg_durasi|0);
+    if (r.aktif) return r;
+  }
+  if (a.maintenance_sk_aktif){
+    const r2 = _mtCekSekali(now, a.maintenance_sk_mulai, a.maintenance_sk_selesai);
+    if (r2.aktif) return r2;
+  }
+  return { aktif:false, selesai:null };
+}
+
+/* Cek & tampilkan overlay bila perlu. Return true bila diblokir (aktif & bukan admin). */
+async function cekMaintenanceLaluBlokir(){
+  let cfg = null;
+  try {
+    const { data } = await sb.from("pengaturan").select(
+      "maintenance_manual, maintenance_mg_aktif, maintenance_mg_hari, maintenance_mg_jam, maintenance_mg_durasi, " +
+      "maintenance_sk_aktif, maintenance_sk_mulai, maintenance_sk_selesai, maintenance_bg, maintenance_pesan"
+    ).eq("id","app").maybeSingle();
+    cfg = data;
+  } catch (e) { return false; }
+  if (!cfg) return false;
+
+  const now = await ambilWaktuServer();
+  const hasil = hitungMaintenance(cfg, now, ME.role);
+  if (!hasil.aktif) { sembunyikanMaintenance(); return false; }
+
+  tampilkanMaintenance(cfg, hasil.selesai, now);
+  return true;
+}
+
+function tampilkanMaintenance(cfg, selesai, waktuServer){
+  const ov = $("maintOverlay");
+  if (!ov) return;
+  // pastikan login & app disembunyikan
+  $("login").classList.add("hidden");
+  $("app").classList.add("hidden");
+  // background
+  if (cfg.maintenance_bg && /^https?:\/\//.test(cfg.maintenance_bg)) {
+    ov.style.background = "url('" + cfg.maintenance_bg + "') center center / cover no-repeat, #031710";
+  } else {
+    ov.style.background = "#031710";
+  }
+  // pesan custom (opsional)
+  if (cfg.maintenance_pesan && cfg.maintenance_pesan.trim()) {
+    $("mtPesan").textContent = cfg.maintenance_pesan.trim();
+  }
+  ov.style.display = "block";
+
+  // countdown: tampil hanya bila ada waktu selesai
+  const cd = $("mtCountdown");
+  if (selesai) {
+    cd.style.display = "flex";
+    let base = waktuServer.getTime();
+    if (_mtTimer) clearInterval(_mtTimer);
+    const tick = () => {
+      let diff = selesai.getTime() - base;
+      if (diff < 0) diff = 0;
+      const p = n => (n<10?"0":"")+n;
+      $("mtDays").textContent  = p(Math.floor(diff/86400000));
+      $("mtHours").textContent = p(Math.floor((diff%86400000)/3600000));
+      $("mtMins").textContent  = p(Math.floor((diff%3600000)/60000));
+      $("mtSecs").textContent  = p(Math.floor((diff%60000)/1000));
+      base += 1000;  // maju 1 detik nyata
+    };
+    tick();
+    _mtTimer = setInterval(tick, 1000);
+  } else {
+    cd.style.display = "none";
+  }
+}
+
+function sembunyikanMaintenance(){
+  const ov = $("maintOverlay");
+  if (ov) ov.style.display = "none";
+  if (_mtTimer) { clearInterval(_mtTimer); _mtTimer = null; }
+}
+
+/* timestamptz dari DB → nilai untuk <input datetime-local> (lokal perangkat admin) */
+function _mtKeInputLokal(ts){
+  const d = new Date(ts);
+  if (isNaN(d)) return "";
+  return new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+}
+
+window.simpanMaintenance = async () => {
+  const patch = {
+    maintenance_manual:   $("mtManual").checked,
+    maintenance_mg_aktif: $("mtMgAktif").checked,
+    maintenance_mg_hari:  parseInt($("mtMgHari").value,10),
+    maintenance_mg_jam:   Math.max(0, Math.min(23, parseInt($("mtMgJam").value,10)||0)),
+    maintenance_mg_durasi:Math.max(1, parseInt($("mtMgDurasi").value,10)||1),
+    maintenance_sk_aktif: $("mtSkAktif").checked,
+    maintenance_sk_mulai:  $("mtSkMulai").value ? new Date($("mtSkMulai").value).toISOString() : null,
+    maintenance_sk_selesai:$("mtSkSelesai").value ? new Date($("mtSkSelesai").value).toISOString() : null,
+    maintenance_bg:       $("mtBg").value.trim() || null,
+    maintenance_pesan:    $("mtPesanInput").value.trim() || null,
+    diubah: new Date().toISOString()
+  };
+  if (patch.maintenance_sk_aktif && patch.maintenance_sk_mulai && patch.maintenance_sk_selesai &&
+      new Date(patch.maintenance_sk_selesai) <= new Date(patch.maintenance_sk_mulai)) {
+    return toast("Jadwal sekali: waktu selesai harus setelah waktu mulai.");
+  }
+  tampilkanLoading("Menyimpan mode pemeliharaan...");
+  try {
+    const { error } = await sb.from("pengaturan").update(patch).eq("id","app");
+    if (error) throw new Error(error.message);
+    toast("Mode pemeliharaan tersimpan.", "sukses");
+  } catch (e) {
+    toast("Gagal: " + e.message);
+  } finally { sembunyikanLoading(); }
+};
+
+/* Pratinjau: tampilkan overlay 5 detik untuk admin, lalu tutup otomatis. */
+window.pratinjauMaintenance = async () => {
+  const cfg = {
+    maintenance_bg: $("mtBg").value.trim(),
+    maintenance_pesan: $("mtPesanInput").value.trim()
+  };
+  const now = await ambilWaktuServer();
+  // untuk pratinjau, buat selesai dummy 2 jam dari sekarang bila jadwal sekali diisi, agar countdown tampil
+  let selesai = null;
+  if ($("mtSkAktif").checked && $("mtSkSelesai").value) selesai = new Date($("mtSkSelesai").value);
+  tampilkanMaintenance(cfg, selesai, now);
+  toast("Pratinjau 5 detik…", "info");
+  setTimeout(sembunyikanMaintenance, 5000);
+};
+
+/* ==================== AKHIR MODE PEMELIHARAAN ==================== */
+
 /* ==================== MODUL BP (Bimbingan Konseling) ==================== */
 const BP_PER_HAL = 20;
 let _bpTab = "kasus";
