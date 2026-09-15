@@ -347,7 +347,7 @@
   #maintOverlay .mt-brand span { font-size:clamp(20px,2.6vw,30px); font-weight:700; letter-spacing:.5px; }
   #maintOverlay .mt-nav { position:absolute; top:6.5%; right:4%; font-size:clamp(9px,1vw,13px); letter-spacing:3px; color:#7f9c8f; font-weight:600; z-index:15; }
   #maintOverlay .mt-nav b { color:#3ecf8e; padding:0 4px; }
-  #maintOverlay .mt-center { position:absolute; left:50%; bottom:6%; transform:translateX(-50%); text-align:center; width:90%; max-width:640px; z-index:15; max-height:82vh; overflow-y:auto; padding:10px 0 0; }
+  #maintOverlay .mt-center { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); text-align:center; width:90%; max-width:640px; z-index:15; max-height:78vh; overflow-y:auto; padding:10px 0 20px; }
   #maintOverlay .mt-title-row { display:flex; align-items:center; justify-content:center; gap:12px; }
   #maintOverlay .mt-title-row svg { width:clamp(28px,3.4vw,42px); height:clamp(28px,3.4vw,42px); }
   #maintOverlay .mt-title-row h1 { font-size:clamp(28px,4.2vw,54px); font-weight:700; }
@@ -371,7 +371,7 @@
   @media (max-width:768px) {
     #maintOverlay::before { content:''; position:absolute; inset:0; background:linear-gradient(180deg, rgba(3,23,16,.45) 0%, rgba(3,23,16,.25) 40%, rgba(3,23,16,.75) 78%, rgba(3,23,16,.95) 100%); z-index:1; }
     #maintOverlay .mt-nav { display:none; }
-    #maintOverlay .mt-center { bottom:5%; }
+    #maintOverlay .mt-center { top:50%; }
     #maintOverlay .mt-corner { bottom:4%; }
     #maintOverlay .mt-slider { bottom:5%; }
   }
@@ -1090,6 +1090,18 @@ async function muatPengaturan(){
       '<button class="btn" onclick="simpanVerifikasi()">Simpan Pengaturan Verifikasi</button>' +
       '<div id="setVerifMsg"></div>' +
     '</div>' +
+    // ---- Rekap Harian ----
+    '<div class="card"><h2>Rekap Harian</h2>' +
+      '<p style="color:#6b7280;font-size:13px;margin-bottom:10px">Mengatur tampilan laporan Rekap Jurnal Harian.</p>' +
+      '<label style="display:flex;align-items:center;gap:8px;font-weight:normal;cursor:pointer">' +
+        '<input type="checkbox" id="setRekapFoto" ' + (cfg.rekap_foto_cetak?"checked":"") +
+        ' style="width:18px;height:18px"> Sertakan foto dokumentasi saat mencetak</label>' +
+      '<p style="color:#6b7280;font-size:12px;margin-top:8px">Hanya memengaruhi hasil <b>cetak/PDF</b>. ' +
+        'Tampilan layar tetap ringan (foto dibuka lewat tombol "Lihat"). Nyalakan hanya saat butuh laporan berfoto — ' +
+        'mencetak banyak foto lebih berat &amp; lambat.</p>' +
+      '<button class="btn" onclick="simpanRekapFoto()">Simpan Pengaturan Rekap</button>' +
+      '<div id="setRekapMsg"></div>' +
+    '</div>' +
     // ---- Mode Pemeliharaan ----
     '<div class="card"><h2>Mode Pemeliharaan</h2>' +
       '<p style="color:#6b7280;font-size:13px;margin-bottom:10px">Saat aktif, guru/kepsek/pengawas melihat ' +
@@ -1296,6 +1308,20 @@ window.simpanVerifikasi = async () => {
     if (error) throw new Error(error.message);
     setMsg(wajib ? "Verifikasi diwajibkan. Jurnal guru menunggu persetujuan." :
                    "Verifikasi dimatikan. Jurnal guru langsung disetujui.", true);
+  } catch (e) { setMsg("Gagal menyimpan: " + e.message, false); }
+};
+
+window.simpanRekapFoto = async () => {
+  const setMsg = (t, ok) => { $("setRekapMsg").innerHTML =
+    '<div style="padding:10px;border-radius:8px;font-size:13px;margin-top:12px;' +
+    (ok?'background:#ebfbee;color:#2b8a3e':'background:#fff0f0;color:#c92a2a') + '">' + esc(t) + '</div>'; };
+  const foto = $("setRekapFoto").checked;
+  try {
+    const { error } = await sb.from("pengaturan")
+      .update({ rekap_foto_cetak: foto, diubah: new Date().toISOString() }).eq("id","app");
+    if (error) throw new Error(error.message);
+    setMsg(foto ? "Foto akan disertakan saat mencetak Rekap Harian." :
+                  "Foto tidak disertakan saat mencetak (cetak ringkas).", true);
   } catch (e) { setMsg("Gagal menyimpan: " + e.message, false); }
 };
 
@@ -4754,7 +4780,7 @@ window.renderRekapHarian = async () => {
   try {
     const periode = await ambilPeriodeAktif();
     let qj = sb.from("jurnal")
-      .select("id, kelas_id, kelas_nama, mapel_nama, guru_nama, guru_asli, jam_ke, materi, catatan, status")
+      .select("id, kelas_id, kelas_nama, mapel_nama, guru_nama, guru_asli, jam_ke, materi, catatan, status, ada_foto")
       .eq("tanggal", tgl);
     if (periode.tahun_ajaran) qj = qj.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
     qj = qj.order("jam_ke");
@@ -4859,7 +4885,7 @@ function gambarHalamanRekapJurnal(){
 
   let html = '<div style="overflow-x:auto"><table style="min-width:820px"><tr>' +
     '<th>No</th><th>Jam</th><th>Kelas</th><th>Mapel</th><th>Guru</th>' +
-    '<th>Materi</th><th>Ketidakhadiran</th><th>Catatan</th></tr>';
+    '<th>Materi</th><th>Ketidakhadiran</th><th>Catatan</th><th>Foto</th></tr>';
   potongan.forEach((j, idx) => {
     const takHadir = (j._absen||[]).filter(x => x.status.toLowerCase() !== "hadir");
     const ringkas = takHadir.length
@@ -4876,6 +4902,9 @@ function gambarHalamanRekapJurnal(){
       '<td style="font-size:12px">' + esc(j.materi||"-") + '</td>' +
       '<td style="font-size:12px">' + ringkas + '</td>' +
       '<td style="font-size:12px">' + esc(j.catatan||"-") + '</td>' +
+      '<td>' + (j.ada_foto
+        ? '<button class="btn btn-ghost btn-sm" onclick="lihatFoto(\'' + j.id + '\')">📷 Lihat</button>'
+        : '<span style="color:#6b7280;font-size:12px">–</span>') + '</td>' +
       '</tr>';
   });
   html += '</table></div>';
@@ -4998,15 +5027,47 @@ window.cetakRekapHarian = async () => {
       '<tr><td class="kolom-kiri"></td><td class="kolom-kanan"><span class="nama-ttd">' + esc(namaKepsek) + '</span>' +
         (nipKepsek ? '<br><span class="nip-ttd">NIP. ' + esc(nipKepsek) + '</span>' : '') + '</td></tr></table>';
 
+  // toggle: sertakan foto saat cetak?
+  let sertakanFoto = false;
+  try {
+    const { data: cfg } = await sb.from("pengaturan").select("rekap_foto_cetak").eq("id","app").maybeSingle();
+    sertakanFoto = !!(cfg && cfg.rekap_foto_cetak);
+  } catch (e) {}
+
+  // bila ON, ambil signed URL untuk semua baris berfoto sekaligus (hemat request)
+  let petaFoto = {};
+  if (sertakanFoto) {
+    const idsFoto = list.filter(j => j.ada_foto).map(j => j.id + ".jpg");
+    if (idsFoto.length) {
+      try {
+        const { data: signed } = await sb.storage.from("dokumentasi").createSignedUrls(idsFoto, 300);
+        (signed || []).forEach(s => {
+          if (s && s.signedUrl && !s.error) {
+            const id = String(s.path).replace(/\.jpg$/, "");
+            petaFoto[id] = s.signedUrl;
+          }
+        });
+      } catch (e) {}
+    }
+  }
+
+  const kolomFotoTh = sertakanFoto ? '<th>Foto</th>' : '';
+
   const baris = list.length ? list.map((j,idx) => {
     const takHadir = (j._absen||[]).filter(x => x.status.toLowerCase() !== "hadir");
     const ringkas = takHadir.length ? takHadir.map(x => x.siswa_nama + " (" + x.status + ")").join(", ") : "Semua hadir";
+    let selFoto = "";
+    if (sertakanFoto) {
+      const url = petaFoto[j.id];
+      selFoto = '<td class="sel-foto">' +
+        (url ? '<img class="foto-rekap" src="' + url + '">' : '<span style="color:#888">–</span>') + '</td>';
+    }
     return '<tr><td>' + (idx+1) + '</td><td>' + esc(j.jam_ke||"-") + '</td><td>' + esc(j.kelas_nama||"-") +
       '</td><td>' + esc(j.mapel_nama||"-") + '</td><td>' + esc(j.guru_nama||"-") +
       (j.guru_asli ? " (mengganti " + esc(j.guru_asli) + ")" : "") +
       '</td><td>' + esc(j.materi||"-") + '</td><td>' + esc(ringkas) +
-      '</td><td>' + esc(j.catatan||"-") + '</td></tr>';
-  }).join("") : '<tr><td colspan="8" style="text-align:center">Belum ada jurnal.</td></tr>';
+      '</td><td>' + esc(j.catatan||"-") + '</td>' + selFoto + '</tr>';
+  }).join("") : '<tr><td colspan="' + (sertakanFoto?9:8) + '" style="text-align:center">Belum ada jurnal.</td></tr>';
 
   const w = window.open("", "_blank");
   if (!w) return toast("Popup diblokir.");
@@ -5019,6 +5080,7 @@ window.cetakRekapHarian = async () => {
     '.kaki-cetak{position:fixed;bottom:0;left:0;right:0;text-align:center;font-size:10px;color:#555;border-top:1px solid #ccc;padding-top:4px}' +
     'th,td{border:1px solid #999;padding:4px 6px;text-align:left;font-size:11px}th{background:#eee}' +
     '.ringkas{margin:10px 0;line-height:1.7}td{vertical-align:top}' +
+    '.sel-foto{text-align:center}.foto-rekap{height:90px;width:auto;max-width:160px;object-fit:contain;border:1px solid #999}' +
     '.ttd{margin-top:48px;border:none;page-break-inside:avoid;break-inside:avoid}.ttd td{border:none;padding:0 0 2px;font-size:13px}' +
     '.ttd .kolom-kiri{width:60%}.ttd .kolom-kanan{width:40%}' +
     '.ttd .spasi-ttd td{height:60px}.ttd .nama-ttd{font-weight:bold;text-decoration:underline}.ttd .nip-ttd{font-size:11px}' +
@@ -5034,10 +5096,23 @@ window.cetakRekapHarian = async () => {
       (belumIsi.length ? '<b>Belum mengisi:</b> ' + esc(belumIsi.join(", ")) : '<b>Semua kelas sudah mengisi.</b>') +
     '</div>' +
     '<table><thead><tr><th>No</th><th>Jam</th><th>Kelas</th><th>Mapel</th><th>Guru</th>' +
-      '<th>Materi</th><th>Ketidakhadiran</th><th>Catatan</th></tr></thead><tbody>' + baris + '</tbody></table>' +
+      '<th>Materi</th><th>Ketidakhadiran</th><th>Catatan</th>' + kolomFotoTh + '</tr></thead><tbody>' + baris + '</tbody></table>' +
     blokTtd + '</body></html>');
   w.document.close(); w.focus();
-  w.onload = () => { try { w.print(); } catch(e){} };
+  // tunggu gambar termuat dulu (bila ada) agar ikut tercetak
+  w.onload = () => {
+    const imgs = w.document.images;
+    if (!imgs || !imgs.length) { try { w.print(); } catch(e){} return; }
+    let sisa = imgs.length;
+    let sudah = false;
+    const cetakSekali = () => { if (sudah) return; sudah = true; try { w.print(); } catch(e){} };
+    const cek = () => { if (--sisa <= 0) cetakSekali(); };
+    for (let k=0; k<imgs.length; k++) {
+      if (imgs[k].complete) cek();
+      else { imgs[k].addEventListener("load", cek); imgs[k].addEventListener("error", cek); }
+    }
+    setTimeout(cetakSekali, 5000); // jaring pengaman bila ada foto lambat/gagal
+  };
 };
 
 window.excelRekapHarian = () => {
