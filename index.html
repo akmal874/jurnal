@@ -1102,6 +1102,29 @@ async function muatPengaturan(){
       '<button class="btn" onclick="simpanRekapFoto()">Simpan Pengaturan Rekap</button>' +
       '<div id="setRekapMsg"></div>' +
     '</div>' +
+    // ---- Batas Waktu Isi Jurnal ----
+    '<div class="card"><h2>Batas Waktu Isi Jurnal</h2>' +
+      '<p style="color:#6b7280;font-size:13px;margin-bottom:10px">Bila aktif, guru hanya bisa mengisi jurnal ' +
+        'pada jam &amp; hari yang ditentukan (memakai jam server — tidak bisa diakali dengan mengubah jam perangkat). ' +
+        '<b>Admin tetap bisa mengisi kapan saja.</b> Batas ini hanya untuk membuat jurnal baru, bukan mengedit.</p>' +
+      '<label style="display:flex;align-items:center;gap:8px;font-weight:normal;cursor:pointer;margin-bottom:10px">' +
+        '<input type="checkbox" id="setBatasAktif" ' + (cfg.jurnal_batas_aktif?"checked":"") +
+        ' style="width:18px;height:18px"> Aktifkan batas waktu pengisian</label>' +
+      '<div class="row">' +
+        '<div><label>Jam mulai (0–23)</label><input type="number" id="setBatasMulai" min="0" max="23" value="' + (cfg.jurnal_jam_mulai??7) + '"></div>' +
+        '<div><label>Jam selesai (0–23)</label><input type="number" id="setBatasSelesai" min="0" max="23" value="' + (cfg.jurnal_jam_selesai??16) + '"></div>' +
+      '</div>' +
+      '<label style="margin-top:10px;display:block">Hari yang diperbolehkan</label>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">' +
+        [["1","Sen"],["2","Sel"],["3","Rab"],["4","Kam"],["5","Jum"],["6","Sab"],["0","Min"]].map(function(h){
+          var aktif = String(cfg.jurnal_hari_kerja||"1,2,3,4,5").split(",").indexOf(h[0]) > -1;
+          return '<label style="display:flex;align-items:center;gap:6px;background:var(--aksen-lembut);padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:normal">' +
+            '<input type="checkbox" class="setBatasHari" value="' + h[0] + '"' + (aktif?" checked":"") + '> ' + h[1] + '</label>';
+        }).join("") +
+      '</div>' +
+      '<button class="btn" style="margin-top:14px" onclick="simpanBatasJurnal()">Simpan Batas Waktu</button>' +
+      '<div id="setBatasMsg"></div>' +
+    '</div>' +
     // ---- Mode Pemeliharaan ----
     '<div class="card"><h2>Mode Pemeliharaan</h2>' +
       '<p style="color:#6b7280;font-size:13px;margin-bottom:10px">Saat aktif, guru/kepsek/pengawas melihat ' +
@@ -1322,6 +1345,27 @@ window.simpanRekapFoto = async () => {
     if (error) throw new Error(error.message);
     setMsg(foto ? "Foto akan disertakan saat mencetak Rekap Harian." :
                   "Foto tidak disertakan saat mencetak (cetak ringkas).", true);
+  } catch (e) { setMsg("Gagal menyimpan: " + e.message, false); }
+};
+
+window.simpanBatasJurnal = async () => {
+  const setMsg = (t, ok) => { $("setBatasMsg").innerHTML =
+    '<div style="padding:10px;border-radius:8px;font-size:13px;margin-top:12px;' +
+    (ok?'background:#ebfbee;color:#2b8a3e':'background:#fff0f0;color:#c92a2a') + '">' + esc(t) + '</div>'; };
+  const aktif = $("setBatasAktif").checked;
+  const mulai = Math.max(0, Math.min(23, parseInt($("setBatasMulai").value,10)||0));
+  const selesai = Math.max(0, Math.min(23, parseInt($("setBatasSelesai").value,10)||0));
+  const hari = [...document.querySelectorAll(".setBatasHari:checked")].map(c => c.value).join(",");
+  if (selesai <= mulai) return setMsg("Jam selesai harus lebih besar dari jam mulai.", false);
+  if (aktif && !hari) return setMsg("Pilih minimal satu hari.", false);
+  try {
+    const { error } = await sb.from("pengaturan").update({
+      jurnal_batas_aktif: aktif, jurnal_jam_mulai: mulai,
+      jurnal_jam_selesai: selesai, jurnal_hari_kerja: hari || "1,2,3,4,5",
+      diubah: new Date().toISOString()
+    }).eq("id","app");
+    if (error) throw new Error(error.message);
+    setMsg(aktif ? "Batas waktu diaktifkan." : "Batas waktu dimatikan.", true);
   } catch (e) { setMsg("Gagal menyimpan: " + e.message, false); }
 };
 
@@ -2141,6 +2185,7 @@ async function muatIsiJurnal(){
       '<button class="btn btn-ghost btn-sm" id="jBtnBatal" style="margin-left:8px" onclick="batalIsiJurnal()">Batal</button>' +
       '<div id="jMsg"></div>' +
     '</div>';
+  terapkanBatasIsiJurnal();
 }
 
 window.gantiGuruAsli = () => {
@@ -2336,6 +2381,59 @@ function tandaiErrorArea(areaId, pesan){
 
 window.bersihkanErrorJurnal = bersihkanErrorJurnal;
 
+/* ===== Batas Waktu Isi Jurnal (Rencana #1, dengan Optimasi B) ===== */
+const _HARI_NAMA = ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
+
+/* Cek apakah SEKARANG boleh mengisi. Return {boleh, pesan}. Admin selalu boleh.
+   Optimasi B: baca kolom aktif dulu; bila fitur MATI → langsung boleh, TANPA panggil jam server. */
+async function cekBolehIsiJurnal(){
+  if (ME.role === "admin") return { boleh:true };
+  let cfg = null;
+  try {
+    const { data } = await sb.from("pengaturan")
+      .select("jurnal_batas_aktif, jurnal_jam_mulai, jurnal_jam_selesai, jurnal_hari_kerja")
+      .eq("id","app").maybeSingle();
+    cfg = data;
+  } catch (e) { return { boleh:true }; }         // gagal baca → jangan kunci
+  if (!cfg || cfg.jurnal_batas_aktif !== true) return { boleh:true };  // fitur mati → tak panggil jam server
+
+  const now = await ambilWaktuServer();          // hanya dipanggil bila fitur AKTIF
+  const jam = now.getHours();
+  const hari = now.getDay();                      // 0=Minggu..6=Sabtu
+  const hariList = String(cfg.jurnal_hari_kerja||"").split(",").map(x => parseInt(x,10)).filter(n => !isNaN(n));
+  const rentang = "Pengisian jurnal hanya " +
+    hariList.map(h => _HARI_NAMA[h]).join(", ") + ", pukul " +
+    String(cfg.jurnal_jam_mulai).padStart(2,"0") + ".00–" +
+    String(cfg.jurnal_jam_selesai).padStart(2,"0") + ".00.";
+  if (!hariList.includes(hari))
+    return { boleh:false, pesan: rentang + " Hari ini (" + _HARI_NAMA[hari] + ") tidak termasuk." };
+  if (jam < cfg.jurnal_jam_mulai || jam >= cfg.jurnal_jam_selesai)
+    return { boleh:false, pesan: rentang + " Sekarang pukul " + String(jam).padStart(2,"0") + ".00." };
+  return { boleh:true };
+}
+
+/* Banner + nonaktifkan tombol simpan bila di luar waktu. Dipanggil saat buka Isi Jurnal. */
+async function terapkanBatasIsiJurnal(){
+  const res = await cekBolehIsiJurnal();
+  const btn = $("jBtnSimpan");
+  let area = $("jBannerBatas");
+  if (res.boleh) {
+    if (area) area.remove();
+    if (btn) { btn.disabled = false; btn.style.opacity = ""; btn.style.cursor = ""; }
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.style.opacity = ".5"; btn.style.cursor = "not-allowed"; }
+  const html = '<div id="jBannerBatas" style="display:flex;align-items:flex-start;gap:10px;' +
+    'background:#b7810014;border-left:4px solid #b78100;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px">' +
+    '<span style="width:24px;height:24px;border-radius:50%;background:#b78100;color:#fff;display:grid;place-items:center;flex:0 0 auto">⚠</span>' +
+    '<span><b>Di luar waktu pengisian.</b><br>' + esc(res.pesan) + '</span></div>';
+  const card = $("main") ? $("main").querySelector(".card") : null;
+  if (card) {
+    if (area) area.outerHTML = html;
+    else card.insertAdjacentHTML("afterbegin", html);
+  }
+}
+
 /* ---- Simpan ---- */
 window.simpanJurnal = async () => {
   const tanggal = $("jTgl").value;
@@ -2350,6 +2448,11 @@ window.simpanJurnal = async () => {
     (ok?'background:#ebfbee;color:#2b8a3e':'background:#fff0f0;color:#c92a2a') + '">' + esc(t) + '</div>'; };
 
   bersihkanErrorJurnal();
+  // Batas waktu: hanya untuk jurnal BARU (bukan edit). Admin dikecualikan di dalam fungsi.
+  if (!_editJurnalId) {
+    const batas = await cekBolehIsiJurnal();
+    if (!batas.boleh) { setMsg(batas.pesan, false); await terapkanBatasIsiJurnal(); return; }
+  }
   let fokusPertama = null;         // field pertama yang error (untuk scroll)
   const tandai = (cond, id, pesan, isArea) => {
     if (cond) return;              // valid, lewati
