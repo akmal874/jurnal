@@ -376,19 +376,46 @@
     #maintOverlay .mt-slider { bottom:5%; }
   }
 
-  /* ===== ROSTER ===== */
+/* ===== ROSTER ===== */
 .rs-tabel{border-collapse:collapse;width:100%;font-size:11.5px}
 .rs-tabel th,.rs-tabel td{border:1px solid #dbe0ea;padding:3px 5px;text-align:center;vertical-align:middle;white-space:nowrap}
-.rs-tabel thead th{background:#1e3a5f;color:#fff;font-size:11px;position:sticky;top:0}
+.rs-tabel thead th{background:#1e3a5f;color:#fff;font-size:11px;position:sticky;top:0;z-index:1}
 .rs-tabel .rs-jam{background:#f4f6fa;font-weight:600;min-width:54px}
 .rs-tabel .rs-jam .rs-wkt{display:block;font-weight:400;color:#8a94a6;font-size:9.5px}
+.rs-tabel .rs-wkt-in{font-weight:400;color:#8a94a6;font-size:9.5px}
 .rs-tabel .rs-sel{font-weight:600}
 .rs-tabel .rs-sel .rs-mp{display:block;font-size:10px;line-height:1.2}
-.rs-tabel .rs-sel .rs-gr{display:block;color:#8a94a6;font-size:9px;font-weight:400}
+.rs-tabel .rs-sel .rs-gr{display:block;color:#6b7280;font-size:9px;font-weight:400}
 .rs-tabel .rs-kosong{color:#d3d9e3}
 .rs-tabel .rs-khusus td{background:#fef9c3;color:#854d0e;font-weight:700;letter-spacing:1px}
 .rs-tabel .rs-bentrok{background:#ffe3e3!important;color:#c92a2a;outline:2px solid #fa5252;outline-offset:-2px}
 .rs-tabel .rs-sub{display:block;font-size:9px;color:#8a94a6;font-weight:400}
+.rs-tabel .rs-klik{cursor:pointer}
+.rs-tabel .rs-klik:hover{outline:2px solid #3b5bdb;outline-offset:-2px}
+.rs-tabel .rs-redup{opacity:.25}
+.rs-tabel .rs-sorot{outline:2px solid #111;outline-offset:-2px;font-weight:800}
+/* 1 Minggu */
+.rs-minggu{table-layout:fixed;min-width:900px}
+.rs-minggu thead th{white-space:normal;line-height:1.15}
+.rs-minggu td{overflow:hidden;font-size:11px}
+.rs-minggu .rs-jam{text-align:left}
+.rs-minggu tr.rs-akhir td{border-bottom:2px solid #1e3a5f}
+.rs-minggu .rs-hari{writing-mode:vertical-rl;transform:rotate(180deg);background:#dbeafe;color:#1e3a5f;font-weight:800;letter-spacing:2px}
+/* Kontrol */
+.rs-cek{display:flex;align-items:center;gap:6px;font-size:13px;margin:0 0 8px;cursor:pointer}
+/* Kamus */
+.rs-kamus{border-collapse:collapse;width:100%;font-size:12.5px;margin-bottom:6px}
+.rs-kamus th,.rs-kamus td{border:1px solid #dbe0ea;padding:3px 7px;text-align:left}
+.rs-kamus th{background:#1e3a5f;color:#fff}
+.rs-kamus .rs-kd{text-align:center;font-weight:700;width:64px}
+.rs-kamus tr:nth-child(even){background:#f8fafc}
+.rs-kamus-grp{margin:12px 0 4px;font-weight:700;font-size:13px;color:#1e3a5f;border-left:4px solid #1e3a5f;padding-left:8px}
+/* Popup */
+.rs-pop-ov{position:fixed;inset:0;background:rgba(0,0,0,.35);align-items:center;justify-content:center;z-index:9999;padding:16px}
+.rs-pop{background:#fff;border-radius:12px;padding:18px 20px;min-width:260px;max-width:420px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+.rs-pop h3{margin:0 0 10px;color:#1e3a5f;font-size:16px}
+.rs-pop-baris{display:flex;justify-content:space-between;gap:16px;padding:6px 0;border-bottom:1px solid #f1f3f5;font-size:14px}
+.rs-pop-baris b{color:#3b5bdb;text-align:right}
 
 </style>
 </head>
@@ -6365,6 +6392,14 @@ let _rsWaktu = {};             // struktur waktu: { "1": {jam:[], khusus:[]}, ..
 let _rsWkDraft = null, _rsWkHari = 1;
 let _rsGuruAktif = null;       // tab Per Guru
 let _rsBebanUrut = { kol:"kode", arah:1 };
+let _rsWarna = true;            // warna per guru di layar
+let _rsCetakWarna = true;       // warna per guru saat cetak
+let _rsSorot = null;            // id guru yang disorot ("" = tidak ada, null = belum diatur)
+let _rsKertas = "F4";           // "F4" | "A4"
+let _rsTab = "lihat";           // tab aktif
+let _rsKamusCari = "";
+const RS_JURUSAN = [["umum","Umum"],["kejuruan_umum","Kejuruan (Umum)"],["nkpi","Kejuruan — NKPI"],
+  ["nkn","Kejuruan — NKN"],["apapl","Kejuruan — APAPL"],["tkro","Kejuruan — TKRO"]];
 
 /* ---------- HELPER ---------- */
 function rsNormKelas(s){ return String(s||"").toUpperCase().replace(/\s+/g," ").trim(); }
@@ -6456,18 +6491,19 @@ async function muatRoster(){
   }
   _rsKelasById = {}; _rsKelasList.forEach(k => _rsKelasById[k.id] = k);
   _rsGuruById = {};  _rsGuruList.forEach(g => _rsGuruById[g.id] = g);
+  if (_rsSorot === null) _rsSorot = (ME.role === "guru") ? ME.id : "";   // guru: sorot dirinya
   await rsMuatWaktu();
 
   const tb = (key, label) => '<button class="btn btn-sm btn-ghost" id="rsTab_' + key + '" onclick="rsGantiTab(\'' + key + '\')">' + label + '</button>';
   $("main").innerHTML =
     '<div class="card"><h2>Roster Pelajaran</h2>' +
       '<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">' +
-        tb("lihat", "Lihat &amp; Cetak") + tb("guru", "Per Guru") +
+        tb("lihat", "Lihat per Hari") + tb("minggu", "1 Minggu") + tb("guru", "Per Guru") + tb("kamus", "Kamus Kode") +
         (admin ? tb("beban", "Beban Mengajar") + tb("isi", "Isi Massal (Paste)") + tb("waktu", "Waktu &amp; Kegiatan") : '') +
       '</div>' +
     '</div>' +
     '<div id="rsIsiTab"></div>';
-  rsGantiTab("lihat");
+  rsGantiTab(_rsTab);
 }
 
 async function rsMuatWaktu(){
@@ -6489,17 +6525,99 @@ async function rsMuatJadwal(){
 }
 
 window.rsGantiTab = async (tab) => {
-  ["lihat","guru","beban","isi","waktu"].forEach(k => {
+  if (!$("rsTab_" + tab)) tab = "lihat";      // tab admin tak tersedia untuk non-admin
+  _rsTab = tab;
+  ["lihat","minggu","guru","kamus","beban","isi","waktu"].forEach(k => {
     const b = $("rsTab_" + k); if (b) b.className = "btn btn-sm" + (k === tab ? "" : " btn-ghost");
   });
   if (tab === "isi") return rsRenderIsi();
   if (tab === "waktu") return rsRenderWaktu();
+  if (tab === "kamus") return rsRenderKamus();
   $("rsIsiTab").innerHTML = '<div class="card"><div class="page-kosong">Memuat...</div></div>';
   try { await rsMuatJadwal(); }
   catch (e) { $("rsIsiTab").innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat: ' + esc(e.message) + '</div></div>'; return; }
   if (tab === "guru") return rsRenderGuru();
   if (tab === "beban") return rsRenderBeban();
+  if (tab === "minggu") return rsRenderMinggu();
   return rsRenderLihat();
+};
+
+/* ---------- WARNA, SOROT, POPUP ---------- */
+/* Warna tetap per kode guru. Rotasi sudut emas → kode berdekatan warnanya jauh berbeda. */
+function rsWarnaGuru(kode){
+  if (kode === null || kode === undefined || kode === "") return "";
+  const k = Number(kode); if (isNaN(k)) return "";
+  return "hsl(" + ((k * 137.508) % 360).toFixed(0) + ",70%," + (k % 2 ? 82 : 74) + "%)";
+}
+
+/* Satu sel jadwal. o = {kode, warna, sorot, klik} */
+function rsSelTd(j, hari, x, kelasId, o){
+  const cls = ["rs-sel"];
+  if (_rsBentrok.set.has(hari + "|" + kelasId + "|" + x)) cls.push("rs-bentrok");
+  if (o.sorot) cls.push(j.guru_id === o.sorot ? "rs-sorot" : "rs-redup");
+  if (o.klik) cls.push("rs-klik");
+  const kg = j.guru ? j.guru.kode_guru : null;
+  const gaya = (o.warna && kg !== null && kg !== undefined) ? ' style="background:' + rsWarnaGuru(kg) + '"' : '';
+  const klik = o.klik ? ' onclick="rsPopup(\'' + j.id + '\')"' : '';
+  const judul = ' title="' + esc(((j.mapel || {}).nama_mapel || "") + " · " + ((j.guru || {}).nama || "")) + '"';
+  let isi;
+  if (o.kode) isi = esc(rsKodeSel(j));
+  else isi = '<span class="rs-mp">' + esc((j.mapel && j.mapel.nama_mapel) || "-") + '</span>' +
+             '<span class="rs-gr">' + esc((j.guru && j.guru.nama) || "-") + '</span>';
+  return '<td class="' + cls.join(" ") + '"' + gaya + klik + judul + '>' + isi + '</td>';
+}
+
+/* Bar kontrol bersama tab Lihat & 1 Minggu. */
+function rsBarKontrol(){
+  const opsi = '<option value="">— tidak ada —</option>' + rsDaftarGuru().map(g =>
+    '<option value="' + esc(g.id) + '"' + (g.id === _rsSorot ? " selected" : "") + '>' + esc(rsLabelGuru(g.id)) + '</option>').join("");
+  return '<div class="row" style="gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px">' +
+    '<div><label>Sorot guru</label><select onchange="rsSetSorot(this.value)">' + opsi + '</select></div>' +
+    '<label class="rs-cek"><input type="checkbox"' + (_rsWarna ? " checked" : "") + ' onchange="rsSetWarna(this.checked)"> Warna per guru</label>' +
+    '<span style="flex:1"></span>' +
+    '<div><label>Kertas cetak</label><select onchange="rsSetKertas(this.value)">' +
+      '<option value="F4"' + (_rsKertas === "F4" ? " selected" : "") + '>F4 / Folio</option>' +
+      '<option value="A4"' + (_rsKertas === "A4" ? " selected" : "") + '>A4</option></select></div>' +
+    '<label class="rs-cek"><input type="checkbox"' + (_rsCetakWarna ? " checked" : "") + ' onchange="rsSetCetakWarna(this.checked)"> Cetak berwarna</label>' +
+  '</div>';
+}
+function rsGambarAktif(){ if (_rsTab === "minggu") rsGambarMinggu(); else if (_rsTab === "lihat") rsGambarLihat(); }
+window.rsSetSorot = (v) => { _rsSorot = v || ""; rsGambarAktif(); };
+window.rsSetWarna = (v) => { _rsWarna = !!v; rsGambarAktif(); };
+window.rsSetKertas = (v) => { _rsKertas = (v === "A4") ? "A4" : "F4"; };
+window.rsSetCetakWarna = (v) => { _rsCetakWarna = !!v; };
+
+/* Popup detail sel (berguna di HP, tak ada hover). */
+function rsPopupEl(){
+  let ov = $("rsPopOv");
+  if (!ov) {
+    ov = document.createElement("div");
+    ov.id = "rsPopOv"; ov.className = "rs-pop-ov"; ov.style.display = "none";
+    ov.onclick = (e) => { if (e.target === ov) rsTutupPopup(); };
+    ov.innerHTML = '<div class="rs-pop"><h3 id="rsPopJudul"></h3><div id="rsPopIsi"></div>' +
+      '<button class="btn btn-ghost" style="width:100%;margin-top:12px" onclick="rsTutupPopup()">Tutup</button></div>';
+    document.body.appendChild(ov);
+  }
+  return ov;
+}
+window.rsTutupPopup = () => { const ov = $("rsPopOv"); if (ov) ov.style.display = "none"; };
+window.rsPopup = (id) => {
+  const j = _rsJadwal.find(x => x.id === id); if (!j) return;
+  const r = rsRentang(j.jam_ke), bel = rsJamBel(j.hari);
+  const waktu = (r && bel[r[0]-1] && bel[r[1]-1]) ? (bel[r[0]-1].mulai + "-" + bel[r[1]-1].selesai) : (j.waktu || "-");
+  let bentrok = false;
+  if (r) for (let x = r[0]; x <= r[1]; x++) if (_rsBentrok.set.has(Number(j.hari) + "|" + j.kelas_id + "|" + x)) bentrok = true;
+  const b = (l, v) => '<div class="rs-pop-baris"><span>' + l + '</span><b>' + v + '</b></div>';
+  rsPopupEl();
+  $("rsPopJudul").textContent = rsKodeSel(j);
+  $("rsPopIsi").innerHTML =
+    b("Mapel", esc((j.mapel && j.mapel.nama_mapel) || "-")) +
+    b("Guru", esc(rsLabelGuru(j.guru_id))) +
+    b("Kelas", esc(rsNamaKelas(j.kelas_id))) +
+    b("Hari / Jam", esc(HARI[Number(j.hari)] + " · jam " + j.jam_ke)) +
+    b("Waktu", esc(waktu)) +
+    (bentrok ? '<div style="margin-top:8px;color:#c92a2a;font-size:13px">⚠ Guru ini bentrok dengan kelas lain di jam ini.</div>' : '');
+  $("rsPopOv").style.display = "flex";
 };
 
 /* ---------- SUSUN 1 HARI (dipakai layar, cetak, Excel) ---------- */
@@ -6534,7 +6652,8 @@ function rsSusunHari(hari){
 }
 
 /* Tabel 1 hari — Gaya A. */
-function rsBangunTabel(hari, kelas, pakaiKode){
+/* Tabel 1 hari — Gaya A. o = {kode, warna, sorot, klik} */
+function rsBangunTabel(hari, kelas, o){
   const s = rsSusunHari(hari);
   if (!s.N) return "";
   const kol = kelas.length;
@@ -6547,12 +6666,7 @@ function rsBangunTabel(hari, kelas, pakaiKode){
     h += '<tr><td class="rs-jam"><b>' + x + '</b>' + (wt ? '<span class="rs-wkt">' + esc(wt) + '</span>' : '') + '</td>';
     kelas.forEach(k => {
       const j = s.dalam[k.id + "|" + x];
-      if (!j) { h += '<td class="rs-kosong">·</td>'; return; }
-      const cls = "rs-sel" + (_rsBentrok.set.has(hari + "|" + k.id + "|" + x) ? " rs-bentrok" : "");
-      if (pakaiKode) { h += '<td class="' + cls + '">' + esc(rsKodeSel(j)) + '</td>'; return; }
-      const nm = (j.mapel && j.mapel.nama_mapel) ? j.mapel.nama_mapel : "-";
-      const ng = (j.guru && j.guru.nama) ? j.guru.nama : "-";
-      h += '<td class="' + cls + '"><span class="rs-mp">' + esc(nm) + '</span><span class="rs-gr">' + esc(ng) + '</span></td>';
+      h += j ? rsSelTd(j, hari, x, k.id, o) : '<td class="rs-kosong">·</td>';
     });
     h += '</tr>';
     (s.setelah[x] || []).forEach(k => h += bk(k));
@@ -6561,7 +6675,35 @@ function rsBangunTabel(hari, kelas, pakaiKode){
   return h + '</tbody></table>';
 }
 
-/* Baris array (Excel) 1 hari. */
+/* Tabel 1 minggu (format Excel): kolom Hari tegak, kolom kelas sama lebar, kegiatan khusus ter-merge. */
+function rsBangunMinggu(kelas, o){
+  const kol = kelas.length;
+  let body = "";
+  for (let h = 1; h <= 5; h++) {
+    const s = rsSusunHari(h); if (!s.N) continue;
+    const rows = [];
+    const bk = k => rows.push({ cls:"rs-khusus", html:'<td class="rs-jam">' + esc(k.waktu || "") + '</td><td colspan="' + kol + '">' + esc(k.label || "") + '</td>' });
+    for (let x = 1; x <= s.N; x++) {
+      (s.sebelum[x] || []).forEach(bk);
+      const wt = s.wkt(x);
+      rows.push({ cls:"", html:'<td class="rs-jam"><b>' + x + '.</b> <span class="rs-wkt-in">' + esc(wt) + '</span></td>' +
+        kelas.map(k => { const j = s.dalam[k.id + "|" + x]; return j ? rsSelTd(j, h, x, k.id, o) : '<td class="rs-kosong">·</td>'; }).join("") });
+      (s.setelah[x] || []).forEach(bk);
+    }
+    s.sisa.forEach(bk);
+    rows.forEach((r, i) => {
+      body += '<tr class="' + r.cls + (i === rows.length - 1 ? ' rs-akhir' : '') + '">' +
+        (i === 0 ? '<td class="rs-hari" rowspan="' + rows.length + '">' + HARI[h].toUpperCase() + '</td>' : '') + r.html + '</tr>';
+    });
+  }
+  if (!body) return "";
+  const lebar = (84 / Math.max(kol, 1)).toFixed(2);
+  return '<table class="rs-tabel rs-minggu"><colgroup><col style="width:3%"><col style="width:13%">' +
+    kelas.map(() => '<col style="width:' + lebar + '%">').join("") + '</colgroup>' +
+    '<thead><tr><th>Hari</th><th>Jam</th>' + kelas.map(k => '<th>' + esc(k.nama_kelas) + '</th>').join("") + '</tr></thead>' +
+    '<tbody>' + body + '</tbody></table>';
+}
+
 function rsAoaHari(hari, kelas){
   const s = rsSusunHari(hari);
   if (!s.N) return null;
@@ -6577,42 +6719,92 @@ function rsAoaHari(hari, kelas){
 }
 
 /* CSS bersama untuk jendela cetak. */
+/* CSS bersama untuk jendela cetak. */
 const RS_CSS_CETAK =
-  'body{font-family:Arial,sans-serif;color:#000;font-size:11px;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-  '.kop{text-align:center;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:10px}' +
-  '.kop .nm{font-size:16px;font-weight:bold;text-transform:uppercase}.kop .sub{font-size:12px}' +
-  '.hari-blok{margin-bottom:12px;page-break-inside:avoid;break-inside:avoid}' +
+  'body{font-family:Arial,sans-serif;color:#000;font-size:11px;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+  '.kop{text-align:center;border-bottom:2px solid #000;padding-bottom:5px;margin-bottom:8px}' +
+  '.kop .nm{font-size:15px;font-weight:bold;text-transform:uppercase}.kop .sub{font-size:11px}' +
+  '.judul-polos{text-align:center;font-size:14px;font-weight:bold;margin:0 0 8px}' +
+  '.hari-blok{margin-bottom:10px;page-break-inside:avoid;break-inside:avoid}' +
   '.hari-judul{background:#1e3a5f;color:#fff;font-weight:bold;font-size:11px;padding:3px 8px}' +
   '.rs-tabel{width:100%;border-collapse:collapse}' +
-  '.rs-tabel th,.rs-tabel td{border:1px solid #888;padding:2px 3px;text-align:center;font-size:9px;white-space:nowrap}' +
-  '.rs-tabel th{background:#eef;font-weight:bold}' +
-  '.rs-jam{background:#f4f4f4;font-weight:bold}.rs-wkt,.rs-sub{display:block;font-weight:normal;font-size:8px;color:#444}' +
+  '.rs-tabel th,.rs-tabel td{border:1px solid #777;padding:1px 2px;text-align:center;font-size:8.5px;white-space:nowrap}' +
+  '.rs-tabel th{background:#e7ecf7;font-weight:bold}' +
+  '.rs-jam{background:#f4f4f4;font-weight:bold}.rs-wkt,.rs-sub{display:block;font-weight:normal;font-size:7.5px;color:#444}' +
+  '.rs-wkt-in{font-weight:normal;font-size:7px;color:#444}' +
   '.rs-khusus td{background:#fef9c3;font-weight:bold;letter-spacing:1px}' +
   '.rs-bentrok{background:#ffe3e3!important}.rs-kosong{color:#bbb}' +
-  '.kaki{position:fixed;bottom:0;left:0;right:0;text-align:center;font-size:9px;color:#555;border-top:1px solid #ccc;padding-top:3px}' +
+  '.rs-minggu{table-layout:fixed}.rs-minggu th{white-space:normal;line-height:1.1}.rs-minggu td{overflow:hidden;font-size:7px;line-height:1.2}' +
+  '.rs-minggu .rs-jam{text-align:left}.rs-minggu tr.rs-akhir td{border-bottom:1.5px solid #1e3a5f}' +
+  '.rs-hari{writing-mode:vertical-rl;transform:rotate(180deg);background:#dbeafe;color:#1e3a5f;font-weight:bold;letter-spacing:2px;font-size:8px}' +
+  '.rs-ttd{width:100%;border-collapse:collapse;margin-top:10px;font-size:10px;page-break-inside:avoid;break-inside:avoid}' +
+  '.rs-ttd td{width:50%;border:0;padding:0 0 2px;vertical-align:top;text-align:left}.rs-ttd .rs-ttd-spasi td{height:48px}' +
+  '.km-dua{display:flex;gap:14px;align-items:flex-start}.km-dua>div{flex:1}.km-dua h3{font-size:11px;margin:0 0 3px;color:#1e3a5f}' +
+  '.km{border-collapse:collapse;width:100%;margin-bottom:6px}.km td,.km th{border:1px solid #999;padding:1.5px 5px;text-align:left;font-size:9.5px}' +
+  '.km th{background:#1e3a5f;color:#fff}.km .kd{text-align:center;font-weight:bold;width:46px}.km .grp td{background:#dbeafe;font-weight:bold;color:#1e3a5f}' +
+  '.kaki{position:fixed;bottom:0;left:0;right:0;text-align:center;font-size:8px;color:#555;border-top:1px solid #ccc;padding-top:2px}' +
   'thead{display:table-header-group}';
 
-async function rsBukaCetak(judul, subjudul, isi, orientasi){
+/* Buka jendela cetak.
+   o = {kertas:"F4"|"A4", kop:true|false, pas:true (perkecil otomatis agar muat 1 halaman)} */
+async function rsBukaCetak(judul, subjudul, isi, orientasi, o){
+  o = o || {};
+  const kertas = o.kertas || _rsKertas;
+  const dim = kertas === "A4" ? [210, 297] : [215, 330];
+  const [W, H] = orientasi === "landscape" ? [dim[1], dim[0]] : dim;
+  const M = 6;   // margin mm
   const info = await ambilInfoApp();
   const namaSekolah = (info.nama_sekolah || "").trim();
   const tgl = new Date().toLocaleDateString("id-ID", { day:"numeric", month:"long", year:"numeric" });
+  const kepala = (o.kop === false)
+    ? '<div class="judul-polos">' + esc(judul) + '</div>'
+    : '<div class="kop">' + (namaSekolah ? '<div class="nm">' + esc(namaSekolah) + '</div>' : '') +
+        '<div class="sub"><b>' + esc(judul) + '</b>' + (subjudul ? '<br>' + esc(subjudul) : '') + '</div></div>';
   const w = window.open("", "_blank");
   if (!w) return toast("Popup diblokir. Izinkan popup untuk mencetak.");
-  w.document.write('<html><head><title>' + esc(judul) + '</title><style>@page{size:A4 ' + orientasi + ';margin:8mm}' +
-    RS_CSS_CETAK + '</style></head><body>' +
+  w.document.write('<html><head><title>' + esc(judul) + '</title><style>@page{size:' + W + 'mm ' + H + 'mm;margin:' + M + 'mm}' +
+    RS_CSS_CETAK + '#rsIsiCetak{width:' + (W - 2*M) + 'mm}</style></head><body>' +
     '<div class="kaki">' + (namaSekolah ? esc(namaSekolah) + ' &middot; ' : '') + 'Dicetak ' + esc(tgl) + '</div>' +
-    '<div class="kop">' + (namaSekolah ? '<div class="nm">' + esc(namaSekolah) + '</div>' : '') +
-      '<div class="sub"><b>' + esc(judul) + '</b>' + (subjudul ? '<br>' + esc(subjudul) : '') + '</div></div>' +
-    isi + '</body></html>');
+    '<div id="rsIsiCetak">' + kepala + isi + '</div></body></html>');
   w.document.close(); w.focus();
-  w.onload = () => { try { w.print(); } catch(e){} };
+  w.onload = () => setTimeout(() => {
+    try {
+      if (o.pas) {
+        const el = w.document.getElementById("rsIsiCetak");
+        const tersedia = (H - 2*M - 5) * 96 / 25.4;      // tinggi halaman (px) dikurangi kaki
+        if (el && el.scrollHeight > tersedia) el.style.zoom = (tersedia / el.scrollHeight * 0.98).toFixed(3);
+      }
+      w.print();
+    } catch(e){}
+  }, 150);
 }
 async function rsTeksPeriode(){
   const p = await ambilPeriodeAktif();
   return "Semester " + (p.semester || "") + (p.tahun_ajaran ? " — Tahun Pelajaran " + p.tahun_ajaran : "");
 }
 
-/* ---------- TAB LIHAT & CETAK ---------- */
+/* Blok tanda tangan (Kepala Sekolah kiri geser 1 cm, Wakasek Kurikulum kanan geser 5 cm). */
+async function rsHtmlTtd(){
+  const t = (_rsWaktu && _rsWaktu.ttd) || {};
+  let kota = "";
+  try {
+    const { data } = await sb.from("pengaturan").select("kota").eq("id","app").maybeSingle();
+    kota = (data && data.kota) ? String(data.kota).trim() : "";
+  } catch (e) {}
+  const tgl = (t.tanggal || "").trim() ||
+    new Date().toLocaleDateString("id-ID", { day:"numeric", month:"long", year:"numeric" });
+  const kepsek = _rsGuruList.find(g => g.role === "kepsek") || {};
+  const wks = _rsGuruById[t.wakasek_id] || {};
+  const kiri = 'style="padding-left:10mm"', kanan = 'style="padding-left:50mm"';
+  const nama = (p) => '<b>' + esc(p.nama || "..............................") + '</b>' + (p.nip ? '<br>NIP. ' + esc(p.nip) : '');
+  return '<table class="rs-ttd">' +
+    '<tr><td ' + kiri + '></td><td ' + kanan + '>' + esc((kota ? kota + ", " : "") + tgl) + '</td></tr>' +
+    '<tr><td ' + kiri + '>Mengetahui,<br>Kepala Sekolah</td><td ' + kanan + '><br>Wakasek Kurikulum</td></tr>' +
+    '<tr class="rs-ttd-spasi"><td></td><td></td></tr>' +
+    '<tr><td ' + kiri + '>' + nama(kepsek) + '</td><td ' + kanan + '>' + nama(wks) + '</td></tr></table>';
+}
+
+/* ---------- TAB LIHAT PER HARI ---------- */
 function rsRenderLihat(){
   const tabHari = HARI.slice(1).map((h,i) =>
     '<button class="btn btn-sm ' + ((i+1)===_rsHari?"":"btn-ghost") + '" onclick="rsPilihHari(' + (i+1) + ')">' + h + '</button>'
@@ -6626,10 +6818,12 @@ function rsRenderLihat(){
           '<button class="btn btn-sm btn-ghost" id="rsMLengkap" style="border:0;border-radius:0" onclick="rsSetMode(\'lengkap\')">Lengkap</button>' +
         '</div>' +
         '<button class="btn btn-sm" style="background:#1971c2" onclick="rsUnduhExcel()">⬇ Excel</button>' +
-        '<button class="btn btn-sm" style="background:#2b8a3e" onclick="rsCetak()">🖨 Cetak</button>' +
+        '<button class="btn btn-sm" style="background:#2b8a3e" onclick="rsCetak()">🖨 Cetak (Landscape)</button>' +
       '</div>' +
+      rsBarKontrol() +
       '<div id="rsGrid" style="overflow-x:auto"></div>' +
       '<div id="rsBentrokInfo"></div>' +
+      '<p style="font-size:12px;color:#6b7280;margin-top:8px">Klik sel untuk detail.</p>' +
     '</div>';
   rsSetMode(_rsMode);
 }
@@ -6639,21 +6833,115 @@ window.rsSetMode = (m) => {
   const a = $("rsMKode"), b = $("rsMLengkap");
   if (a) a.className = "btn btn-sm" + (m==="kode"?"":" btn-ghost");
   if (b) b.className = "btn btn-sm" + (m==="lengkap"?"":" btn-ghost");
-  const html = rsBangunTabel(_rsHari, rsKelasTerurut(), _rsMode === "kode");
+  rsGambarLihat();
+};
+function rsGambarLihat(){
+  if (!$("rsGrid")) return;
+  const html = rsBangunTabel(_rsHari, rsKelasTerurut(), { kode:_rsMode === "kode", warna:_rsWarna, sorot:_rsSorot, klik:true });
   $("rsGrid").innerHTML = html || '<div class="empty">Belum ada jadwal untuk ' + HARI[_rsHari] + '.</div>';
   $("rsBentrokInfo").innerHTML = rsHtmlBentrok(_rsBentrok.daftar.filter(b => b.hari === _rsHari), "Bentrok guru hari " + HARI[_rsHari]);
-};
+}
 
+/* Cetak per hari (landscape), semua hari + tanda tangan. */
 window.rsCetak = async () => {
   const kelas = rsKelasTerurut();
   let body = "";
   for (let hh = 1; hh <= 5; hh++) {
-    const t = rsBangunTabel(hh, kelas, true);
+    const t = rsBangunTabel(hh, kelas, { kode:true, warna:_rsCetakWarna, sorot:"", klik:false });
     if (t) body += '<div class="hari-blok"><div class="hari-judul">' + HARI[hh] + '</div>' + t + '</div>';
   }
   if (!body) return toast("Belum ada jadwal untuk dicetak.");
-  await rsBukaCetak("JADWAL PELAJARAN", await rsTeksPeriode(), body, "landscape");
+  await rsBukaCetak("JADWAL PELAJARAN", await rsTeksPeriode(), body + await rsHtmlTtd(), "landscape");
 };
+
+/* ---------- TAB 1 MINGGU ---------- */
+function rsRenderMinggu(){
+  $("rsIsiTab").innerHTML =
+    '<div class="card">' +
+      '<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">' +
+        '<h2 style="margin:0">Roster 1 Minggu</h2><span style="flex:1"></span>' +
+        '<button class="btn btn-sm" style="background:#2b8a3e" onclick="rsCetakMinggu()">🖨 Cetak 1 Minggu (Portrait)</button>' +
+      '</div>' +
+      rsBarKontrol() +
+      '<div id="rsMingguGrid" style="overflow:auto;max-height:70vh"></div>' +
+      '<div id="rsMingguBentrok"></div>' +
+      '<p style="font-size:12px;color:#6b7280;margin-top:8px">Klik sel untuk detail. Cetak diperkecil otomatis agar muat 1 halaman.</p>' +
+    '</div>';
+  rsGambarMinggu();
+}
+function rsGambarMinggu(){
+  if (!$("rsMingguGrid")) return;
+  const t = rsBangunMinggu(rsKelasTerurut(), { kode:true, warna:_rsWarna, sorot:_rsSorot, klik:true });
+  $("rsMingguGrid").innerHTML = t || '<div class="empty">Belum ada jadwal.</div>';
+  $("rsMingguBentrok").innerHTML = rsHtmlBentrok(_rsBentrok.daftar);
+}
+window.rsCetakMinggu = async () => {
+  const t = rsBangunMinggu(rsKelasTerurut(), { kode:true, warna:_rsCetakWarna, sorot:"", klik:false });
+  if (!t) return toast("Belum ada jadwal untuk dicetak.");
+  await rsBukaCetak("JADWAL PELAJARAN", await rsTeksPeriode(), t + await rsHtmlTtd(), "portrait", { pas:true });
+};
+
+/* ---------- TAB KAMUS KODE ---------- */
+function rsUrutKode(a, b){ return String(a).localeCompare(String(b), undefined, { numeric:true }); }
+function rsRenderKamus(){
+  $("rsIsiTab").innerHTML =
+    '<div class="card">' +
+      '<div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px">' +
+        '<h2 style="margin:0">Kamus Kode</h2><span style="flex:1"></span>' +
+        '<div><label>Kertas cetak</label><select onchange="rsSetKertas(this.value)">' +
+          '<option value="F4"' + (_rsKertas === "F4" ? " selected" : "") + '>F4 / Folio</option>' +
+          '<option value="A4"' + (_rsKertas === "A4" ? " selected" : "") + '>A4</option></select></div>' +
+        '<button class="btn btn-sm" style="background:#2b8a3e" onclick="rsCetakKamus()">🖨 Cetak Kamus</button>' +
+      '</div>' +
+      '<input id="rsKamusCari" placeholder="Cari kode / nama..." value="' + esc(_rsKamusCari) + '" oninput="rsCariKamus(this.value)" ' +
+        'style="width:240px;margin-bottom:10px">' +
+      '<div id="rsKamusIsi"></div>' +
+    '</div>';
+  rsGambarKamus();
+}
+window.rsCariKamus = (v) => { _rsKamusCari = v || ""; rsGambarKamus(); };
+function rsDataKamus(q){
+  q = (q || "").toLowerCase();
+  const cocok = (a, b) => !q || (String(a) + " " + String(b || "")).toLowerCase().includes(q);
+  const guru = _rsGuruList.filter(g => g.kode_guru !== null && g.kode_guru !== undefined && cocok(g.kode_guru, g.nama))
+    .sort((a,b) => a.kode_guru - b.kode_guru);
+  const kelompok = RS_JURUSAN.concat([["_lain","Lainnya"]]).map(([kode, label]) => ({
+    label,
+    mapel: _rsMapelList.filter(m => m.kode && (kode === "_lain" ? !RS_JURUSAN.some(x => x[0] === m.jurusan) : m.jurusan === kode) &&
+      cocok(m.kode, m.nama_mapel)).sort((a,b) => rsUrutKode(a.kode, b.kode))
+  })).filter(k => k.mapel.length);
+  return { guru, kelompok };
+}
+function rsGambarKamus(){
+  if (!$("rsKamusIsi")) return;
+  const { guru, kelompok } = rsDataKamus(_rsKamusCari);
+  const baris = (k, n) => '<tr><td class="rs-kd">' + esc(k) + '</td><td>' + esc(n || "") + '</td></tr>';
+  const jmlMapel = kelompok.reduce((s,k) => s + k.mapel.length, 0);
+  $("rsKamusIsi").innerHTML =
+    '<div style="display:flex;gap:22px;flex-wrap:wrap">' +
+      '<div style="flex:1;min-width:280px"><h3 style="margin:0 0 6px">Kode Guru (' + guru.length + ')</h3>' +
+        '<table class="rs-kamus"><tr><th class="rs-kd">Kode</th><th>Nama Guru</th></tr>' +
+        (guru.length ? guru.map(g => baris(g.kode_guru, g.nama)).join("") : '<tr><td colspan="2" style="color:#999">—</td></tr>') + '</table></div>' +
+      '<div style="flex:1;min-width:300px"><h3 style="margin:0 0 6px">Kode Mapel (' + jmlMapel + ')</h3>' +
+        (kelompok.length ? kelompok.map(k =>
+          '<div class="rs-kamus-grp">' + esc(k.label) + ' (' + k.mapel.length + ')</div>' +
+          '<table class="rs-kamus">' + k.mapel.map(m => baris(m.kode, m.nama_mapel)).join("") + '</table>').join("")
+          : '<div style="color:#999">—</div>') +
+      '</div>' +
+    '</div>';
+}
+window.rsCetakKamus = async () => {
+  const { guru, kelompok } = rsDataKamus("");
+  const baris = (k, n) => '<tr><td class="kd">' + esc(k) + '</td><td>' + esc(n || "") + '</td></tr>';
+  const isi = '<div class="km-dua">' +
+    '<div><h3>KODE GURU</h3><table class="km"><tr><th class="kd">Kd</th><th>Nama Guru</th></tr>' +
+      guru.map(g => baris(g.kode_guru, g.nama)).join("") + '</table></div>' +
+    '<div><h3>KODE MATA PELAJARAN</h3><table class="km"><tr><th class="kd">Kd</th><th>Mata Pelajaran</th></tr>' +
+      kelompok.map(k => '<tr class="grp"><td colspan="2">' + esc(k.label) + '</td></tr>' +
+        k.mapel.map(m => baris(m.kode, m.nama_mapel)).join("")).join("") + '</table></div></div>';
+  await rsBukaCetak("KAMUS KODE ROSTER", "", isi, "portrait", { kop:false });
+};
+
 
 window.rsUnduhExcel = () => {
   if (typeof XLSX === "undefined") return toast("Library Excel belum termuat.");
@@ -6814,12 +7102,31 @@ function rsRenderWaktu(){
         '<button class="btn btn-sm btn-ghost" style="align-self:flex-end" onclick="rsWkSalin()">Salin →</button>' +
       '</div>' +
       '<div id="rsWkIsi"></div>' +
+      rsHtmlSetelanTtd() +
       '<p style="font-size:12px;color:#6b7280;margin:10px 0">Format jam: <b>08.15</b>. Perubahan (termasuk salin) baru tersimpan setelah klik <b>Simpan</b>.</p>' +
       '<button class="btn" style="background:#2b8a3e" onclick="rsWkSimpan()">Simpan</button>' +
       '<div id="rsWkMsg" style="margin-top:10px"></div>' +
     '</div>';
   rsWkGambar();
 }
+function rsHtmlSetelanTtd(){
+  const t = _rsWkDraft.ttd = _rsWkDraft.ttd || {};
+  const kepsek = _rsGuruList.find(g => g.role === "kepsek");
+  const opsi = '<option value="">— pilih —</option>' + _rsGuruList
+    .filter(g => g.role !== "admin")
+    .sort((a,b) => String(a.nama||"").localeCompare(String(b.nama||"")))
+    .map(g => '<option value="' + esc(g.id) + '"' + (g.id === t.wakasek_id ? " selected" : "") + '>' + esc(g.nama || g.email || "") + '</option>').join("");
+  return '<h3 style="margin:18px 0 6px;color:#3b5bdb">Tanda Tangan Cetak Roster</h3>' +
+    '<div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end">' +
+      '<div><label>Wakasek Kurikulum</label><select onchange="rsWkUbahTtd(\'wakasek_id\',this.value)">' + opsi + '</select></div>' +
+      '<div><label>Tanggal penetapan</label><input value="' + esc(t.tanggal || "") + '" placeholder="mis. 13 Juli 2026" ' +
+        'oninput="rsWkUbahTtd(\'tanggal\',this.value)" style="width:170px"></div>' +
+    '</div>' +
+    '<p style="font-size:12px;color:#6b7280;margin:6px 0 0">Kepala Sekolah otomatis dari akun ber-role kepsek: <b>' +
+      esc(kepsek ? kepsek.nama : "belum ada") + '</b>. Kota dari Pengaturan. Tanggal kosong = tanggal cetak.</p>';
+}
+window.rsWkUbahTtd = (f, v) => { (_rsWkDraft.ttd = _rsWkDraft.ttd || {})[f] = v; };
+
 function rsWkGambar(){
   const d = rsHariData(_rsWkDraft, _rsWkHari);
   const inp = (val, handler, lebar) => '<input value="' + esc(val==null?"":String(val)) + '" oninput="' + handler + '" ' +
@@ -6893,6 +7200,8 @@ window.rsWkSimpan = async () => {
     khusus.forEach(x => { if (!x.ref) salah.push(HARI[h] + " kegiatan \"" + x.label + "\": isi Jam ke (angka)."); });
     bersih[String(h)] = { jam, khusus };
   }
+  const td = _rsWkDraft.ttd || {};
+  bersih.ttd = { wakasek_id: td.wakasek_id || "", tanggal: String(td.tanggal || "").trim() };
   if (salah.length) return msg("Belum bisa disimpan: " + salah.slice(0,5).join(" · ") + (salah.length>5?" …":""), false);
   try {
     const { error } = await sb.from("pengaturan")
