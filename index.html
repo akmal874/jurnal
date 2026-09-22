@@ -375,6 +375,18 @@
     #maintOverlay .mt-corner { bottom:4%; }
     #maintOverlay .mt-slider { bottom:5%; }
   }
+
+  /* ===== ROSTER ===== */
+.rs-tabel{border-collapse:collapse;width:100%;font-size:11.5px}
+.rs-tabel th,.rs-tabel td{border:1px solid #dbe0ea;padding:3px 5px;text-align:center;vertical-align:middle;white-space:nowrap}
+.rs-tabel thead th{background:#1e3a5f;color:#fff;font-size:11px;position:sticky;top:0}
+.rs-tabel .rs-jam{background:#f4f6fa;font-weight:600;min-width:54px}
+.rs-tabel .rs-jam .rs-wkt{display:block;font-weight:400;color:#8a94a6;font-size:9.5px}
+.rs-tabel .rs-sel{font-weight:600}
+.rs-tabel .rs-sel .rs-mp{display:block;font-size:10px;line-height:1.2}
+.rs-tabel .rs-sel .rs-gr{display:block;color:#8a94a6;font-size:9px;font-weight:400}
+.rs-tabel .rs-kosong{color:#d3d9e3}
+
 </style>
 </head>
 <body>
@@ -799,12 +811,12 @@ sb.auth.onAuthStateChange(async (event, session) => {
 /* ===== NAVIGASI ===== */
 // Menu per role. Untuk sekarang baru "kelas"; kita tambah modul lain nanti.
 const MENU = {
-  admin:  ["beranda", "jadwal", "isijurnal", "daftarjurnal", "rekapharian", "nilai", "walikelas", "bp", "kelas", "mapel", "siswa", "pengguna", "izinmenu", "pengaturan"],
+  admin:  ["beranda", "jadwal", "roster", "isijurnal", "daftarjurnal", "rekapharian", "nilai", "walikelas", "bp", "kelas", "mapel", "siswa", "pengguna", "izinmenu", "pengaturan"],
   kepsek: ["beranda", "jadwal", "daftarjurnal", "rekapharian", "nilai", "walikelas"],
   pengawas: ["beranda", "jadwal", "daftarjurnal", "rekapharian", "nilai", "walikelas"],
   guru:   ["beranda", "jadwal", "isijurnal", "daftarjurnal", "rekapharian", "nilai", "walikelas", "bp"]
 };
-const LABEL = { beranda:"Beranda", kelas:"Kelas", mapel:"Mapel", siswa:"Siswa", jadwal:"Jadwal",
+const LABEL = { beranda:"Beranda", kelas:"Kelas", mapel:"Mapel", siswa:"Siswa", jadwal:"Jadwal", roster:"Roster",
   pengguna:"Pengguna", isijurnal:"Isi Jurnal", daftarjurnal:"Daftar Jurnal", nilai:"Nilai",
   catatan:"Catatan", pengaturan:"Pengaturan", rekapharian:"Rekap Harian", izinmenu:"Izin Menu",
   rekapabsensi:"Rekap Absensi", walikelas:"Wali Kelas", bp:"Bimbingan Konseling" };
@@ -818,6 +830,7 @@ function bangunNav(){
     if (!ME.izin_nilai)   menu = menu.filter(k => k !== "nilai");
     if (!punyaTabWali())  menu = menu.filter(k => k !== "walikelas");
     if (!ME.izin_jadwal)  menu = menu.filter(k => k !== "jadwal");
+    if (!ME.izin_roster)  menu = menu.filter(k => k !== "roster");
     // Rekap Harian hanya untuk guru bila diizinkan (kepsek/pengawas selalu punya)
     if (ME.role === "guru" && !ME.izin_rekapharian) menu = menu.filter(k => k !== "rekapharian");
     if (!ME.izin_bp) menu = menu.filter(k => k !== "bp");
@@ -877,6 +890,7 @@ function buka(key, btn){
   if (key === "mapel") return muatMapel();
   if (key === "siswa") return muatSiswa();   // <-- baris baru
   if (key === "jadwal") return muatJadwal();
+  if (key === "roster") return muatRoster();
   if (key === "pengguna") return muatPengguna();
   if (key === "isijurnal") return muatIsiJurnal();
   if (key === "daftarjurnal") return muatDaftarJurnal();
@@ -5264,6 +5278,9 @@ const IZIN_GRUP = [
     { label:"Lihat Jadwal", kolom:"izin_jadwal" },
     { label:"Edit/Buat Jadwal", kolom:"izin_jadwal_edit" }
   ]},
+  { grup:"Roster", item:[
+    { label:"Lihat & Cetak Roster", kolom:"izin_roster" }
+  ]},
   { grup:"Lainnya", item:[
     { label:"Nilai", kolom:"izin_nilai" },
     { label:"Rekap Harian", kolom:"izin_rekapharian" }
@@ -6302,6 +6319,439 @@ window.hapusJadwal = async (id) => {
     if (error) throw new Error(error.message);
     toast("Slot dihapus."); await renderJadwal();
   } catch (e) { toast("Gagal menghapus: " + e.message); }
+};
+
+/* ==================== ROSTER PELAJARAN ==================== */
+/* Urutan kelas baku (fallback bila paste tanpa header). Sesuai layout Excel. */
+const ROSTER_URUT_KELAS = [
+  "X NKPI","X NKN 1","X NKN 2","X APAPL","X TKRO",
+  "XI NKPI","XI NKN 1","XI NKN 2","XI APAPL","XI TKRO",
+  "XII NKPI","XII NKN 1","XII NKN 2","XII APAPL","XII TKRO"
+];
+/* Penanda baris kegiatan khusus (diabaikan saat paste ke jadwal). */
+const ROSTER_KHUSUS = /UPACARA|ISTIRAHAT|APEL|SAIH|SENAM|SHOLAT|SHALAT|JUM.?AT/i;
+
+let _rsMode = "kode";          // tampilan grid: "kode" | "lengkap"
+let _rsHari = 1;               // tab hari aktif (1-5)
+let _rsKelasList = [];         // master kelas
+let _rsMapelList = [];         // master mapel (punya .kode)
+let _rsGuruList = [];          // master profil (punya .kode_guru)
+let _rsJadwal = [];            // semua jadwal (join mapel+guru+kelas)
+let _rsParsed = null;          // hasil parse siap simpan
+
+/* Normalisasi nama kelas untuk pencocokan longgar (buang spasi ganda, samakan case). */
+function rsNormKelas(s){ return String(s||"").toUpperCase().replace(/\s+/g," ").trim(); }
+
+async function muatRoster(){
+  const bolehIsi = (ME.role === "admin");  // Isi Massal khusus admin (RLS jadwal)
+  try {
+    _rsKelasList = await ambilSemua("kelas", "nama_kelas");
+    _rsMapelList = await ambilSemua("mapel", "nama_mapel");
+    _rsGuruList  = await ambilSemua("profil");
+  } catch (e) {
+    $("main").innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat data: ' +
+      esc(e.message) + '</div></div>'; return;
+  }
+
+  $("main").innerHTML =
+    '<div class="card"><h2>Roster Pelajaran</h2>' +
+      '<div class="row" style="gap:8px;align-items:center">' +
+        '<button class="btn btn-sm" id="rsTabLihat" onclick="rsGantiTab(\'lihat\')">Lihat &amp; Cetak</button>' +
+        (bolehIsi ? '<button class="btn btn-sm btn-ghost" id="rsTabIsi" onclick="rsGantiTab(\'isi\')">Isi Massal (Paste)</button>' : '') +
+      '</div>' +
+    '</div>' +
+    '<div id="rsIsiTab"></div>';
+
+  rsGantiTab("lihat");
+}
+
+window.rsGantiTab = (tab) => {
+  const tl = $("rsTabLihat"), ti = $("rsTabIsi");
+  if (tl) tl.className = "btn btn-sm" + (tab==="lihat" ? "" : " btn-ghost");
+  if (ti) ti.className = "btn btn-sm" + (tab==="isi" ? "" : " btn-ghost");
+  if (tab === "isi") return rsRenderIsi();
+  return rsRenderLihat();
+};
+
+/* ---------- TAB LIHAT & CETAK ---------- */
+async function rsRenderLihat(){
+  $("rsIsiTab").innerHTML = '<div class="card"><div class="page-kosong">Memuat roster...</div></div>';
+  try {
+    const { data, error } = await sb.from("jadwal")
+      .select("id, hari, jam_ke, waktu, kelas_id, mapel_id, guru_id, " +
+              "mapel:mapel_id(nama_mapel, kode), guru:guru_id(nama, kode_guru)");
+    if (error) throw new Error(error.message);
+    _rsJadwal = data || [];
+  } catch (e) {
+    $("rsIsiTab").innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat: ' + esc(e.message) + '</div></div>';
+    return;
+  }
+
+  const tabHari = HARI.slice(1).map((h,i) =>
+    '<button class="btn btn-sm ' + ((i+1)===_rsHari?"":"btn-ghost") + '" onclick="rsPilihHari(' + (i+1) + ')">' + h + '</button>'
+  ).join(" ");
+
+  $("rsIsiTab").innerHTML =
+    '<div class="card">' +
+      '<div class="row" style="gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px">' +
+        tabHari +
+        '<span style="flex:1"></span>' +
+        '<div style="display:inline-flex;border:1px solid #dbe0ea;border-radius:8px;overflow:hidden">' +
+          '<button class="btn btn-sm" id="rsMKode" style="border:0;border-radius:0" onclick="rsSetMode(\'kode\')">Kode</button>' +
+          '<button class="btn btn-sm btn-ghost" id="rsMLengkap" style="border:0;border-radius:0" onclick="rsSetMode(\'lengkap\')">Lengkap</button>' +
+        '</div>' +
+        '<button class="btn btn-sm" style="background:#2b8a3e" onclick="rsCetak()">🖨 Cetak (Landscape)</button>' +
+      '</div>' +
+      '<div id="rsGrid" style="overflow-x:auto"></div>' +
+    '</div>';
+  rsSetMode(_rsMode);
+}
+
+window.rsPilihHari = (h) => { _rsHari = h; rsRenderLihat(); };
+window.rsSetMode = (m) => {
+  _rsMode = m;
+  const a = $("rsMKode"), b = $("rsMLengkap");
+  if (a) a.className = "btn btn-sm" + (m==="kode"?"":" btn-ghost");
+  if (b) b.className = "btn btn-sm" + (m==="lengkap"?"":" btn-ghost");
+  rsGambarGrid();
+};
+
+/* Susun kolom kelas berurutan (pakai urutan baku, sisanya di belakang). */
+function rsKelasTerurut(){
+  const byNama = {}; _rsKelasList.forEach(k => byNama[rsNormKelas(k.nama_kelas)] = k);
+  const hasil = [], dipakai = new Set();
+  ROSTER_URUT_KELAS.forEach(n => { const k = byNama[rsNormKelas(n)]; if (k){ hasil.push(k); dipakai.add(k.id); } });
+  _rsKelasList.forEach(k => { if (!dipakai.has(k.id)) hasil.push(k); });
+  return hasil;
+}
+
+function rsGambarGrid(){
+  const kelas = rsKelasTerurut();
+  const slotHari = _rsJadwal.filter(j => Number(j.hari) === _rsHari);
+  // kumpulkan slot jam unik, urut by jam_ke numerik
+  const setJam = {};
+  slotHari.forEach(j => { setJam[j.jam_ke] = j.waktu || ""; });
+  const jamUrut = Object.keys(setJam).sort((a,b) =>
+    String(a).localeCompare(String(b), undefined, { numeric:true }));
+
+  if (!jamUrut.length) {
+    $("rsGrid").innerHTML = '<div class="empty">Belum ada jadwal untuk ' + HARI[_rsHari] + '.</div>';
+    return;
+  }
+
+  // index cepat: kelas_id|jam_ke -> slot
+  const idx = {};
+  slotHari.forEach(j => { idx[j.kelas_id + "|" + j.jam_ke] = j; });
+
+  let h = '<table class="rs-tabel"><thead><tr><th class="rs-jam">Jam</th>';
+  kelas.forEach(k => h += '<th>' + esc(k.nama_kelas) + '</th>');
+  h += '</tr></thead><tbody>';
+  jamUrut.forEach(jk => {
+    h += '<tr><td class="rs-jam"><b>' + esc(jk) + '</b>' +
+         (setJam[jk] ? '<span class="rs-wkt">' + esc(setJam[jk]) + '</span>' : '') + '</td>';
+    kelas.forEach(k => {
+      const j = idx[k.id + "|" + jk];
+      if (!j) { h += '<td class="rs-kosong">·</td>'; return; }
+      if (_rsMode === "kode") {
+        const km = (j.mapel && j.mapel.kode) ? j.mapel.kode : "?";
+        const kg = (j.guru && j.guru.kode_guru!=null) ? j.guru.kode_guru : "?";
+        h += '<td class="rs-sel">' + esc(km) + '-' + esc(kg) + '</td>';
+      } else {
+        const nm = (j.mapel && j.mapel.nama_mapel) ? j.mapel.nama_mapel : "-";
+        const ng = (j.guru && j.guru.nama) ? j.guru.nama : "-";
+        h += '<td class="rs-sel"><span class="rs-mp">' + esc(nm) + '</span>' +
+             '<span class="rs-gr">' + esc(ng) + '</span></td>';
+      }
+    });
+    h += '</tr>';
+  });
+  h += '</tbody></table>';
+  $("rsGrid").innerHTML = h;
+}
+
+/* ---------- CETAK (semua hari, landscape) ---------- */
+window.rsCetak = async () => {
+  toast("Menyiapkan cetakan...");
+  const kelas = rsKelasTerurut();
+  const info = await ambilInfoApp();
+  const namaSekolah = (info.nama_sekolah || "").trim();
+  const info2 = info || {};
+  const tglCetak = new Date().toLocaleDateString("id-ID", { day:"numeric", month:"long", year:"numeric" });
+
+  let body = "";
+  for (let hh = 1; hh <= 5; hh++) {
+    const slotHari = _rsJadwal.filter(j => Number(j.hari) === hh);
+    const setJam = {};
+    slotHari.forEach(j => { setJam[j.jam_ke] = j.waktu || ""; });
+    const jamUrut = Object.keys(setJam).sort((a,b) =>
+      String(a).localeCompare(String(b), undefined, { numeric:true }));
+    if (!jamUrut.length) continue;
+    const idx = {};
+    slotHari.forEach(j => { idx[j.kelas_id + "|" + j.jam_ke] = j; });
+
+    body += '<div class="hari-blok"><div class="hari-judul">' + HARI[hh] + '</div>' +
+      '<table><thead><tr><th class="jam">Jam</th>';
+    kelas.forEach(k => body += '<th>' + esc(k.nama_kelas.replace(/^(X|XI|XII)\s+/,"")) + '</th>');
+    body += '</tr></thead><tbody>';
+    jamUrut.forEach(jk => {
+      body += '<tr><td class="jam">' + esc(jk) + '</td>';
+      kelas.forEach(k => {
+        const j = idx[k.id + "|" + jk];
+        if (!j) { body += '<td>·</td>'; return; }
+        const km = (j.mapel && j.mapel.kode) ? j.mapel.kode : "?";
+        const kg = (j.guru && j.guru.kode_guru!=null) ? j.guru.kode_guru : "?";
+        body += '<td>' + esc(km) + '-' + esc(kg) + '</td>';
+      });
+      body += '</tr>';
+    });
+    body += '</tbody></table></div>';
+  }
+  if (!body) return toast("Belum ada jadwal untuk dicetak.");
+
+  const w = window.open("", "_blank");
+  if (!w) return toast("Popup diblokir. Izinkan popup untuk mencetak.");
+  w.document.write(
+    '<html><head><title>Roster Pelajaran</title><style>' +
+    '@page{size:A4 landscape;margin:8mm}body{font-family:Arial,sans-serif;color:#000;font-size:11px;padding:0}' +
+    '.kop{text-align:center;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:10px}' +
+    '.kop .nm{font-size:16px;font-weight:bold;text-transform:uppercase}' +
+    '.kop .sub{font-size:12px}' +
+    '.hari-blok{margin-bottom:12px;page-break-inside:avoid}' +
+    '.hari-judul{background:#1e3a5f;color:#fff;font-weight:bold;font-size:11px;padding:3px 8px;border-radius:3px 3px 0 0}' +
+    'table{width:100%;border-collapse:collapse}' +
+    'th,td{border:1px solid #888;padding:2px 3px;text-align:center;font-size:9px;white-space:nowrap}' +
+    'th{background:#eef;font-weight:bold}td.jam,th.jam{background:#f4f4f4;font-weight:bold}' +
+    '.kaki{position:fixed;bottom:0;left:0;right:0;text-align:center;font-size:9px;color:#555;border-top:1px solid #ccc;padding-top:3px}' +
+    'thead{display:table-header-group}</style></head><body>' +
+    '<div class="kaki">' + (namaSekolah ? esc(namaSekolah) + ' &middot; ' : '') + 'Dicetak ' + esc(tglCetak) + '</div>' +
+    '<div class="kop">' + (namaSekolah ? '<div class="nm">' + esc(namaSekolah) + '</div>' : '') +
+      '<div class="sub">JADWAL PELAJARAN — ' + esc((info2.tahun_ajaran||"") + (info2.semester?(" " + info2.semester):"")) + '</div></div>' +
+    body + '</body></html>');
+  w.document.close(); w.focus();
+  w.onload = () => { try { w.print(); } catch(e){} };
+};
+
+/* ---------- TAB ISI MASSAL (PASTE) ---------- */
+function rsRenderIsi(){
+  _rsParsed = null;
+  $("rsIsiTab").innerHTML =
+    '<div class="card"><h2>Isi Massal Roster (Paste dari Excel)</h2>' +
+      '<div style="font-size:13px;color:#6b7280;line-height:1.6;margin-bottom:10px">' +
+        'Cara pakai:<br>' +
+        '1. Di Excel, <b>blok kolom Hari + Waktu + 15 kolom kelas</b> untuk <b>semua hari</b> (baris grid saja, tanpa kop &amp; kamus kode).<br>' +
+        '2. Sertakan <b>baris header nama kelas</b> bila ada (lebih aman). Copy (Ctrl+C).<br>' +
+        '3. Tempel (Ctrl+V) ke kotak di bawah, lalu klik <b>Cek Data</b>.<br>' +
+        '4. Periksa pratinjau (hijau = valid, merah = bermasalah), lalu <b>Simpan</b>.' +
+      '</div>' +
+      '<textarea id="rsPaste" rows="10" style="width:100%;font-family:monospace;font-size:12px;' +
+        'border:1px solid #dbe0ea;border-radius:8px;padding:8px" ' +
+        'placeholder="Tempel data roster di sini..."></textarea>' +
+      '<div style="margin-top:10px">' +
+        '<button class="btn" onclick="rsCekData()">Cek Data</button>' +
+      '</div>' +
+      '<div id="rsPreview" style="margin-top:14px"></div>' +
+    '</div>';
+}
+
+/* Parse teks paste → daftar slot tergabung + laporan error. */
+window.rsCekData = () => {
+  const teks = $("rsPaste").value || "";
+  const baris = teks.split(/\r?\n/).filter(r => r.trim() !== "");
+  if (!baris.length) return toast("Kotak paste masih kosong.");
+
+  // lookup master
+  const mapelByKode = {}; _rsMapelList.forEach(m => { if (m.kode) mapelByKode[String(m.kode).toUpperCase()] = m; });
+  const guruByKode = {}; _rsGuruList.forEach(g => { if (g.kode_guru!=null) guruByKode[String(g.kode_guru)] = g; });
+  const kelasByNama = {}; _rsKelasList.forEach(k => kelasByNama[rsNormKelas(k.nama_kelas)] = k);
+
+  // deteksi header kelas: baris yang mayoritas selnya cocok nama kelas
+  let kolomKelas = null;   // array kelas per kolom (mulai kolom ke-2 setelah hari/waktu)
+  let mulaiIdx = 0;
+  const sel0 = baris[0].split("\t");
+  const cocokKelas = sel0.filter(s => kelasByNama[rsNormKelas(s)]).length;
+  if (cocokKelas >= 3) {
+    // baris pertama = header. Kolom kelas = sel yang cocok; tentukan offset kolom pertama kelas.
+    kolomKelas = sel0.map(s => kelasByNama[rsNormKelas(s)] || null);
+    mulaiIdx = 1;
+  }
+
+  const HARI_RE = /S\s*E\s*N\s*I\s*N|SELASA|R\s*A\s*B\s*U|KAMIS|JUM/i;
+  const hariDari = (s) => {
+    const t = s.toUpperCase().replace(/\s+/g,"");
+    if (t.includes("SENIN")) return 1;
+    if (t.includes("SELASA")) return 2;
+    if (t.includes("RABU")) return 3;
+    if (t.includes("KAMIS")) return 4;
+    if (t.includes("JUM")) return 5;
+    return 0;
+  };
+
+  // Struktur: kumpulkan sel mentah per (hari, kelasKolom) urut baris → nanti di-merge
+  // Tentukan indeks kolom: [0]=hari(mungkin kosong/rowspan), [1]=waktu, [2..]=kelas
+  // Jika ada header, offset kelas = posisi pertama kolom kelas yang cocok.
+  let offKelas = 2;
+  if (kolomKelas) {
+    const first = kolomKelas.findIndex(x => x);
+    if (first >= 0) offKelas = first;
+  }
+
+  const errors = [];
+  const mentah = [];  // {hari, kolKelasIdx, kelasObj, jam_ke(satuan urut), waktu, kodeSel}
+  let hariAktif = 0;
+  let nomorJam = {};  // per hari: counter jam satuan
+
+  for (let r = mulaiIdx; r < baris.length; r++) {
+    const sel = baris[r].split("\t");
+    // update hari bila kolom 0 berisi nama hari
+    const kolHari = (sel[0]||"").trim();
+    const hh = hariDari(kolHari);
+    if (hh) hariAktif = hh;
+    if (!hariAktif) continue; // belum masuk blok hari mana pun
+
+    const waktu = (sel[1]||"").trim();
+    const gabung = sel.join(" ");
+    // lewati baris kegiatan khusus (colspan penuh)
+    const isiKelas = sel.slice(offKelas).map(s => (s||"").trim());
+    const adaIsi = isiKelas.some(s => s && !ROSTER_KHUSUS.test(s));
+    if (ROSTER_KHUSUS.test(gabung) && !adaIsi) continue;
+
+    // hitung nomor jam satuan per hari (baris slot valid)
+    nomorJam[hariAktif] = (nomorJam[hariAktif]||0) + 1;
+    const jamSat = nomorJam[hariAktif];
+
+    isiKelas.forEach((isi, ci) => {
+      if (!isi) return;
+      if (ROSTER_KHUSUS.test(isi)) return;
+      const kelasObj = kolomKelas
+        ? kolomKelas[offKelas + ci]
+        : (kelasByNama[rsNormKelas(ROSTER_URUT_KELAS[ci])] || null);
+      if (!kelasObj) { errors.push('Baris ' + (r+1) + ' kolom ' + (ci+1) + ': kelas tak dikenal (dilewati).'); return; }
+      // pisah kode: MAPEL-GURU. Guru = angka setelah strip terakhir; mapel = sisanya.
+      const m = isi.match(/^(.*?)-+(\d+)$/);
+      if (!m) { errors.push(kelasObj.nama_kelas + ' ' + HARI[hariAktif] + ' jam ' + jamSat + ': format sel "' + isi + '" tak dikenal.'); return; }
+      const kodeM = m[1].trim().toUpperCase();
+      const kodeG = m[2];
+      const mp = mapelByKode[kodeM];
+      const gr = guruByKode[kodeG];
+      if (!mp) { errors.push(kelasObj.nama_kelas + ' ' + HARI[hariAktif] + ' jam ' + jamSat + ': kode mapel "' + kodeM + '" tak ada.'); return; }
+      if (!gr) { errors.push(kelasObj.nama_kelas + ' ' + HARI[hariAktif] + ' jam ' + jamSat + ': kode guru "' + kodeG + '" tak ada.'); return; }
+      mentah.push({ hari:hariAktif, kelas_id:kelasObj.id, nama_kelas:kelasObj.nama_kelas,
+        jamSat, waktu, mapel_id:mp.id, guru_id:gr.id,
+        kodeM, kodeG, nm:mp.nama_mapel, ng:gr.nama });
+    });
+  }
+
+  // MERGE: gabung jam berurutan (mapel+guru sama, jamSat berurutan) per kelas+hari
+  const grup = {};
+  mentah.forEach(x => { (grup[x.hari+"|"+x.kelas_id] = grup[x.hari+"|"+x.kelas_id] || []).push(x); });
+  const hasil = [];
+  Object.values(grup).forEach(arr => {
+    arr.sort((a,b) => a.jamSat - b.jamSat);
+    let cur = null;
+    arr.forEach(x => {
+      if (cur && x.mapel_id===cur.mapel_id && x.guru_id===cur.guru_id && x.jamSat===cur._akhir+1) {
+        cur._akhir = x.jamSat;
+        if (x.waktu) cur._waktuAkhir = x.waktu;
+      } else {
+        if (cur) hasil.push(cur);
+        cur = { hari:x.hari, kelas_id:x.kelas_id, nama_kelas:x.nama_kelas,
+          mapel_id:x.mapel_id, guru_id:x.guru_id, kodeM:x.kodeM, kodeG:x.kodeG,
+          nm:x.nm, ng:x.ng, _awal:x.jamSat, _akhir:x.jamSat,
+          _waktuAwal:x.waktu, _waktuAkhir:x.waktu };
+      }
+    });
+    if (cur) hasil.push(cur);
+  });
+  // format jam_ke rentang + gabung waktu
+  hasil.forEach(s => {
+    s.jam_ke = (s._awal === s._akhir) ? String(s._awal) : (s._awal + "-" + s._akhir);
+    // waktu: ambil awal dari _waktuAwal, akhir dari _waktuAkhir bila keduanya ada
+    const wa = (s._waktuAwal||"").split(/[-–]/)[0].trim();
+    const wb = (s._waktuAkhir||"").split(/[-–]/).pop().trim();
+    s.waktu = (wa && wb) ? (wa + "-" + wb) : (s._waktuAwal || "");
+  });
+
+  _rsParsed = hasil;
+  rsGambarPreview(hasil, errors);
+};
+
+function rsGambarPreview(hasil, errors){
+  if (!hasil.length && errors.length) {
+    $("rsPreview").innerHTML = '<div style="background:#fff0f0;color:#c92a2a;padding:12px;border-radius:8px">' +
+      '<b>Tidak ada data valid.</b><br>' + errors.map(esc).join("<br>") + '</div>';
+    return;
+  }
+  const perHari = {}; hasil.forEach(s => (perHari[s.hari]=perHari[s.hari]||[]).push(s));
+
+  let h = '<div style="background:#ebfbee;color:#2b8a3e;padding:10px;border-radius:8px;margin-bottom:10px">' +
+    '<b>' + hasil.length + '</b> slot siap disimpan (setelah digabung ke rentang jam).</div>';
+
+  if (errors.length) {
+    h += '<div style="background:#fff0f0;color:#c92a2a;padding:10px;border-radius:8px;margin-bottom:10px">' +
+      '<b>' + errors.length + ' baris bermasalah (dilewati):</b><br>' +
+      errors.slice(0,30).map(esc).join("<br>") +
+      (errors.length>30 ? '<br>… dan ' + (errors.length-30) + ' lainnya.' : '') + '</div>';
+  }
+
+  for (let hh=1; hh<=5; hh++){
+    const arr = perHari[hh]; if (!arr || !arr.length) continue;
+    arr.sort((a,b) => rsNormKelas(a.nama_kelas).localeCompare(rsNormKelas(b.nama_kelas)) ||
+      String(a.jam_ke).localeCompare(String(b.jam_ke), undefined, {numeric:true}));
+    h += '<h3 style="margin:12px 0 6px;color:#3b5bdb">' + HARI[hh] + ' <span style="font-weight:400;color:#6b7280;font-size:13px">(' + arr.length + ' slot)</span></h3>' +
+      '<table><tr><th>Kelas</th><th>Jam</th><th>Mapel</th><th>Guru</th></tr>' +
+      arr.map(s => '<tr><td>' + esc(s.nama_kelas) + '</td><td>' + esc(s.jam_ke) + '</td>' +
+        '<td style="text-align:left">' + esc(s.nm) + ' <span style="color:#9aa">(' + esc(s.kodeM) + ')</span></td>' +
+        '<td style="text-align:left">' + esc(s.ng) + '</td></tr>').join("") +
+      '</table>';
+  }
+
+  h += '<div style="margin-top:14px;padding:12px;background:#fff8e6;border:1px solid #ffe08a;border-radius:8px">' +
+    '<b>Perhatian:</b> Menyimpan akan <b>menimpa</b> jadwal lama pada tiap <b>kelas+hari</b> yang ada di data ini. ' +
+    'Kelas/hari yang tak ada di paste tidak tersentuh.</div>' +
+    '<div style="margin-top:10px">' +
+      '<button class="btn" style="background:#2b8a3e" onclick="rsSimpan()">Simpan ke Jadwal</button>' +
+    '</div>' +
+    '<div id="rsSimpanMsg" style="margin-top:10px"></div>';
+
+  $("rsPreview").innerHTML = h;
+}
+
+/* Simpan: hapus jadwal lama per (kelas+hari) yang muncul, lalu insert hasil merge. */
+window.rsSimpan = async () => {
+  if (ME.role !== "admin") return toast("Hanya admin yang bisa menyimpan.");
+  if (!_rsParsed || !_rsParsed.length) return toast("Tidak ada data untuk disimpan.");
+  const msg = (t,ok) => { $("rsSimpanMsg").innerHTML =
+    '<div style="padding:10px;border-radius:8px;font-size:13px;' +
+    (ok?'background:#ebfbee;color:#2b8a3e':'background:#fff0f0;color:#c92a2a') + '">' + esc(t) + '</div>'; };
+
+  if (!(await konfirmasi("Simpan Roster",
+    "Menimpa jadwal lama pada kelas+hari terkait, lalu mengisi " + _rsParsed.length + " slot. Lanjut?",
+    {bahaya:true}))) return;
+
+  try {
+    toast("Menyimpan...");
+    // kumpulkan pasangan kelas+hari unik untuk dihapus
+    const pasangan = {};
+    _rsParsed.forEach(s => { pasangan[s.kelas_id + "|" + s.hari] = { kelas_id:s.kelas_id, hari:s.hari }; });
+    // hapus per pasangan
+    for (const p of Object.values(pasangan)) {
+      const { error } = await sb.from("jadwal").delete()
+        .eq("kelas_id", p.kelas_id).eq("hari", p.hari);
+      if (error) throw new Error("Hapus lama gagal: " + error.message);
+    }
+    // insert baru (batch)
+    const rows = _rsParsed.map(s => ({
+      kelas_id:s.kelas_id, hari:s.hari, jam_ke:s.jam_ke, waktu:s.waktu||null,
+      mapel_id:s.mapel_id, guru_id:s.guru_id
+    }));
+    const { error: errIns } = await sb.from("jadwal").insert(rows);
+    if (errIns) throw new Error("Simpan baru gagal: " + errIns.message);
+
+    msg("Berhasil menyimpan " + rows.length + " slot jadwal.", true);
+    toast("Roster tersimpan.");
+  } catch (e) {
+    msg("Gagal: " + e.message, false);
+  }
 };
 
 /* ==================== MODE PEMELIHARAAN ==================== */
