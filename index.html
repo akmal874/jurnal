@@ -6267,7 +6267,7 @@ function gambarHalamanJurnal(){
   const mulai = (_pgJurnal - 1) * PG_JURNAL;
   const potongan = _jurnalCache.slice(mulai, mulai + PG_JURNAL);
 
-  let html = "";
+  let html = djRingkasLuarJadwal();   // ringkasan (hanya saat filter "di luar jadwal")
   potongan.forEach(j => {
     const w = warna[j.status] || "#6b7280";
     html += '<div class="card" style="margin-bottom:12px">' +
@@ -6297,6 +6297,35 @@ function gambarHalamanJurnal(){
   });
   html += kontrolHalaman(_pgJurnal, totalHal, "gantiHalamanJurnal");
   $("jurnalList").innerHTML = html;
+}
+
+/* Ringkasan jurnal di luar jadwal (muncul bila filter Jadwal = "Hanya di luar jadwal"). */
+function djRingkasLuarJadwal(){
+  if (!$("fJadwal") || $("fJadwal").value !== "luar" || !_jurnalCache.length) return "";
+  const AMBANG = 3;   // muncul >= 3 kali dianggap pola berulang
+  const hitung = (kunci) => {
+    const m = {};
+    _jurnalCache.forEach(j => { const k = kunci(j); if (k) m[k] = (m[k] || 0) + 1; });
+    return Object.entries(m).sort((a,b) => b[1] - a[1]);
+  };
+  const perGuru = hitung(j => j.guru_nama);
+  const perKelas = hitung(j => j.kelas_nama);
+  const perPasang = hitung(j => (j.guru_nama || "-") + " · " + (j.kelas_nama || "-"));
+  const berulang = perPasang.filter(x => x[1] >= AMBANG).length;
+  const daftar = (arr) => arr.slice(0, 5).map(([k, n]) => '<li>' + esc(k) + ' — <b>' + n + '×</b>' +
+    (n >= AMBANG ? ' <span class="ij-tag ij-tag-luar">berulang</span>' : '') + '</li>').join("");
+  const kolom = (judul, arr) => '<div style="flex:1;min-width:200px"><b>' + judul + '</b>' +
+    '<ul style="margin:4px 0 0 18px;line-height:1.7">' + daftar(arr) + '</ul></div>';
+  return '<div class="card" style="background:#fff8e6;border-color:#ffe08a">' +
+    '<h2 style="margin-bottom:6px">Ringkasan Di Luar Jadwal (' + _jurnalCache.length + ' jurnal)</h2>' +
+    '<p style="font-size:13px;color:#8a5a00;margin-bottom:10px">' +
+      (berulang ? '<b>' + berulang + ' pasangan guru–kelas</b> muncul ≥' + AMBANG + ' kali — kemungkinan roster perlu diperbarui.'
+                : 'Belum ada pola berulang (≥' + AMBANG + ' kali). Kemungkinan hanya tukar jam / jam tambahan biasa.') + '</p>' +
+    '<div style="display:flex;gap:20px;flex-wrap:wrap;font-size:13px">' +
+      kolom("Per guru", perGuru) + kolom("Per kelas", perKelas) + kolom("Guru · kelas", perPasang) +
+    '</div>' +
+    '<p style="font-size:12px;color:#6b7280;margin-top:8px">Rentang mengikuti filter Dari/Sampai Tanggal (periode aktif). Tampil 5 teratas.</p>' +
+  '</div>';
 }
 
 window.gantiHalamanJurnal = (arah) => { _pgJurnal += arah; gambarHalamanJurnal(); };
