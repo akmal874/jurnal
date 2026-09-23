@@ -6793,13 +6793,14 @@ async function rsHtmlTtd(){
   } catch (e) {}
   const tgl = (t.tanggal || "").trim() ||
     new Date().toLocaleDateString("id-ID", { day:"numeric", month:"long", year:"numeric" });
-  const kepsek = _rsGuruList.find(g => g.role === "kepsek") || {};
+  const kepsek = _rsGuruById[t.kepsek_id] || _rsGuruList.find(g => g.role === "kepsek") || {};
+  const jabatanKs = (t.plt ? "Plt. " : "") + "Kepala Sekolah";
   const wks = _rsGuruById[t.wakasek_id] || {};
   const kiri = 'style="padding-left:10mm"', kanan = 'style="padding-left:50mm"';
   const nama = (p) => '<b>' + esc(p.nama || "..............................") + '</b>' + (p.nip ? '<br>NIP. ' + esc(p.nip) : '');
   return '<table class="rs-ttd">' +
     '<tr><td ' + kiri + '></td><td ' + kanan + '>' + esc((kota ? kota + ", " : "") + tgl) + '</td></tr>' +
-    '<tr><td ' + kiri + '>Mengetahui,<br>Kepala Sekolah</td><td ' + kanan + '><br>Wakasek Kurikulum</td></tr>' +
+    '<tr><td ' + kiri + '>Mengetahui,<br>' + jabatanKs + '</td><td ' + kanan + '><br>Wakasek Kurikulum</td></tr>' +
     '<tr class="rs-ttd-spasi"><td></td><td></td></tr>' +
     '<tr><td ' + kiri + '>' + nama(kepsek) + '</td><td ' + kanan + '>' + nama(wks) + '</td></tr></table>';
 }
@@ -7111,19 +7112,26 @@ function rsRenderWaktu(){
 }
 function rsHtmlSetelanTtd(){
   const t = _rsWkDraft.ttd = _rsWkDraft.ttd || {};
-  const kepsek = _rsGuruList.find(g => g.role === "kepsek");
-  const opsi = '<option value="">— pilih —</option>' + _rsGuruList
-    .filter(g => g.role !== "admin")
-    .sort((a,b) => String(a.nama||"").localeCompare(String(b.nama||"")))
-    .map(g => '<option value="' + esc(g.id) + '"' + (g.id === t.wakasek_id ? " selected" : "") + '>' + esc(g.nama || g.email || "") + '</option>').join("");
+  const ksAkun = _rsGuruList.find(g => g.role === "kepsek");
+  const calon = _rsGuruList.filter(g => g.role !== "admin")
+    .sort((a,b) => String(a.nama||"").localeCompare(String(b.nama||"")));
+  const opsi = (pilih) => calon.map(g => '<option value="' + esc(g.id) + '"' + (g.id === pilih ? " selected" : "") + '>' +
+    esc(g.nama || g.email || "") + (g.nip ? "" : " (NIP kosong)") + '</option>').join("");
   return '<h3 style="margin:18px 0 6px;color:#3b5bdb">Tanda Tangan Cetak Roster</h3>' +
     '<div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end">' +
-      '<div><label>Wakasek Kurikulum</label><select onchange="rsWkUbahTtd(\'wakasek_id\',this.value)">' + opsi + '</select></div>' +
+      '<div><label>Kepala Sekolah</label><select onchange="rsWkUbahTtd(\'kepsek_id\',this.value)">' +
+        '<option value="">Otomatis — ' + esc(ksAkun ? ksAkun.nama : "belum ada akun kepsek") + '</option>' + opsi(t.kepsek_id) +
+      '</select></div>' +
+      '<label class="rs-cek"><input type="checkbox"' + (t.plt ? " checked" : "") +
+        ' onchange="rsWkUbahTtd(\'plt\',this.checked)"> Plt.</label>' +
+      '<div><label>Wakasek Kurikulum</label><select onchange="rsWkUbahTtd(\'wakasek_id\',this.value)">' +
+        '<option value="">— pilih —</option>' + opsi(t.wakasek_id) + '</select></div>' +
       '<div><label>Tanggal penetapan</label><input value="' + esc(t.tanggal || "") + '" placeholder="mis. 13 Juli 2026" ' +
         'oninput="rsWkUbahTtd(\'tanggal\',this.value)" style="width:170px"></div>' +
     '</div>' +
-    '<p style="font-size:12px;color:#6b7280;margin:6px 0 0">Kepala Sekolah otomatis dari akun ber-role kepsek: <b>' +
-      esc(kepsek ? kepsek.nama : "belum ada") + '</b>. Kota dari Pengaturan. Tanggal kosong = tanggal cetak.</p>';
+    '<p style="font-size:12px;color:#6b7280;margin:6px 0 0">Kepala Sekolah "Otomatis" = akun ber-role kepsek. ' +
+      'Pilih nama lain bila yang menandatangani berbeda; centang <b>Plt.</b> agar tertulis "Plt. Kepala Sekolah". ' +
+      'Kota dari Pengaturan. Tanggal kosong = tanggal cetak.</p>';
 }
 window.rsWkUbahTtd = (f, v) => { (_rsWkDraft.ttd = _rsWkDraft.ttd || {})[f] = v; };
 
@@ -7201,7 +7209,8 @@ window.rsWkSimpan = async () => {
     bersih[String(h)] = { jam, khusus };
   }
   const td = _rsWkDraft.ttd || {};
-  bersih.ttd = { wakasek_id: td.wakasek_id || "", tanggal: String(td.tanggal || "").trim() };
+  bersih.ttd = { kepsek_id: td.kepsek_id || "", plt: !!td.plt,
+    wakasek_id: td.wakasek_id || "", tanggal: String(td.tanggal || "").trim() };
   if (salah.length) return msg("Belum bisa disimpan: " + salah.slice(0,5).join(" · ") + (salah.length>5?" …":""), false);
   try {
     const { error } = await sb.from("pengaturan")
