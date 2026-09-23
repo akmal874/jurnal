@@ -444,6 +444,17 @@
 .kh-box{padding:10px 12px;border-radius:8px;font-size:13px;margin-top:10px}
 .kh-box-kuning{background:#fff8e6;border:1px solid #ffe08a;color:#8a5a00}
 .kh-box-abu{background:#f8f9fa;border:1px solid #e9ecef;color:#495057}
+/* ===== KEHADIRAN HARIAN — tambahan koreksi (v2) ===== */
+.kh-pena{color:#8a5a00;font-weight:700}
+.kh-otomatis{display:block;font-size:11px;color:#868e96;margin-top:2px;font-weight:400}
+.kh-c-K{background:#fff3bf;color:#8a5a00}
+.kh-riwayat{background:#fff9db;border:1px solid #ffe066;border-radius:8px;padding:8px 10px;font-size:12px;color:#8a5a00;margin-bottom:10px}
+.kh-form{margin-top:14px;padding-top:12px;border-top:1px solid var(--garis)}
+.kh-pil{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.kh-pil-btn{border:2px solid #e9ecef;background:#fff;border-radius:8px;padding:8px 4px;font-weight:700;font-size:13px;cursor:pointer}
+.kh-pil-btn.dipilih{border-color:var(--aksen);background:#eef3ff;color:var(--aksen)}
+#khAlasan{width:100%;border:1px solid var(--garis);border-radius:8px;padding:8px;font-size:13px;font-family:inherit}
+.kh-info{background:#e7f5ff;color:#1864ab;border-radius:8px;padding:8px 10px;font-size:12px;margin-top:10px}
 
 </style>
 </head>
@@ -3798,6 +3809,7 @@ let _khTanggal = "";           // yyyy-mm-dd
 let _khBulan = "";             // yyyy-mm
 let _khHarian = null;          // hasil susun harian (untuk cetak & detail)
 let _khBulanan = null;         // hasil susun bulanan
+let _khPilih = null;           // pilihan status di form koreksi
 
 const KH_LABEL = { H:"Hadir", P:"Hadir sebagian", S:"Sakit", I:"Izin", A:"Alpa" };
 
@@ -3826,6 +3838,20 @@ function khStatusHarian(kode){
   return ["S","I","A"].sort((a,b) => n[b] - n[a])[0];   // seri → urutan S, I, A
 }
 function khNamaKelas(){ return (_khKelasList.find(k => k.id === _khKelasAktif) || {}).nama_kelas || ""; }
+/* Koreksi hanya admin atau wali kelas dari kelas aktif (RLS juga menjaga). */
+function khBolehKoreksi(){
+  if (ME.role === "admin") return true;
+  const k = _khKelasList.find(x => x.id === _khKelasAktif);
+  return !!(k && k.wali_kelas_id === ME.id);
+}
+/* Koreksi wali kelas (absensi_harian) untuk kelas aktif dalam rentang tanggal. */
+async function khAmbilKoreksi(dari, sampai){
+  const { data, error } = await sb.from("absensi_harian")
+    .select("siswa_id, tanggal, status, keterangan, diubah_nama, diubah_pada")
+    .eq("kelas_id", _khKelasAktif).gte("tanggal", dari).lte("tanggal", sampai);
+  if (error) { console.warn("absensi_harian:", error.message); return []; }   // tabel belum ada → tanpa koreksi
+  return data || [];
+}
 
 /* ---------- MUAT TAB ---------- */
 async function muatKehadiranHarian(wadahId){
@@ -3899,7 +3925,7 @@ async function khAmbilAbsensi(jurnalIds){
 
 /* ---------- SUSUN HARIAN (murni, tanpa query) ---------- */
 /* jadwal: slot roster kelas pada hari itu; jurnal: jurnal kelas pada tanggal itu. */
-function khSusunHarian(hari, jadwal, jurnal, absensi, siswa){
+function khSusunHarian(hari, jadwal, jurnal, absensi, siswa, koreksi){
   const bel = hari ? rsJamBel(hari) : [];
   const kolom = [];
   jadwal.forEach(j => {
@@ -3929,6 +3955,7 @@ function khSusunHarian(hari, jadwal, jurnal, absensi, siswa){
     k.waktu = (w1 && w2) ? (w1.mulai + "-" + w2.selesai) : "";
   });
 
+  const korPer = {}; (koreksi || []).forEach(k => korPer[k.siswa_id] = k);
   const absPer = {};   // jurnal_id|siswa_id → absensi
   absensi.forEach(a => { absPer[a.jurnal_id + "|" + a.siswa_id] = a; });
   const baris = siswa.map(s => {
@@ -3937,13 +3964,15 @@ function khSusunHarian(hari, jadwal, jurnal, absensi, siswa){
       const a = absPer[k.jurnal.id + "|" + s.id];
       return a ? { kode: khKode(a.status), ket: a.keterangan || "" } : { kode:"-" };
     });
-    const status = khStatusHarian(sel.map(x => x.kode).filter(x => "HSIA".includes(x) && x.length === 1));
-    return { siswa: s, sel, status };
+    const auto = khStatusHarian(sel.map(x => x.kode).filter(x => "HSIA".includes(x) && x.length === 1));
+    const kor = korPer[s.id] || null;
+    return { siswa: s, sel, auto, kor, status: kor ? kor.status : auto };
   });
-  const ringkas = { H:0, P:0, S:0, I:0, A:0 };
-  baris.forEach(b => { if (b.status) ringkas[b.status]++; });
+  const ringkas = { H:0, P:0, S:0, I:0, A:0, K:0 };
+  baris.forEach(b => { if (b.status) ringkas[b.status]++; if (b.kor) ringkas.K++; });
   const belum = kolom.filter(k => !k.jurnal);
-  return { kolom, baris, ringkas, belum };
+  const adaJurnal = kolom.some(k => k.jurnal);
+  return { kolom, baris, ringkas, belum, adaJurnal };
 }
 
 /* ---------- TAMPILAN HARIAN ---------- */
@@ -3972,8 +4001,11 @@ async function khRenderHarian(){
     if (jurnalRes.error) throw new Error(jurnalRes.error.message);
     const jurnal = jurnalRes.data || [];
     const jadwal = jadwalRes.error ? [] : (jadwalRes.data || []);   // tanpa akses jadwal → kolom dari jurnal saja
-    const absensi = jurnal.length ? await khAmbilAbsensi(jurnal.map(j => j.id)) : [];
-    _khHarian = khSusunHarian(hari, jadwal, jurnal, absensi, siswa);
+    const [absensi, koreksi] = await Promise.all([
+      jurnal.length ? khAmbilAbsensi(jurnal.map(j => j.id)) : Promise.resolve([]),
+      khAmbilKoreksi(_khTanggal, _khTanggal)
+    ]);
+    _khHarian = khSusunHarian(hari, jadwal, jurnal, absensi, siswa, koreksi);
     _khHarian.tanggal = _khTanggal; _khHarian.kelas = khNamaKelas();
     khGambarHarian();
   } catch (e) {
@@ -3988,16 +4020,24 @@ function khSelHtml(c){
   if (c.kode === "-") return '<td class="kh-kosong" title="Tidak tercatat di absensi">·</td>';
   return '<td class="kh-' + c.kode + '"' + (c.ket ? ' title="' + esc(c.ket) + '"' : '') + '>' + c.kode + (c.ket ? '*' : '') + '</td>';
 }
+function khStatusSel(b, cetak){
+  if (!b.kor) return khBadge(b.status);
+  return '<span class="kh-pena">✎</span> ' + khBadge(b.status) +
+    (cetak ? '' : '<span class="kh-otomatis">otomatis: ' + (b.auto ? KH_LABEL[b.auto] : "—") + '</span>');
+}
 function khBadge(st){ return st ? '<span class="kh-st kh-st-' + st + '">' + (st === "P" ? "⚠ " : "") + KH_LABEL[st] + '</span>' : '<span style="color:#adb5bd">—</span>'; }
 
 function khTabelHarian(d, cetak){
+  const aksi = !cetak && khBolehKoreksi() && d.adaJurnal;
   let h = '<table class="kh-tabel"><thead><tr><th>No</th><th style="text-align:left">Nama Siswa</th>' +
     d.kolom.map(k => '<th>Jam ' + esc(k.jam) + '<small>' + esc(k.kode) + (k.waktu && !cetak ? ' · ' + esc(k.waktu) : '') + '</small></th>').join("") +
-    '<th>Status Harian</th></tr></thead><tbody>';
+    '<th>Status Harian</th>' + (aksi ? '<th>Aksi</th>' : '') + '</tr></thead><tbody>';
   h += d.baris.map((b, i) => '<tr class="' + (b.status === "P" ? "kh-waspada" : "") + '"><td>' + (i+1) + '</td>' +
     '<td class="kh-nm">' + (cetak ? esc(b.siswa.nama_siswa)
-      : '<a href="#" onclick="khDetailHarian(' + i + ');return false">' + esc(b.siswa.nama_siswa) + '</a>') + '</td>' +
-    b.sel.map(khSelHtml).join("") + '<td>' + khBadge(b.status) + '</td></tr>').join("");
+      : '<a class="ra-nama-link" onclick="khDetailHarian(' + i + ')">' + esc(b.siswa.nama_siswa) + '</a>') + '</td>' +
+    b.sel.map(khSelHtml).join("") + '<td>' + khStatusSel(b, cetak) + '</td>' +
+    (aksi ? '<td><button class="btn btn-ghost btn-sm" onclick="khDetailHarian(' + i + ')">✎ Koreksi</button></td>' : '') +
+    '</tr>').join("");
   return h + '</tbody></table>';
 }
 function khRingkasHtml(d){
@@ -4006,7 +4046,8 @@ function khRingkasHtml(d){
   return '<div class="kh-chips">' +
     chip("kh-c-H", r.H, "Hadir penuh") + chip("kh-c-P", r.P, "⚠ Hadir sebagian") +
     chip("kh-c-S", r.S, "Sakit") + chip("kh-c-I", r.I, "Izin") + chip("kh-c-A", r.A, "Alpa") +
-    chip("kh-c-B", d.belum.length + " dari " + jmlJam, "Jam belum diabsen") + '</div>';
+    chip("kh-c-B", d.belum.length + " dari " + jmlJam, "Jam belum diabsen") +
+    (r.K ? chip("kh-c-K", r.K, "✎ Dikoreksi") : '') + '</div>';
 }
 function khGambarHarian(){
   const d = _khHarian;
@@ -4019,16 +4060,18 @@ function khGambarHarian(){
     '<div style="overflow-x:auto">' + khTabelHarian(d, false) + '</div>' +
     '<div class="kh-legend"><span><i class="kh-H"></i>Hadir</span><span><i class="kh-S"></i>Sakit</span><span><i class="kh-I"></i>Izin</span>' +
       '<span><i class="kh-A"></i>Alpa</span><span><i class="kh-belum"></i>Jurnal belum diisi</span><span><i style="background:#fff9db"></i>Hadir sebagian</span>' +
-      '<span>* = ada keterangan (arahkan kursor)</span></div>' +
+      '<span>* = ada keterangan (arahkan kursor)</span><span>✎ = dikoreksi wali kelas</span></div>' +
     (d.belum.length ? '<div class="kh-box kh-box-kuning"><b>Belum diabsen:</b> ' +
       d.belum.map(k => 'Jam ' + esc(k.jam) + ' · ' + esc(k.kode) + ' (' + esc(k.mapel) + ') · ' + esc(k.guru)).join("; ") +
       '. <span style="opacity:.8">Status harian dihitung dari jam yang sudah diisi.</span></div>' : '') +
-    '<div style="font-size:12px;color:#6b7280;margin-top:8px">Klik nama siswa untuk rincian per jam.</div>';
+    '<div style="font-size:12px;color:#6b7280;margin-top:8px">Klik nama siswa untuk rincian per jam' +
+      (khBolehKoreksi() && d.adaJurnal ? ' dan koreksi status harian' : '') + '.</div>';
 }
 window.khDetailHarian = (i) => {
   const d = _khHarian, b = d && d.baris[i]; if (!b) return;
-  const isi = '<div style="margin-bottom:8px">' + esc(khTglPanjang(d.tanggal)) + ' · Status harian: ' + khBadge(b.status) + '</div>' +
-    '<table class="kh-tabel"><thead><tr><th>Jam</th><th style="text-align:left">Mapel</th><th style="text-align:left">Guru</th><th>Status</th><th style="text-align:left">Keterangan</th></tr></thead><tbody>' +
+  const boleh = khBolehKoreksi() && d.adaJurnal;
+  _khPilih = b.kor ? b.kor.status : null;
+  const rinci = '<table class="kh-tabel"><thead><tr><th>Jam</th><th style="text-align:left">Mapel</th><th style="text-align:left">Guru</th><th>Status</th><th style="text-align:left">Keterangan</th></tr></thead><tbody>' +
     d.kolom.map((k, j) => {
       const c = b.sel[j];
       const st = c.kode === "belum" ? '<span style="color:#adb5bd">Belum diabsen</span>' : c.kode === "-" ? '<span style="color:#adb5bd">Tidak tercatat</span>' : KH_LABEL[c.kode];
@@ -4037,11 +4080,65 @@ window.khDetailHarian = (i) => {
         '<td class="' + ("HSIA".includes(c.kode) && c.kode.length === 1 ? "kh-" + c.kode : "") + '">' + st + '</td>' +
         '<td style="text-align:left">' + esc(c.ket || "") + '</td></tr>';
     }).join("") + '</tbody></table>';
+  const riwayat = b.kor ? '<div class="kh-riwayat">✎ Dikoreksi oleh <b>' + esc(b.kor.diubah_nama || "-") + '</b>' +
+    (b.kor.diubah_pada ? ' · ' + esc(new Date(b.kor.diubah_pada).toLocaleString("id-ID", { dateStyle:"medium", timeStyle:"short" })) : '') +
+    '<br>Alasan: ' + esc(b.kor.keterangan || "-") + '</div>' : '';
+  const form = !boleh ? '' :
+    '<div class="kh-form"><div style="font-weight:700;margin-bottom:4px">Status final hari ini</div>' +
+      '<div class="kh-pil" id="khPil"></div>' +
+      '<div style="font-weight:700;margin:10px 0 4px">Alasan / keterangan <span style="color:#c92a2a">*</span></div>' +
+      '<textarea id="khAlasan" rows="2" placeholder="mis. surat dokter menyusul, izin pulang karena sakit">' + esc(b.kor ? b.kor.keterangan : "") + '</textarea>' +
+      '<div class="kh-info">Koreksi hanya mengubah <b>status harian</b> untuk rekap &amp; rapor. Absensi per jam dari guru mapel tetap seperti aslinya.</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">' +
+        (b.kor ? '<button class="btn btn-ghost btn-sm" style="color:#c92a2a" onclick="khHapusKoreksi(' + i + ')">↺ Kembalikan ke otomatis</button>' : '') +
+        '<span style="flex:1"></span>' +
+        '<button class="btn btn-sm" style="background:#2b8a3e" id="khBtnSimpan" onclick="khSimpanKoreksi(' + i + ')">Simpan Koreksi</button>' +
+      '</div></div>';
+  const isi = '<div style="margin-bottom:8px">' + esc(khTglPanjang(d.tanggal)) + ' · Status harian: ' + khStatusSel(b, false) + '</div>' +
+    riwayat + rinci + form;
   bukaModalDetailAbsensi(b.siswa.nama_siswa, b.siswa.nis || "-", d.kelas, isi);
+  if (boleh) khGambarPilihan();
+};
+function khGambarPilihan(){
+  const el = $("khPil"); if (!el) return;
+  el.innerHTML = ["H","S","I","A"].map(k => '<button type="button" class="kh-pil-btn' + (_khPilih === k ? " dipilih" : "") +
+    '" onclick="khPilihStatus(\'' + k + '\')">' + KH_LABEL[k] + '</button>').join("");
+}
+window.khPilihStatus = (k) => { _khPilih = k; khGambarPilihan(); };
+window.khSimpanKoreksi = async (i) => {
+  const d = _khHarian, b = d && d.baris[i]; if (!b) return;
+  if (!khBolehKoreksi()) return toast("gagal: Hanya wali kelas kelas ini atau admin yang bisa mengoreksi.");
+  const alasan = ($("khAlasan").value || "").trim();
+  if (!_khPilih) return toast("warning: Pilih status final dulu.");
+  if (!alasan) return toast("warning: Alasan wajib diisi.");
+  const btn = $("khBtnSimpan"); if (btn) btn.disabled = true;
+  try {
+    const { error } = await sb.from("absensi_harian").upsert({
+      siswa_id: b.siswa.id, kelas_id: _khKelasAktif, tanggal: d.tanggal, status: _khPilih, keterangan: alasan
+    }, { onConflict: "siswa_id,tanggal" });
+    if (error) throw new Error(error.message);
+    tutupModalDetailAbsensi();
+    toast("sukses: Koreksi tersimpan.");
+    khRenderHarian();
+  } catch (e) {
+    if (btn) btn.disabled = false;
+    toast("gagal: Gagal menyimpan koreksi: " + e.message);
+  }
+};
+window.khHapusKoreksi = async (i) => {
+  const d = _khHarian, b = d && d.baris[i]; if (!b || !b.kor) return;
+  if (!(await konfirmasi("Kembalikan ke Otomatis", "Hapus koreksi untuk " + b.siswa.nama_siswa + " dan kembali ke status otomatis?", { bahaya:true }))) return;
+  try {
+    const { error } = await sb.from("absensi_harian").delete().eq("siswa_id", b.siswa.id).eq("tanggal", d.tanggal);
+    if (error) throw new Error(error.message);
+    tutupModalDetailAbsensi();
+    toast("sukses: Koreksi dihapus.");
+    khRenderHarian();
+  } catch (e) { toast("gagal: Gagal menghapus koreksi: " + e.message); }
 };
 
 /* ---------- SUSUN BULANAN (murni) ---------- */
-function khSusunBulanan(jurnal, absensi, siswa){
+function khSusunBulanan(jurnal, absensi, siswa, koreksi){
   const tglJurnal = {}; jurnal.forEach(j => tglJurnal[j.id] = j.tanggal);
   const hariEfektif = [...new Set(jurnal.map(j => j.tanggal))].sort();
   const per = {};   // siswa_id → tanggal → [kode]
@@ -4049,16 +4146,25 @@ function khSusunBulanan(jurnal, absensi, siswa){
     const t = tglJurnal[a.jurnal_id]; if (!t) return;
     ((per[a.siswa_id] = per[a.siswa_id] || {})[t] = per[a.siswa_id][t] || []).push(khKode(a.status));
   });
+  const efektifSet = new Set(hariEfektif);
+  const korPer = {};   // siswa_id|tanggal → koreksi (hanya hari efektif)
+  (koreksi || []).forEach(k => { if (efektifSet.has(k.tanggal)) korPer[k.siswa_id + "|" + k.tanggal] = k; });
   const baris = siswa.map(s => {
     const n = { H:0, P:0, S:0, I:0, A:0 }, hariTidakPenuh = [];
-    Object.entries(per[s.id] || {}).forEach(([t, kode]) => {
-      const st = khStatusHarian(kode); if (!st) return;
+    let dikoreksi = 0;
+    const tanggalSiswa = new Set(Object.keys(per[s.id] || {}));
+    hariEfektif.forEach(t => { if (korPer[s.id + "|" + t]) tanggalSiswa.add(t); });
+    tanggalSiswa.forEach(t => {
+      const kor = korPer[s.id + "|" + t];
+      const st = kor ? kor.status : khStatusHarian((per[s.id] || {})[t] || []);
+      if (!st) return;
       n[st]++;
-      if (st !== "H") hariTidakPenuh.push({ tanggal:t, status:st });
+      if (kor) dikoreksi++;
+      if (st !== "H" || kor) hariTidakPenuh.push({ tanggal:t, status:st, kor: !!kor });
     });
     const hadir = n.H + n.P, tercatat = hadir + n.S + n.I + n.A;
     hariTidakPenuh.sort((a,b) => a.tanggal.localeCompare(b.tanggal));
-    return { siswa: s, efektif: hariEfektif.length, hadir, sebagian: n.P, sakit: n.S, izin: n.I, alpa: n.A, tercatat,
+    return { siswa: s, efektif: hariEfektif.length, hadir, sebagian: n.P, sakit: n.S, izin: n.I, alpa: n.A, tercatat, dikoreksi,
       persen: tercatat ? hadir / tercatat * 100 : null, hariTidakPenuh };
   });
   return { hariEfektif: hariEfektif.length, baris };
@@ -4085,8 +4191,11 @@ async function khRenderBulanan(){
     ]);
     if (jurnalRes.error) throw new Error(jurnalRes.error.message);
     const jurnal = jurnalRes.data || [];
-    const absensi = jurnal.length ? await khAmbilAbsensi(jurnal.map(j => j.id)) : [];
-    _khBulanan = khSusunBulanan(jurnal, absensi, siswa);
+    const [absensi, koreksi] = await Promise.all([
+      jurnal.length ? khAmbilAbsensi(jurnal.map(j => j.id)) : Promise.resolve([]),
+      khAmbilKoreksi(awal, akhir)
+    ]);
+    _khBulanan = khSusunBulanan(jurnal, absensi, siswa, koreksi);
     _khBulanan.bulan = _khBulan; _khBulanan.kelas = khNamaKelas();
     khGambarBulanan();
   } catch (e) {
@@ -4098,12 +4207,13 @@ window.khPilihBulan = (v) => { if (v) { _khBulan = v; khRenderBulanan(); } };
 function khTabelBulanan(d, cetak){
   const f = v => v === null ? "-" : v.toFixed(1).replace(".", ",") + "%";
   return '<table class="kh-tabel"><thead><tr><th>No</th><th>NIS</th><th style="text-align:left">Nama Siswa</th><th>Hari Efektif</th>' +
-    '<th>Hadir</th><th>Sakit</th><th>Izin</th><th>Tanpa Ket.</th><th>⚠ Hadir Sebagian</th><th>% Hadir</th></tr></thead><tbody>' +
+    '<th>Hadir</th><th>Sakit</th><th>Izin</th><th>Tanpa Ket.</th><th>⚠ Hadir Sebagian</th><th>✎ Dikoreksi</th><th>% Hadir</th></tr></thead><tbody>' +
     d.baris.map((b, i) => '<tr class="' + (b.sebagian ? "kh-waspada" : "") + '"><td>' + (i+1) + '</td><td>' + esc(b.siswa.nis || "-") + '</td>' +
       '<td class="kh-nm">' + (cetak ? esc(b.siswa.nama_siswa)
-        : '<a href="#" onclick="khDetailBulanan(' + i + ');return false">' + esc(b.siswa.nama_siswa) + '</a>') + '</td>' +
+        : '<a class="ra-nama-link" onclick="khDetailBulanan(' + i + ')">' + esc(b.siswa.nama_siswa) + '</a>') + '</td>' +
       '<td>' + b.efektif + '</td><td>' + b.hadir + '</td><td>' + b.sakit + '</td><td>' + b.izin + '</td><td>' + b.alpa + '</td>' +
-      '<td>' + (b.sebagian ? '<b>' + b.sebagian + '</b>' : 0) + '</td><td>' + f(b.persen) + '</td></tr>').join("") +
+      '<td>' + (b.sebagian ? '<b>' + b.sebagian + '</b>' : 0) + '</td>' +
+      '<td>' + (b.dikoreksi ? '<b class="kh-pena">' + b.dikoreksi + '</b>' : 0) + '</td><td>' + f(b.persen) + '</td></tr>').join("") +
     '</tbody></table>';
 }
 function khGambarBulanan(){
@@ -4113,6 +4223,7 @@ function khGambarBulanan(){
   $("khBulananIsi").innerHTML = '<div style="overflow-x:auto">' + khTabelBulanan(d, false) + '</div>' +
     '<div class="kh-box kh-box-abu"><b>Cara hitung (satuan hari, untuk rapor):</b> Hari efektif = hari yang punya minimal 1 jurnal ' +
     'untuk kelas ini (' + d.hariEfektif + ' hari). Hadir sebagian dihitung <b>Hadir</b>, jumlah harinya ditampilkan di kolom ⚠. ' +
+    'Hari yang dikoreksi wali kelas memakai status koreksi (kolom ✎). ' +
     'Klik nama siswa untuk melihat tanggal-tanggalnya.</div>';
 }
 window.khDetailBulanan = (i) => {
@@ -4121,7 +4232,7 @@ window.khDetailBulanan = (i) => {
     (b.hariTidakPenuh.length
       ? '<table class="kh-tabel"><thead><tr><th style="text-align:left">Tanggal</th><th>Status Harian</th></tr></thead><tbody>' +
         b.hariTidakPenuh.map(x => '<tr><td style="text-align:left"><a href="#" onclick="khBukaTanggal(\'' + x.tanggal + '\');return false">' +
-          esc(khTglPanjang(x.tanggal)) + '</a></td><td>' + khBadge(x.status) + '</td></tr>').join("") + '</tbody></table>'
+          esc(khTglPanjang(x.tanggal)) + '</a></td><td>' + (x.kor ? '<span class="kh-pena">✎</span> ' : '') + khBadge(x.status) + '</td></tr>').join("") + '</tbody></table>'
       : '<div class="empty">Hadir penuh setiap hari tercatat. 👍</div>');
   bukaModalDetailAbsensi(b.siswa.nama_siswa, b.siswa.nis || "-", d.kelas, isi);
 };
@@ -4156,7 +4267,7 @@ async function khCetak(judul, meta, isi, orientasi){
     '.kh-tabel{width:100%;border-collapse:collapse}.kh-tabel th,.kh-tabel td{border:1px solid #888;padding:3px 4px;text-align:center;font-size:10px}' +
     '.kh-tabel th{background:#e7ecf7}.kh-tabel th small{display:block;font-weight:normal;font-size:8.5px}.kh-nm{text-align:left!important}' +
     '.kh-H{background:#ebfbee}.kh-S{background:#e7f5ff}.kh-I{background:#f3f0ff}.kh-A{background:#ffe3e3}.kh-belum{background:#eee;color:#999}.kh-kosong{color:#999}' +
-    'tr.kh-waspada td{background-color:#fff3bf}.kh-st{font-weight:bold}' +
+    'tr.kh-waspada td{background-color:#fff3bf}.kh-st{font-weight:bold}.kh-pena{font-weight:bold}' +
     '.kh-chips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.kh-chip{border:1px solid #bbb;border-radius:4px;padding:3px 8px}.kh-chip b{margin-right:4px}' +
     '.catatan{font-size:10px;margin-top:6px}' +
     '.ttd{width:100%;margin-top:30px;border-collapse:collapse;page-break-inside:avoid}.ttd td{border:0;padding:0 0 2px;font-size:12px}' +
@@ -4176,7 +4287,7 @@ window.khCetakHarian = async () => {
   const ringkas = '<div class="kh-chips"><span class="kh-chip"><b>' + r.H + '</b>Hadir penuh</span><span class="kh-chip"><b>' + r.P + '</b>Hadir sebagian</span>' +
     '<span class="kh-chip"><b>' + r.S + '</b>Sakit</span><span class="kh-chip"><b>' + r.I + '</b>Izin</span><span class="kh-chip"><b>' + r.A + '</b>Alpa</span></div>';
   const catatan = '<div class="catatan">H = Hadir, S = Sakit, I = Izin, A = Alpa, – = jurnal belum diisi, * = ada keterangan. ' +
-    'Baris berwarna = hadir sebagian.' + (d.belum.length ? ' Belum diabsen: ' + d.belum.map(k => 'jam ' + esc(k.jam) + ' (' + esc(k.mapel) + ')').join(", ") + '.' : '') + '</div>';
+    'Baris berwarna = hadir sebagian. ✎ = dikoreksi wali kelas.' + (d.belum.length ? ' Belum diabsen: ' + d.belum.map(k => 'jam ' + esc(k.jam) + ' (' + esc(k.mapel) + ')').join(", ") + '.' : '') + '</div>';
   await khCetak("Kehadiran Harian Siswa", '<b>Kelas:</b> ' + esc(d.kelas) + ' &nbsp; <b>Hari/Tanggal:</b> ' + esc(khTglPanjang(d.tanggal)),
     ringkas + khTabelHarian(d, true) + catatan, d.kolom.length > 8 ? "landscape" : "portrait");
 };
@@ -4185,7 +4296,7 @@ window.khCetakBulanan = async () => {
   if (!d || !d.hariEfektif || !d.baris.length) return toast("Belum ada data untuk dicetak.");
   await khCetak("Rekap Kehadiran Bulanan (Hari)", '<b>Kelas:</b> ' + esc(d.kelas) + ' &nbsp; <b>Bulan:</b> ' + esc(khNamaBulan(d.bulan)) +
     ' &nbsp; <b>Hari efektif:</b> ' + d.hariEfektif,
-    khTabelBulanan(d, true) + '<div class="catatan">Hadir sebagian dihitung Hadir; jumlah harinya pada kolom ⚠. Baris berwarna = ada hari hadir sebagian.</div>',
+    khTabelBulanan(d, true) + '<div class="catatan">Hadir sebagian dihitung Hadir; jumlah harinya pada kolom ⚠. Kolom ✎ = jumlah hari yang dikoreksi wali kelas. Baris berwarna = ada hari hadir sebagian.</div>',
     "portrait");
 };
 window.khExcelBulanan = () => {
@@ -4193,10 +4304,10 @@ window.khExcelBulanan = () => {
   if (!d || !d.baris.length) return toast("Belum ada data untuk diekspor.");
   if (typeof XLSX === "undefined") return toast("Library Excel belum termuat.");
   const data = d.baris.map((b, i) => ({ "No": i+1, "NIS": b.siswa.nis || "", "Nama": b.siswa.nama_siswa, "Hari Efektif": b.efektif,
-    "Hadir": b.hadir, "Sakit": b.sakit, "Izin": b.izin, "Tanpa Keterangan": b.alpa, "Hadir Sebagian": b.sebagian,
+    "Hadir": b.hadir, "Sakit": b.sakit, "Izin": b.izin, "Tanpa Keterangan": b.alpa, "Hadir Sebagian": b.sebagian, "Dikoreksi Wali": b.dikoreksi,
     "% Hadir": b.persen === null ? "" : Number(b.persen.toFixed(1)) }));
   const ws = XLSX.utils.json_to_sheet(data);
-  ws["!cols"] = [{wch:5},{wch:12},{wch:26},{wch:12},{wch:7},{wch:7},{wch:7},{wch:16},{wch:14},{wch:9}];
+  ws["!cols"] = [{wch:5},{wch:12},{wch:26},{wch:12},{wch:7},{wch:7},{wch:7},{wch:16},{wch:14},{wch:14},{wch:9}];
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Kehadiran " + d.bulan);
   XLSX.writeFile(wb, ("Kehadiran-Harian-" + d.kelas + "-" + d.bulan + ".xlsx").replace(/[^\w\-.]/g, "_"));
   toast("Excel diunduh.");
