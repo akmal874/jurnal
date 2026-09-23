@@ -6254,7 +6254,12 @@ window.renderDaftarJurnal = async function(){
 
 function gambarHalamanJurnal(){
   if (!_jurnalCache.length) {
-    $("jurnalList").innerHTML = '<div class="empty">Tidak ada jurnal yang cocok.</div>'; return;
+    const filterLuar = $("fJadwal") && $("fJadwal").value === "luar";
+    $("jurnalList").innerHTML = filterLuar
+      ? '<div class="card" style="background:#ebfbee;border-color:#b2f2bb;color:#2b8a3e">' +
+          '✓ <b>Tidak ada jurnal di luar jadwal</b> pada rentang ini — semua jurnal sesuai roster.</div>'
+      : '<div class="empty">Tidak ada jurnal yang cocok.</div>';
+    return;
   }
   const bisaVerif = (ME.role === "admin" || ME.role === "kepsek");
   const bisaHapus = (ME.role === "admin");
