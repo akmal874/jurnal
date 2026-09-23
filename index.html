@@ -416,6 +416,34 @@
 .rs-pop h3{margin:0 0 10px;color:#1e3a5f;font-size:16px}
 .rs-pop-baris{display:flex;justify-content:space-between;gap:16px;padding:6px 0;border-bottom:1px solid #f1f3f5;font-size:14px}
 .rs-pop-baris b{color:#3b5bdb;text-align:right}
+/* ===== KEHADIRAN HARIAN (Wali Kelas) ===== */
+.kh-tabel{border-collapse:collapse;width:100%;font-size:12.5px}
+.kh-tabel th,.kh-tabel td{border:1px solid #dbe0ea;padding:4px 6px;text-align:center;white-space:nowrap}
+.kh-tabel thead th{background:#1e3a5f;color:#fff;font-size:11.5px}
+.kh-tabel thead th small{display:block;font-weight:400;opacity:.85;font-size:10px}
+.kh-tabel .kh-nm{text-align:left}
+.kh-H{background:#ebfbee;color:#2b8a3e;font-weight:700}
+.kh-S{background:#e7f5ff;color:#1864ab;font-weight:700}
+.kh-I{background:#f3f0ff;color:#5f3dc4;font-weight:700}
+.kh-A{background:#fff0f0;color:#c92a2a;font-weight:700}
+.kh-belum{background:repeating-linear-gradient(45deg,#f8f9fa,#f8f9fa 4px,#eceff3 4px,#eceff3 8px);color:#adb5bd}
+.kh-kosong{color:#ced4da}
+.kh-tabel tr.kh-waspada td{background-color:#fff9db}
+.kh-tabel tr.kh-waspada td.kh-nm{box-shadow:inset 4px 0 0 #f08c00}
+.kh-st{font-weight:700;border-radius:99px;padding:2px 10px;display:inline-block;font-size:12px}
+.kh-st-H{background:#d3f9d8;color:#2b8a3e}.kh-st-P{background:#ffe8cc;color:#d9480f}
+.kh-st-S{background:#d0ebff;color:#1864ab}.kh-st-I{background:#e5dbff;color:#5f3dc4}.kh-st-A{background:#ffe3e3;color:#c92a2a}
+.kh-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.kh-chip{border-radius:10px;padding:8px 12px;font-size:13px;min-width:110px}
+.kh-chip b{display:block;font-size:20px}
+.kh-c-H{background:#ebfbee;color:#2b8a3e}.kh-c-P{background:#fff4e6;color:#d9480f}.kh-c-S{background:#e7f5ff;color:#1864ab}
+.kh-c-I{background:#f3f0ff;color:#5f3dc4}.kh-c-A{background:#fff0f0;color:#c92a2a}.kh-c-B{background:#f1f3f5;color:#495057}
+.kh-legend{font-size:12px;color:#6b7280;margin-top:8px;display:flex;gap:12px;flex-wrap:wrap}
+.kh-legend span{display:inline-flex;align-items:center;gap:4px}
+.kh-legend i{display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid #ddd}
+.kh-box{padding:10px 12px;border-radius:8px;font-size:13px;margin-top:10px}
+.kh-box-kuning{background:#fff8e6;border:1px solid #ffe08a;color:#8a5a00}
+.kh-box-abu{background:#f8f9fa;border:1px solid #e9ecef;color:#495057}
 
 </style>
 </head>
@@ -3705,6 +3733,7 @@ let _wkTab = "absensi";   // tab aktif terakhir
 function tabWaliTampil(tab){
   if (ME.role === "admin") return true;
   if (tab === "absensi") return !!ME.izin_absensi;
+  if (tab === "harian")  return !!ME.izin_absensi;
   if (tab === "catatan") return !!ME.izin_catatan;
   if (tab === "kartu")   return !!ME.izin_kartu;
   if (tab === "nilai")   return !!ME.izin_rekapnilai;
@@ -3726,6 +3755,7 @@ async function muatWaliKelas(){
 
   const tombol =
     (tabWaliTampil("absensi") ? '<button id="wkTabAbsensi" class="' + (_wkTab==="absensi"?"aktif":"") + '" onclick="gantiTabWali(\'absensi\')">Rekap Absensi</button>' : '') +
+    (tabWaliTampil("harian")  ? '<button id="wkTabHarian" class="' + (_wkTab==="harian"?"aktif":"") + '" onclick="gantiTabWali(\'harian\')">Kehadiran Harian</button>' : '') +
     (tabWaliTampil("catatan") ? '<button id="wkTabCatatan" class="' + (_wkTab==="catatan"?"aktif":"") + '" onclick="gantiTabWali(\'catatan\')">Catatan</button>' : '') +
     (tabWaliTampil("kartu")   ? '<button id="wkTabKartu" class="' + (_wkTab==="kartu"?"aktif":"") + '" onclick="gantiTabWali(\'kartu\')">Kartu Siswa</button>' : '') +
     (tabWaliTampil("nilai")   ? '<button id="wkTabNilai" class="' + (_wkTab==="nilai"?"aktif":"") + '" onclick="gantiTabWali(\'nilai\')">Rekap Nilai</button>' : '');
@@ -3743,7 +3773,7 @@ window.gantiTabWali = async (tab) => {
   if (!tabWaliTampil(tab)) return;   // jaga-jaga: tab tak diizinkan
   _wkTab = tab;
   document.querySelectorAll(".subtab-wk button").forEach(b => b.classList.remove("aktif"));
-  const idBtn = tab === "catatan" ? "wkTabCatatan" : (tab === "kartu" ? "wkTabKartu" : (tab === "nilai" ? "wkTabNilai" : "wkTabAbsensi"));
+  const idBtn = { catatan:"wkTabCatatan", kartu:"wkTabKartu", nilai:"wkTabNilai", harian:"wkTabHarian" }[tab] || "wkTabAbsensi";
   const btn = $(idBtn);
   if (btn) btn.classList.add("aktif");
   await tampilkanTabWali();
@@ -3753,8 +3783,424 @@ async function tampilkanTabWali(){
   if (_wkTab === "catatan") await muatCatatan("wkIsi");
   else if (_wkTab === "kartu") await muatKartuSiswa("wkIsi");
   else if (_wkTab === "nilai") await muatRekapNilai("wkIsi");
+  else if (_wkTab === "harian") await muatKehadiranHarian("wkIsi");
   else await muatRekapAbsensi("wkIsi");
 }
+
+/* ==================== WALI KELAS: KEHADIRAN HARIAN ==================== */
+/* Status harian dihitung dari absensi per jam (jurnal guru mapel). Tidak ada input manual.
+   Aturan: semua Hadir → Hadir; ada Hadir + ada S/I/A → Hadir sebagian (dihitung Hadir, ditandai);
+   tanpa Hadir → status terbanyak (S/I/A). */
+let _khKelasList = [];
+let _khKelasAktif = "";
+let _khView = "harian";        // "harian" | "bulanan"
+let _khTanggal = "";           // yyyy-mm-dd
+let _khBulan = "";             // yyyy-mm
+let _khHarian = null;          // hasil susun harian (untuk cetak & detail)
+let _khBulanan = null;         // hasil susun bulanan
+
+const KH_LABEL = { H:"Hadir", P:"Hadir sebagian", S:"Sakit", I:"Izin", A:"Alpa" };
+
+/* ---------- HELPER ---------- */
+function khPad(n){ return String(n).padStart(2, "0"); }
+function khTglLokal(d){ return d.getFullYear() + "-" + khPad(d.getMonth()+1) + "-" + khPad(d.getDate()); }  // hindari geser UTC
+function khGeserTgl(tgl, n){ const d = new Date(tgl + "T00:00:00"); d.setDate(d.getDate() + n); return khTglLokal(d); }
+function khHariKe(tgl){ const g = new Date(tgl + "T00:00:00").getDay(); return (g >= 1 && g <= 5) ? g : 0; }   // 1=Senin..5=Jumat
+function khTglPanjang(tgl){
+  return new Date(tgl + "T00:00:00").toLocaleDateString("id-ID", { weekday:"long", day:"numeric", month:"long", year:"numeric" });
+}
+function khNamaBulan(bln){
+  return new Date(bln + "-01T00:00:00").toLocaleDateString("id-ID", { month:"long", year:"numeric" });
+}
+/* "Hadir"/"hadir"/"H" → H; lainnya S/I/A. */
+function khKode(status){
+  const v = String(status || "").trim().charAt(0).toUpperCase();
+  return (v === "H" || v === "S" || v === "I") ? v : "A";
+}
+/* Status harian dari daftar kode per jam (yang sudah diabsen). */
+function khStatusHarian(kode){
+  if (!kode.length) return "";
+  if (kode.every(k => k === "H")) return "H";
+  if (kode.includes("H")) return "P";
+  const n = { S:0, I:0, A:0 }; kode.forEach(k => n[k]++);
+  return ["S","I","A"].sort((a,b) => n[b] - n[a])[0];   // seri → urutan S, I, A
+}
+function khNamaKelas(){ return (_khKelasList.find(k => k.id === _khKelasAktif) || {}).nama_kelas || ""; }
+
+/* ---------- MUAT TAB ---------- */
+async function muatKehadiranHarian(wadahId){
+  const WADAH = wadahId || "main";
+  $(WADAH).innerHTML = '<div class="card"><div class="page-kosong">Memuat...</div></div>';
+  let kelasSemua = [];
+  try { kelasSemua = await ambilSemua("kelas", "nama_kelas"); }
+  catch (e) { $(WADAH).innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat kelas: ' + esc(e.message) + '</div></div>'; return; }
+
+  if (ME.role === "guru") {
+    _khKelasList = kelasSemua.filter(k => k.wali_kelas_id === ME.id);
+    if (!_khKelasList.length) {
+      $(WADAH).innerHTML = '<div class="card"><h2>Kehadiran Harian</h2>' +
+        '<div style="color:#b78100;padding:16px">Kamu belum ditetapkan sebagai wali kelas mana pun. ' +
+        'Hubungi admin untuk menetapkan wali kelas di menu Kelas.</div></div>';
+      return;
+    }
+  } else {
+    _khKelasList = kelasSemua;
+    if (!_khKelasList.length) { $(WADAH).innerHTML = '<div class="card"><div class="empty">Belum ada kelas.</div></div>'; return; }
+  }
+  if (!_khKelasList.find(k => k.id === _khKelasAktif)) _khKelasAktif = _khKelasList[0].id;
+  if (!_khTanggal) _khTanggal = khTglLokal(new Date());
+  if (!_khBulan) _khBulan = _khTanggal.slice(0, 7);
+  await rsMuatWaktu();   // jam bel dari Roster (Waktu & Kegiatan)
+
+  const opsiKelas = _khKelasList.map(k => '<option value="' + esc(k.id) + '"' + (k.id === _khKelasAktif ? " selected" : "") + '>' +
+    esc(k.nama_kelas) + '</option>').join("");
+  $(WADAH).innerHTML =
+    '<div class="card"><h2>Kehadiran Harian</h2>' +
+      '<p style="color:#6b7280;font-size:13px;margin-bottom:8px">Status kehadiran per hari, dihitung otomatis dari absensi ' +
+        'yang diisi guru mapel di jurnal. "Hadir sebagian" dihitung Hadir, tetapi ditandai agar wali kelas waspada.</p>' +
+      '<div class="row" style="align-items:flex-end;gap:10px;flex-wrap:wrap">' +
+        '<div><label>Kelas</label><select id="khKelas" onchange="khGantiKelas(this.value)">' + opsiKelas + '</select></div>' +
+        '<div style="display:flex;gap:4px;flex:0 0 auto">' +
+          '<button class="btn btn-sm" id="khVHarian" onclick="khGantiView(\'harian\')">Harian</button>' +
+          '<button class="btn btn-sm btn-ghost" id="khVBulanan" onclick="khGantiView(\'bulanan\')">Rekap Bulanan</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div id="khIsi"></div>';
+  khGantiView(_khView);
+}
+
+window.khGantiKelas = (id) => { _khKelasAktif = id; khGantiView(_khView); };
+window.khGantiView = (v) => {
+  _khView = (v === "bulanan") ? "bulanan" : "harian";
+  const a = $("khVHarian"), b = $("khVBulanan");
+  if (a) a.className = "btn btn-sm" + (_khView === "harian" ? "" : " btn-ghost");
+  if (b) b.className = "btn btn-sm" + (_khView === "bulanan" ? "" : " btn-ghost");
+  return _khView === "bulanan" ? khRenderBulanan() : khRenderHarian();
+};
+
+/* ---------- AMBIL DATA ---------- */
+async function khAmbilSiswa(){
+  const { data, error } = await sb.from("siswa").select("id, nis, nama_siswa")
+    .eq("kelas_id", _khKelasAktif).eq("aktif", true).order("nama_siswa");
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+async function khAmbilAbsensi(jurnalIds){
+  const hasil = [];
+  for (let i = 0; i < jurnalIds.length; i += 200) {
+    const { data, error } = await sb.from("absensi").select("jurnal_id, siswa_id, status, keterangan")
+      .in("jurnal_id", jurnalIds.slice(i, i + 200));
+    if (error) throw new Error(error.message);
+    hasil.push(...(data || []));
+  }
+  return hasil;
+}
+
+/* ---------- SUSUN HARIAN (murni, tanpa query) ---------- */
+/* jadwal: slot roster kelas pada hari itu; jurnal: jurnal kelas pada tanggal itu. */
+function khSusunHarian(hari, jadwal, jurnal, absensi, siswa){
+  const bel = hari ? rsJamBel(hari) : [];
+  const kolom = [];
+  jadwal.forEach(j => {
+    const r = rsRentang(j.jam_ke); if (!r) return;
+    const kg = (j.guru && j.guru.kode_guru != null) ? j.guru.kode_guru : "?";
+    kolom.push({ r, jam: r[0] === r[1] ? String(r[0]) : r[0] + "–" + r[1],
+      kode: ((j.mapel && j.mapel.kode) || "?") + "-" + kg,
+      mapel: (j.mapel && j.mapel.nama_mapel) || "-", guru: (j.guru && j.guru.nama) || "-",
+      mapel_id: j.mapel_id, jurnal: null, dariRoster: true });
+  });
+  // pasangkan jurnal ke kolom roster (jam beririsan, utamakan mapel sama); sisanya jadi kolom tambahan
+  jurnal.forEach(jr => {
+    const r = rsRentang(jr.jam_ke);
+    let cocok = null;
+    if (r) {
+      const irisan = kolom.filter(k => !k.jurnal && k.dariRoster && k.r[0] <= r[1] && r[0] <= k.r[1]);
+      cocok = irisan.find(k => k.mapel_id === jr.mapel_id) || irisan[0] || null;
+    }
+    if (cocok) { cocok.jurnal = jr; return; }
+    kolom.push({ r, jam: r ? (r[0] === r[1] ? String(r[0]) : r[0] + "–" + r[1]) : (jr.jam_ke || "Lainnya"),
+      kode: "Tambahan", mapel: jr.mapel_nama || "-", guru: jr.guru_nama || "-",
+      mapel_id: jr.mapel_id, jurnal: jr, dariRoster: false });
+  });
+  kolom.sort((a,b) => (a.r ? a.r[0] : 999) - (b.r ? b.r[0] : 999));
+  kolom.forEach(k => {
+    const w1 = k.r && bel[k.r[0]-1], w2 = k.r && bel[k.r[1]-1];
+    k.waktu = (w1 && w2) ? (w1.mulai + "-" + w2.selesai) : "";
+  });
+
+  const absPer = {};   // jurnal_id|siswa_id → absensi
+  absensi.forEach(a => { absPer[a.jurnal_id + "|" + a.siswa_id] = a; });
+  const baris = siswa.map(s => {
+    const sel = kolom.map(k => {
+      if (!k.jurnal) return { kode:"belum" };
+      const a = absPer[k.jurnal.id + "|" + s.id];
+      return a ? { kode: khKode(a.status), ket: a.keterangan || "" } : { kode:"-" };
+    });
+    const status = khStatusHarian(sel.map(x => x.kode).filter(x => "HSIA".includes(x) && x.length === 1));
+    return { siswa: s, sel, status };
+  });
+  const ringkas = { H:0, P:0, S:0, I:0, A:0 };
+  baris.forEach(b => { if (b.status) ringkas[b.status]++; });
+  const belum = kolom.filter(k => !k.jurnal);
+  return { kolom, baris, ringkas, belum };
+}
+
+/* ---------- TAMPILAN HARIAN ---------- */
+async function khRenderHarian(){
+  $("khIsi").innerHTML =
+    '<div class="card">' +
+      '<div class="row" style="align-items:flex-end;gap:6px;flex-wrap:wrap;margin-bottom:10px">' +
+        '<button class="btn btn-sm btn-ghost" style="flex:0 0 auto" onclick="khGeser(-1)">‹</button>' +
+        '<div style="flex:0 0 auto"><label>Tanggal</label><input type="date" id="khTgl" value="' + esc(_khTanggal) + '" onchange="khPilihTgl(this.value)"></div>' +
+        '<button class="btn btn-sm btn-ghost" style="flex:0 0 auto" onclick="khGeser(1)">›</button>' +
+        '<button class="btn btn-sm btn-ghost" style="flex:0 0 auto" onclick="khPilihTgl(\'\')">Hari ini</button>' +
+        '<span style="align-self:center;color:#6b7280;font-size:13px">' + esc(khTglPanjang(_khTanggal)) + '</span>' +
+        '<span style="flex:1"></span>' +
+        '<button class="btn btn-sm" style="background:#2b8a3e;flex:0 0 auto" onclick="khCetakHarian()">🖨 Cetak</button>' +
+      '</div>' +
+      '<div id="khHarianIsi"><div class="page-kosong">Memuat...</div></div>' +
+    '</div>';
+  try {
+    const hari = khHariKe(_khTanggal);
+    const [siswa, jadwalRes, jurnalRes] = await Promise.all([
+      khAmbilSiswa(),
+      hari ? sb.from("jadwal").select("jam_ke, mapel_id, guru_id, mapel:mapel_id(nama_mapel, kode), guru:guru_id(nama, kode_guru)")
+        .eq("kelas_id", _khKelasAktif).eq("hari", hari) : Promise.resolve({ data: [] }),
+      sb.from("jurnal").select("id, jam_ke, mapel_id, mapel_nama, guru_nama").eq("kelas_id", _khKelasAktif).eq("tanggal", _khTanggal)
+    ]);
+    if (jurnalRes.error) throw new Error(jurnalRes.error.message);
+    const jurnal = jurnalRes.data || [];
+    const jadwal = jadwalRes.error ? [] : (jadwalRes.data || []);   // tanpa akses jadwal → kolom dari jurnal saja
+    const absensi = jurnal.length ? await khAmbilAbsensi(jurnal.map(j => j.id)) : [];
+    _khHarian = khSusunHarian(hari, jadwal, jurnal, absensi, siswa);
+    _khHarian.tanggal = _khTanggal; _khHarian.kelas = khNamaKelas();
+    khGambarHarian();
+  } catch (e) {
+    $("khHarianIsi").innerHTML = '<div class="page-kosong">Gagal memuat: ' + esc(e.message) + '</div>';
+  }
+}
+window.khPilihTgl = (v) => { _khTanggal = v || khTglLokal(new Date()); khRenderHarian(); };
+window.khGeser = (n) => { _khTanggal = khGeserTgl(_khTanggal, n); khRenderHarian(); };
+
+function khSelHtml(c){
+  if (c.kode === "belum") return '<td class="kh-belum" title="Jurnal belum diisi guru">–</td>';
+  if (c.kode === "-") return '<td class="kh-kosong" title="Tidak tercatat di absensi">·</td>';
+  return '<td class="kh-' + c.kode + '"' + (c.ket ? ' title="' + esc(c.ket) + '"' : '') + '>' + c.kode + (c.ket ? '*' : '') + '</td>';
+}
+function khBadge(st){ return st ? '<span class="kh-st kh-st-' + st + '">' + (st === "P" ? "⚠ " : "") + KH_LABEL[st] + '</span>' : '<span style="color:#adb5bd">—</span>'; }
+
+function khTabelHarian(d, cetak){
+  let h = '<table class="kh-tabel"><thead><tr><th>No</th><th style="text-align:left">Nama Siswa</th>' +
+    d.kolom.map(k => '<th>Jam ' + esc(k.jam) + '<small>' + esc(k.kode) + (k.waktu && !cetak ? ' · ' + esc(k.waktu) : '') + '</small></th>').join("") +
+    '<th>Status Harian</th></tr></thead><tbody>';
+  h += d.baris.map((b, i) => '<tr class="' + (b.status === "P" ? "kh-waspada" : "") + '"><td>' + (i+1) + '</td>' +
+    '<td class="kh-nm">' + (cetak ? esc(b.siswa.nama_siswa)
+      : '<a href="#" onclick="khDetailHarian(' + i + ');return false">' + esc(b.siswa.nama_siswa) + '</a>') + '</td>' +
+    b.sel.map(khSelHtml).join("") + '<td>' + khBadge(b.status) + '</td></tr>').join("");
+  return h + '</tbody></table>';
+}
+function khRingkasHtml(d){
+  const r = d.ringkas, jmlJam = d.kolom.length;
+  const chip = (cls, n, t) => '<div class="kh-chip ' + cls + '"><b>' + n + '</b>' + t + '</div>';
+  return '<div class="kh-chips">' +
+    chip("kh-c-H", r.H, "Hadir penuh") + chip("kh-c-P", r.P, "⚠ Hadir sebagian") +
+    chip("kh-c-S", r.S, "Sakit") + chip("kh-c-I", r.I, "Izin") + chip("kh-c-A", r.A, "Alpa") +
+    chip("kh-c-B", d.belum.length + " dari " + jmlJam, "Jam belum diabsen") + '</div>';
+}
+function khGambarHarian(){
+  const d = _khHarian;
+  if (!d.kolom.length) {
+    $("khHarianIsi").innerHTML = '<div class="empty">Tidak ada jadwal maupun jurnal untuk kelas ini pada tanggal tersebut (libur / akhir pekan?).</div>';
+    return;
+  }
+  if (!d.baris.length) { $("khHarianIsi").innerHTML = '<div class="empty">Belum ada siswa aktif di kelas ini.</div>'; return; }
+  $("khHarianIsi").innerHTML = khRingkasHtml(d) +
+    '<div style="overflow-x:auto">' + khTabelHarian(d, false) + '</div>' +
+    '<div class="kh-legend"><span><i class="kh-H"></i>Hadir</span><span><i class="kh-S"></i>Sakit</span><span><i class="kh-I"></i>Izin</span>' +
+      '<span><i class="kh-A"></i>Alpa</span><span><i class="kh-belum"></i>Jurnal belum diisi</span><span><i style="background:#fff9db"></i>Hadir sebagian</span>' +
+      '<span>* = ada keterangan (arahkan kursor)</span></div>' +
+    (d.belum.length ? '<div class="kh-box kh-box-kuning"><b>Belum diabsen:</b> ' +
+      d.belum.map(k => 'Jam ' + esc(k.jam) + ' · ' + esc(k.kode) + ' (' + esc(k.mapel) + ') · ' + esc(k.guru)).join("; ") +
+      '. <span style="opacity:.8">Status harian dihitung dari jam yang sudah diisi.</span></div>' : '') +
+    '<div style="font-size:12px;color:#6b7280;margin-top:8px">Klik nama siswa untuk rincian per jam.</div>';
+}
+window.khDetailHarian = (i) => {
+  const d = _khHarian, b = d && d.baris[i]; if (!b) return;
+  const isi = '<div style="margin-bottom:8px">' + esc(khTglPanjang(d.tanggal)) + ' · Status harian: ' + khBadge(b.status) + '</div>' +
+    '<table class="kh-tabel"><thead><tr><th>Jam</th><th style="text-align:left">Mapel</th><th style="text-align:left">Guru</th><th>Status</th><th style="text-align:left">Keterangan</th></tr></thead><tbody>' +
+    d.kolom.map((k, j) => {
+      const c = b.sel[j];
+      const st = c.kode === "belum" ? '<span style="color:#adb5bd">Belum diabsen</span>' : c.kode === "-" ? '<span style="color:#adb5bd">Tidak tercatat</span>' : KH_LABEL[c.kode];
+      return '<tr><td>' + esc(k.jam) + (k.waktu ? '<br><small style="color:#8a94a6">' + esc(k.waktu) + '</small>' : '') + '</td>' +
+        '<td style="text-align:left">' + esc(k.mapel) + '</td><td style="text-align:left">' + esc(k.guru) + '</td>' +
+        '<td class="' + ("HSIA".includes(c.kode) && c.kode.length === 1 ? "kh-" + c.kode : "") + '">' + st + '</td>' +
+        '<td style="text-align:left">' + esc(c.ket || "") + '</td></tr>';
+    }).join("") + '</tbody></table>';
+  bukaModalDetailAbsensi(b.siswa.nama_siswa, b.siswa.nis || "-", d.kelas, isi);
+};
+
+/* ---------- SUSUN BULANAN (murni) ---------- */
+function khSusunBulanan(jurnal, absensi, siswa){
+  const tglJurnal = {}; jurnal.forEach(j => tglJurnal[j.id] = j.tanggal);
+  const hariEfektif = [...new Set(jurnal.map(j => j.tanggal))].sort();
+  const per = {};   // siswa_id → tanggal → [kode]
+  absensi.forEach(a => {
+    const t = tglJurnal[a.jurnal_id]; if (!t) return;
+    ((per[a.siswa_id] = per[a.siswa_id] || {})[t] = per[a.siswa_id][t] || []).push(khKode(a.status));
+  });
+  const baris = siswa.map(s => {
+    const n = { H:0, P:0, S:0, I:0, A:0 }, hariTidakPenuh = [];
+    Object.entries(per[s.id] || {}).forEach(([t, kode]) => {
+      const st = khStatusHarian(kode); if (!st) return;
+      n[st]++;
+      if (st !== "H") hariTidakPenuh.push({ tanggal:t, status:st });
+    });
+    const hadir = n.H + n.P, tercatat = hadir + n.S + n.I + n.A;
+    hariTidakPenuh.sort((a,b) => a.tanggal.localeCompare(b.tanggal));
+    return { siswa: s, efektif: hariEfektif.length, hadir, sebagian: n.P, sakit: n.S, izin: n.I, alpa: n.A, tercatat,
+      persen: tercatat ? hadir / tercatat * 100 : null, hariTidakPenuh };
+  });
+  return { hariEfektif: hariEfektif.length, baris };
+}
+
+/* ---------- TAMPILAN BULANAN ---------- */
+async function khRenderBulanan(){
+  $("khIsi").innerHTML =
+    '<div class="card">' +
+      '<div class="row" style="align-items:flex-end;gap:8px;flex-wrap:wrap;margin-bottom:10px">' +
+        '<div style="flex:0 0 auto"><label>Bulan</label><input type="month" id="khBln" value="' + esc(_khBulan) + '" onchange="khPilihBulan(this.value)"></div>' +
+        '<span style="flex:1"></span>' +
+        '<button class="btn btn-sm" style="background:#2b8a3e;flex:0 0 auto" onclick="khCetakBulanan()">🖨 Cetak</button>' +
+        '<button class="btn btn-sm btn-ghost" style="flex:0 0 auto" onclick="khExcelBulanan()">📊 Excel</button>' +
+      '</div>' +
+      '<div id="khBulananIsi"><div class="page-kosong">Memuat...</div></div>' +
+    '</div>';
+  try {
+    const [th, bl] = _khBulan.split("-").map(Number);
+    const awal = _khBulan + "-01", akhir = _khBulan + "-" + khPad(new Date(th, bl, 0).getDate());
+    const [siswa, jurnalRes] = await Promise.all([
+      khAmbilSiswa(),
+      sb.from("jurnal").select("id, tanggal").eq("kelas_id", _khKelasAktif).gte("tanggal", awal).lte("tanggal", akhir)
+    ]);
+    if (jurnalRes.error) throw new Error(jurnalRes.error.message);
+    const jurnal = jurnalRes.data || [];
+    const absensi = jurnal.length ? await khAmbilAbsensi(jurnal.map(j => j.id)) : [];
+    _khBulanan = khSusunBulanan(jurnal, absensi, siswa);
+    _khBulanan.bulan = _khBulan; _khBulanan.kelas = khNamaKelas();
+    khGambarBulanan();
+  } catch (e) {
+    $("khBulananIsi").innerHTML = '<div class="page-kosong">Gagal memuat: ' + esc(e.message) + '</div>';
+  }
+}
+window.khPilihBulan = (v) => { if (v) { _khBulan = v; khRenderBulanan(); } };
+
+function khTabelBulanan(d, cetak){
+  const f = v => v === null ? "-" : v.toFixed(1).replace(".", ",") + "%";
+  return '<table class="kh-tabel"><thead><tr><th>No</th><th>NIS</th><th style="text-align:left">Nama Siswa</th><th>Hari Efektif</th>' +
+    '<th>Hadir</th><th>Sakit</th><th>Izin</th><th>Tanpa Ket.</th><th>⚠ Hadir Sebagian</th><th>% Hadir</th></tr></thead><tbody>' +
+    d.baris.map((b, i) => '<tr class="' + (b.sebagian ? "kh-waspada" : "") + '"><td>' + (i+1) + '</td><td>' + esc(b.siswa.nis || "-") + '</td>' +
+      '<td class="kh-nm">' + (cetak ? esc(b.siswa.nama_siswa)
+        : '<a href="#" onclick="khDetailBulanan(' + i + ');return false">' + esc(b.siswa.nama_siswa) + '</a>') + '</td>' +
+      '<td>' + b.efektif + '</td><td>' + b.hadir + '</td><td>' + b.sakit + '</td><td>' + b.izin + '</td><td>' + b.alpa + '</td>' +
+      '<td>' + (b.sebagian ? '<b>' + b.sebagian + '</b>' : 0) + '</td><td>' + f(b.persen) + '</td></tr>').join("") +
+    '</tbody></table>';
+}
+function khGambarBulanan(){
+  const d = _khBulanan;
+  if (!d.hariEfektif) { $("khBulananIsi").innerHTML = '<div class="empty">Belum ada jurnal untuk kelas ini pada ' + esc(khNamaBulan(_khBulan)) + '.</div>'; return; }
+  if (!d.baris.length) { $("khBulananIsi").innerHTML = '<div class="empty">Belum ada siswa aktif di kelas ini.</div>'; return; }
+  $("khBulananIsi").innerHTML = '<div style="overflow-x:auto">' + khTabelBulanan(d, false) + '</div>' +
+    '<div class="kh-box kh-box-abu"><b>Cara hitung (satuan hari, untuk rapor):</b> Hari efektif = hari yang punya minimal 1 jurnal ' +
+    'untuk kelas ini (' + d.hariEfektif + ' hari). Hadir sebagian dihitung <b>Hadir</b>, jumlah harinya ditampilkan di kolom ⚠. ' +
+    'Klik nama siswa untuk melihat tanggal-tanggalnya.</div>';
+}
+window.khDetailBulanan = (i) => {
+  const d = _khBulanan, b = d && d.baris[i]; if (!b) return;
+  const isi = '<div style="margin-bottom:8px">' + esc(khNamaBulan(d.bulan)) + ' · Hadir ' + b.hadir + ' dari ' + b.tercatat + ' hari tercatat</div>' +
+    (b.hariTidakPenuh.length
+      ? '<table class="kh-tabel"><thead><tr><th style="text-align:left">Tanggal</th><th>Status Harian</th></tr></thead><tbody>' +
+        b.hariTidakPenuh.map(x => '<tr><td style="text-align:left"><a href="#" onclick="khBukaTanggal(\'' + x.tanggal + '\');return false">' +
+          esc(khTglPanjang(x.tanggal)) + '</a></td><td>' + khBadge(x.status) + '</td></tr>').join("") + '</tbody></table>'
+      : '<div class="empty">Hadir penuh setiap hari tercatat. 👍</div>');
+  bukaModalDetailAbsensi(b.siswa.nama_siswa, b.siswa.nis || "-", d.kelas, isi);
+};
+/* Dari detail bulanan → lompat ke tampilan harian tanggal itu. */
+window.khBukaTanggal = (tgl) => { tutupModalDetailAbsensi(); _khTanggal = tgl; khGantiView("harian"); };
+
+/* ---------- CETAK & EXCEL ---------- */
+async function khTtdWali(){
+  const kelasObj = _khKelasList.find(k => k.id === _khKelasAktif) || {};
+  let nama = "", nip = "";
+  if (kelasObj.wali_kelas_id) {
+    const { data: w } = await sb.from("profil").select("nama, nip").eq("id", kelasObj.wali_kelas_id).maybeSingle();
+    if (w) { nama = w.nama || ""; nip = w.nip || ""; }
+  }
+  if (!nama) { nama = ME.nama || ME.email || "(Wali Kelas)"; nip = ME.nip || ""; }
+  const tgl = await kotaTanggalTtd();
+  return '<table class="ttd"><tr><td class="kiri"></td><td class="kanan">' + esc(tgl) + '</td></tr>' +
+    '<tr><td class="kiri"></td><td class="kanan">Wali Kelas,</td></tr><tr class="spasi"><td></td><td></td></tr>' +
+    '<tr><td class="kiri"></td><td class="kanan"><b><u>' + esc(nama) + '</u></b>' + (nip ? '<br>NIP. ' + esc(nip) : '') + '</td></tr></table>';
+}
+async function khCetak(judul, meta, isi, orientasi){
+  const info = await ambilInfoApp();
+  const namaSekolah = (info.nama_sekolah || "").trim();
+  const tglCetak = new Date().toLocaleDateString("id-ID", { day:"numeric", month:"long", year:"numeric" });
+  const ttd = await khTtdWali();
+  const w = window.open("", "_blank");
+  if (!w) return toast("Popup diblokir. Izinkan popup untuk mencetak.");
+  w.document.write('<html><head><title>' + esc(judul) + '</title><style>' +
+    '@page{size:A4 ' + orientasi + ';margin:12mm}body{font-family:Arial,sans-serif;color:#000;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    '.kop{text-align:center;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:10px}.kop .nm{font-size:16px;font-weight:bold;text-transform:uppercase}' +
+    'h2{margin:0 0 4px;font-size:15px}.meta{margin:4px 0 8px}' +
+    '.kh-tabel{width:100%;border-collapse:collapse}.kh-tabel th,.kh-tabel td{border:1px solid #888;padding:3px 4px;text-align:center;font-size:10px}' +
+    '.kh-tabel th{background:#e7ecf7}.kh-tabel th small{display:block;font-weight:normal;font-size:8.5px}.kh-nm{text-align:left!important}' +
+    '.kh-H{background:#ebfbee}.kh-S{background:#e7f5ff}.kh-I{background:#f3f0ff}.kh-A{background:#ffe3e3}.kh-belum{background:#eee;color:#999}.kh-kosong{color:#999}' +
+    'tr.kh-waspada td{background-color:#fff3bf}.kh-st{font-weight:bold}' +
+    '.kh-chips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.kh-chip{border:1px solid #bbb;border-radius:4px;padding:3px 8px}.kh-chip b{margin-right:4px}' +
+    '.catatan{font-size:10px;margin-top:6px}' +
+    '.ttd{width:100%;margin-top:30px;border-collapse:collapse;page-break-inside:avoid}.ttd td{border:0;padding:0 0 2px;font-size:12px}' +
+    '.ttd .kiri{width:60%}.ttd .kanan{width:40%}.ttd .spasi td{height:56px}' +
+    '.kaki{position:fixed;bottom:0;left:0;right:0;text-align:center;font-size:9px;color:#555;border-top:1px solid #ccc;padding-top:3px}' +
+    'thead{display:table-header-group}tr{page-break-inside:avoid}</style></head><body>' +
+    '<div class="kaki">' + (namaSekolah ? esc(namaSekolah) + ' &middot; ' : '') + 'Dicetak ' + esc(tglCetak) + '</div>' +
+    (namaSekolah ? '<div class="kop"><div class="nm">' + esc(namaSekolah) + '</div></div>' : '') +
+    '<h2>' + esc(judul) + '</h2><div class="meta">' + meta + '</div>' + isi + ttd + '</body></html>');
+  w.document.close(); w.focus();
+  w.onload = () => { try { w.print(); } catch(e){} };
+}
+window.khCetakHarian = async () => {
+  const d = _khHarian;
+  if (!d || !d.kolom.length || !d.baris.length) return toast("Belum ada data untuk dicetak.");
+  const r = d.ringkas;
+  const ringkas = '<div class="kh-chips"><span class="kh-chip"><b>' + r.H + '</b>Hadir penuh</span><span class="kh-chip"><b>' + r.P + '</b>Hadir sebagian</span>' +
+    '<span class="kh-chip"><b>' + r.S + '</b>Sakit</span><span class="kh-chip"><b>' + r.I + '</b>Izin</span><span class="kh-chip"><b>' + r.A + '</b>Alpa</span></div>';
+  const catatan = '<div class="catatan">H = Hadir, S = Sakit, I = Izin, A = Alpa, – = jurnal belum diisi, * = ada keterangan. ' +
+    'Baris berwarna = hadir sebagian.' + (d.belum.length ? ' Belum diabsen: ' + d.belum.map(k => 'jam ' + esc(k.jam) + ' (' + esc(k.mapel) + ')').join(", ") + '.' : '') + '</div>';
+  await khCetak("Kehadiran Harian Siswa", '<b>Kelas:</b> ' + esc(d.kelas) + ' &nbsp; <b>Hari/Tanggal:</b> ' + esc(khTglPanjang(d.tanggal)),
+    ringkas + khTabelHarian(d, true) + catatan, d.kolom.length > 8 ? "landscape" : "portrait");
+};
+window.khCetakBulanan = async () => {
+  const d = _khBulanan;
+  if (!d || !d.hariEfektif || !d.baris.length) return toast("Belum ada data untuk dicetak.");
+  await khCetak("Rekap Kehadiran Bulanan (Hari)", '<b>Kelas:</b> ' + esc(d.kelas) + ' &nbsp; <b>Bulan:</b> ' + esc(khNamaBulan(d.bulan)) +
+    ' &nbsp; <b>Hari efektif:</b> ' + d.hariEfektif,
+    khTabelBulanan(d, true) + '<div class="catatan">Hadir sebagian dihitung Hadir; jumlah harinya pada kolom ⚠. Baris berwarna = ada hari hadir sebagian.</div>',
+    "portrait");
+};
+window.khExcelBulanan = () => {
+  const d = _khBulanan;
+  if (!d || !d.baris.length) return toast("Belum ada data untuk diekspor.");
+  if (typeof XLSX === "undefined") return toast("Library Excel belum termuat.");
+  const data = d.baris.map((b, i) => ({ "No": i+1, "NIS": b.siswa.nis || "", "Nama": b.siswa.nama_siswa, "Hari Efektif": b.efektif,
+    "Hadir": b.hadir, "Sakit": b.sakit, "Izin": b.izin, "Tanpa Keterangan": b.alpa, "Hadir Sebagian": b.sebagian,
+    "% Hadir": b.persen === null ? "" : Number(b.persen.toFixed(1)) }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  ws["!cols"] = [{wch:5},{wch:12},{wch:26},{wch:12},{wch:7},{wch:7},{wch:7},{wch:16},{wch:14},{wch:9}];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Kehadiran " + d.bulan);
+  XLSX.writeFile(wb, ("Kehadiran-Harian-" + d.kelas + "-" + d.bulan + ".xlsx").replace(/[^\w\-.]/g, "_"));
+  toast("Excel diunduh.");
+};
 
 /* ============ TAB KARTU SISWA BINAAN ============ */
 let _ksKelasList = [];
