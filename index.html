@@ -455,6 +455,26 @@
 .kh-pil-btn.dipilih{border-color:var(--aksen);background:#eef3ff;color:var(--aksen)}
 #khAlasan{width:100%;border:1px solid var(--garis);border-radius:8px;padding:8px;font-size:13px;font-family:inherit}
 .kh-info{background:#e7f5ff;color:#1864ab;border-radius:8px;padding:8px 10px;font-size:12px;margin-top:10px}
+/* ===== ISI JURNAL: PILIH DARI JADWAL ===== */
+.ij-kotak{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin:4px 0 14px}
+.ij-judul{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:13px;font-weight:700;color:#1e3a5f;margin-bottom:8px}
+.ij-judul .ra-nama-link{font-size:13px}
+.ij-slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+.ij-slot{border:2px solid #dbe0ea;background:#fff;border-radius:10px;padding:8px 10px;cursor:pointer;text-align:left;font-family:inherit;color:inherit}
+.ij-slot:hover{border-color:var(--aksen)}
+.ij-slot.pilih{border-color:var(--aksen);background:#eef3ff}
+.ij-slot.sudah{opacity:.55;cursor:not-allowed;background:#f1f3f5}
+.ij-slot b{display:block;font-size:14px;color:#1e3a5f}
+.ij-slot span{display:block;font-size:12px;color:#495057}
+.ij-slot small{display:block;font-size:11px;color:#868e96;margin-top:2px}
+.ij-kosong{font-size:13px;color:#6b7280}
+.ij-tag{display:inline-block;font-size:11px;font-weight:700;border-radius:99px;padding:1px 8px;margin-left:4px}
+.ij-tag-jadwal{background:#e7f5ff;color:#1864ab}
+.ij-tag-manual,.ij-tag-luar{background:#fff3bf;color:#8a5a00}
+input#jJam[readonly]{background:#f1f5f9;color:#1e3a5f;font-weight:700}
+.ij-warn{background:#fff8e6;border:1px solid #ffe08a;color:#8a5a00;border-radius:8px;padding:10px 12px;font-size:13px;margin-top:10px}
+.ij-cek{display:flex!important;gap:8px;align-items:flex-start;font-weight:600;margin-top:8px;cursor:pointer}
+.ij-cek input{width:auto!important;margin-top:3px}
 
 </style>
 </head>
@@ -2159,6 +2179,8 @@ async function muatIsiJurnal(){
       esc(e.message) + '</div></div>'; return;
   }
 
+  window._ijKelasSemua = kelasList.slice();   // semua kelas (untuk slot guru pengganti)
+
   // guru lain + mapel diampu (dibungkus terpisah agar tak menggagalkan form)
   try {
     const { data: profilData, error } = await sb.from("profil")
@@ -2220,7 +2242,7 @@ async function muatIsiJurnal(){
   // Diambil sekali di sini, lalu difilter di klien saat kelas/guru pengganti berubah.
   window._jadwalSemua = [];
   try {
-    const { data: jdAll } = await sb.from("jadwal").select("kelas_id, mapel_id, guru_id");
+    const { data: jdAll } = await sb.from("jadwal").select("kelas_id, mapel_id, guru_id, hari, jam_ke");
     window._jadwalSemua = jdAll || [];
   } catch (e) { console.warn("Gagal memuat jadwal untuk filter mapel:", e.message); }
 
@@ -2231,24 +2253,27 @@ async function muatIsiJurnal(){
   const opsiGuru = '<option value="">— tidak menggantikan —</option>' +
     guruList.map(g => '<option value="' + esc(g.nama || g.email) + '">' +
       esc(g.nama || g.email) + '</option>').join("");
-  const hariIni = new Date().toISOString().slice(0,10);
+  const hariIni = ijTglLokal(new Date());   // tanggal WITA, bukan UTC
 
   $("main").innerHTML =
     '<div class="card"><h2 id="jJudulForm">Isi Jurnal Mengajar</h2>' +
       '<div class="row">' +
-        '<div><label>Tanggal</label><input id="jTgl" type="date" value="' + hariIni + '"></div>' +
-        '<div><label>Jam Ke- *</label><input id="jJam" placeholder="Wajib, mis. 1-2"></div>' +
-      '</div>' +
-      '<div class="row">' +
-        '<div><label>Kelas</label><select id="jKelas" onchange="bersihkanErrorJurnal();muatAbsensi();gantiGuruAsli()">' + opsiKelas + '</select></div>' +
-        '<div><label>Mapel</label>' +
-          '<select id="jMapel">' + opsiMapel + '</select></div>' +
-      '</div>' +
-      '<div class="row">' +
+        '<div><label>Tanggal</label><input id="jTgl" type="date" value="' + hariIni + '" onchange="ijSegarkan()"></div>' +
         '<div><label>Mengganti Guru (opsional)</label>' +
-          '<select id="jGuruAsli" onchange="gantiGuruAsli()">' + opsiGuru + '</select></div>' +
+          '<select id="jGuruAsli" onchange="gantiGuruAsli();ijSegarkan()">' + opsiGuru + '</select></div>' +
+      '</div>' +
+      '<div id="ijSlotArea"></div>' +
+      '<div class="row">' +
+        '<div><label>Jam Ke- * <span id="ijAsal"></span></label><input id="jJam" placeholder="Pilih dari jadwal di atas" oninput="ijCekManual()"></div>' +
+        '<div><label>Kelas</label><select id="jKelas" onchange="bersihkanErrorJurnal();muatAbsensi();gantiGuruAsli();ijCekManual()">' + opsiKelas + '</select></div>' +
+      '</div>' +
+      '<div class="row">' +
+        '<div><label>Mapel</label>' +
+          '<select id="jMapel" onchange="ijCekManual()">' + opsiMapel + '</select></div>' +
         '<div></div>' +
       '</div>' +
+      '<div id="ijHint" style="font-size:12px;margin:-4px 0 6px"></div>' +
+      '<div id="ijWarn"></div>' +
       '<label>Materi / Kegiatan</label>' +
       '<textarea id="jMateri" style="min-height:70px" placeholder="Materi yang diajarkan"></textarea>' +
       '<label>Catatan (opsional)</label>' +
@@ -2269,6 +2294,7 @@ async function muatIsiJurnal(){
       '<div id="jMsg"></div>' +
     '</div>';
   terapkanBatasIsiJurnal();
+  await ijMulai();
 }
 
 window.gantiGuruAsli = () => {
@@ -2520,7 +2546,7 @@ async function terapkanBatasIsiJurnal(){
 /* ---- Simpan ---- */
 window.simpanJurnal = async () => {
   const tanggal = $("jTgl").value;
-  const jam_ke = $("jJam").value.trim();
+  const jam_ke = $("jJam").value.replace(/\s+/g, "");
   const kelasId = $("jKelas").value;
   const mapelId = $("jMapel").value;
   const materi = $("jMateri").value.trim();
@@ -2550,6 +2576,8 @@ window.simpanJurnal = async () => {
   tandai(!!materi,  "jMateri","Materi / kegiatan wajib diisi.");
   tandai(_absenSiswa.length > 0, "absenArea", "Pilih kelas dulu untuk mengisi absensi.", true);
   tandai(!!_editJurnalId || !!_fotoFile, "jFotoPreview", "Foto dokumentasi wajib.", true);
+  const cekIJ = ijValidasiSimpan();   // format jam, jam bel, konfirmasi di luar jadwal
+  if (cekIJ) tandai(false, cekIJ.id, cekIJ.pesan);
   if (fokusPertama) {
     fokusPertama.scrollIntoView({ behavior:"smooth", block:"center" });
     if (fokusPertama.focus) fokusPertama.focus();
@@ -2573,7 +2601,7 @@ window.simpanJurnal = async () => {
     const dataJurnal = {
       tanggal, kelas_id: kelasId, kelas_nama: kelasRow?.nama_kelas || "",
       mapel_id: mapelId, mapel_nama: mapelRow?.nama_mapel || "",
-      jam_ke, materi, catatan, kehadiran, guru_asli: guruAsli
+      jam_ke, materi, catatan, kehadiran, guru_asli: guruAsli, luar_jadwal: ijLuarJadwal()
     };
 
     let jurnalId;
@@ -2682,6 +2710,197 @@ window.simpanJurnal = async () => {
   }
 };
 
+/* ==================== ISI JURNAL: PILIH DARI JADWAL ==================== */
+/* Jalur utama: tombol jadwal (dari roster) → Jam Ke-, Kelas, Mapel terisi & terkunci.
+   Jalur cadangan: isi manual → format divalidasi, jam ≤ jam bel, bila tak sesuai roster
+   wajib konfirmasi dan jurnal ditandai luar_jadwal = true. */
+let _ijMode = "jadwal";        // "jadwal" | "manual"
+let _ijSlot = null;            // slot jadwal terpilih
+let _ijJurnalHari = [];        // jurnal pada tanggal terpilih (cek "sudah diisi" & dobel)
+
+function ijTglLokal(d){        // yyyy-mm-dd waktu lokal (WITA), bukan UTC
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function ijHariKe(tgl){ if (!tgl) return 0; const g = new Date(tgl + "T00:00:00").getDay(); return (g >= 1 && g <= 5) ? g : 0; }
+function ijLabelJam(r){ return r[0] === r[1] ? String(r[0]) : r[0] + "–" + r[1]; }
+function ijNamaKelas(id){ return ((window._ijKelasSemua || []).find(k => k.id === id) || {}).nama_kelas || "?"; }
+function ijMapel(id){ return (window._mapelSemuaIsi || []).find(m => m.id === id) || null; }
+/* Guru pemilik jadwal: guru yang digantikan (bila dipilih) atau diri sendiri. */
+function ijGuruId(){
+  const g = $("jGuruAsli") ? $("jGuruAsli").value : "";
+  return g ? ((window._guruNamaKeId || {})[g] || null) : ME.id;
+}
+function ijWaktu(hari, r){
+  const bel = rsJamBel(hari), a = bel[r[0]-1], b = bel[r[1]-1];
+  return (a && b) ? a.mulai + "-" + b.selesai : "";
+}
+/* Slot roster guru pada hari tanggal terpilih. */
+function ijSlotHari(){
+  const hari = ijHariKe($("jTgl").value), guruId = ijGuruId();
+  if (!hari || !guruId) return [];
+  return (window._jadwalSemua || [])
+    .filter(j => j.guru_id === guruId && Number(j.hari) === hari)
+    .map(j => ({ ...j, r: rsRentang(j.jam_ke) })).filter(j => j.r)
+    .sort((a,b) => a.r[0] - b.r[0]);
+}
+/* Jurnal lain (bukan yang sedang diedit) di kelas yang sama & jam beririsan. */
+function ijJurnalBentrok(kelasId, r){
+  return _ijJurnalHari.find(j => j.id !== _editJurnalId && j.kelas_id === kelasId &&
+    (() => { const x = rsRentang(j.jam_ke); return x && x[0] <= r[1] && r[0] <= x[1]; })());
+}
+
+/* Dipanggil di akhir muatIsiJurnal(). */
+async function ijMulai(){
+  await rsMuatWaktu();          // jam bel dari Roster
+  _ijMode = "jadwal"; _ijSlot = null;
+  await ijSegarkan();
+}
+
+/* Tanggal / guru pengganti berubah → muat ulang jurnal hari itu & gambar ulang. */
+window.ijSegarkan = async () => {
+  const tgl = $("jTgl") ? $("jTgl").value : "";
+  _ijJurnalHari = [];
+  if (tgl) {
+    try {
+      const { data } = await sb.from("jurnal").select("id, kelas_id, jam_ke, mapel_nama, guru_nama").eq("tanggal", tgl);
+      _ijJurnalHari = data || [];
+    } catch (e) { console.warn("Gagal cek jurnal hari ini:", e.message); }
+  }
+  if (_ijMode === "jadwal") { _ijSlot = null; ijKosongkanPilihan(); }
+  ijGambar();
+};
+
+function ijKosongkanPilihan(){
+  if ($("jJam")) $("jJam").value = "";
+  if ($("jKelas")) $("jKelas").value = "";
+  if ($("jMapel")) $("jMapel").value = "";
+  if ($("absenArea")) $("absenArea").innerHTML = '<p style="color:#6b7280;font-size:13px;margin-top:14px">Pilih jadwal untuk menampilkan absensi.</p>';
+  if (typeof _absenSiswa !== "undefined") _absenSiswa = [];
+}
+
+function ijGambar(){
+  const area = $("ijSlotArea"); if (!area) return;
+  const manual = _ijMode === "manual";
+  // kunci/buka field
+  if ($("jJam")) { $("jJam").readOnly = !manual; $("jJam").placeholder = manual ? "mis. 5 atau 3-4" : "Pilih dari jadwal di atas"; }
+  if ($("jKelas")) $("jKelas").disabled = !manual;
+  if ($("jMapel")) $("jMapel").disabled = !manual;
+  if ($("ijAsal")) $("ijAsal").innerHTML = manual ? '<span class="ij-tag ij-tag-manual">manual</span>'
+    : (_ijSlot ? '<span class="ij-tag ij-tag-jadwal">dari jadwal</span>' : '');
+
+  if (manual) {
+    area.innerHTML = '<div class="ij-kotak"><div class="ij-judul"><span>✍ Isi manual (di luar jadwal)</span>' +
+      '<a class="ra-nama-link" onclick="ijModeJadwal()">← Kembali pilih dari jadwal</a></div>' +
+      '<div style="font-size:12px;color:#6b7280">Untuk tukar jam, jam tambahan, atau perubahan roster yang belum diperbarui.</div></div>';
+    ijCekManual();
+    return;
+  }
+  const tgl = $("jTgl").value, hari = ijHariKe(tgl);
+  const g = $("jGuruAsli") ? $("jGuruAsli").value : "";
+  const judul = (g ? "Jadwal " + g + " (digantikan)" : "Jadwal Anda") + (tgl ? " — " +
+    new Date(tgl + "T00:00:00").toLocaleDateString("id-ID", { weekday:"long", day:"numeric", month:"short", year:"numeric" }) : "");
+  const slot = ijSlotHari();
+  const isi = !hari ? '<div class="ij-kosong">Tanggal ini akhir pekan. Gunakan isi manual bila memang ada kegiatan.</div>'
+    : !slot.length ? '<div class="ij-kosong">Tidak ada jadwal di tanggal ini. Gunakan isi manual.</div>'
+    : '<div class="ij-slots">' + slot.map((s, i) => {
+        const sudah = ijJurnalBentrok(s.kelas_id, s.r);
+        const mp = ijMapel(s.mapel_id);
+        const pilih = _ijSlot && _ijSlot.kelas_id === s.kelas_id && _ijSlot.jam_ke === s.jam_ke;
+        return '<button type="button" class="ij-slot' + (sudah ? " sudah" : "") + (pilih ? " pilih" : "") + '"' +
+          (sudah ? ' disabled title="Sudah ada jurnal: ' + esc(sudah.mapel_nama || "") + ' · ' + esc(sudah.guru_nama || "") + '"' : ' onclick="ijPilihSlot(' + i + ')"') + '>' +
+          '<b>Jam ' + ijLabelJam(s.r) + ' · ' + esc(ijNamaKelas(s.kelas_id)) + '</b>' +
+          '<span>' + esc(mp ? labelMapel(mp) : "-") + '</span>' +
+          '<small>' + esc(ijWaktu(hari, s.r)) + (sudah ? ' · ✓ Sudah diisi' : '') + '</small></button>';
+      }).join("") + '</div>';
+  area.innerHTML = '<div class="ij-kotak"><div class="ij-judul"><span>' + esc(judul) + '</span>' +
+    '<a class="ra-nama-link" onclick="ijModeManual()">Di luar jadwal? Isi manual</a></div>' + isi + '</div>';
+  if ($("ijHint")) $("ijHint").innerHTML = "";
+  if ($("ijWarn")) $("ijWarn").innerHTML = "";
+}
+
+window.ijPilihSlot = async (i) => {
+  const s = ijSlotHari()[i]; if (!s) return;
+  _ijSlot = s;
+  const tambahOpsi = (sel, val, teks) => {
+    if (sel && val && !sel.querySelector('option[value="' + val + '"]')) {
+      const o = document.createElement("option"); o.value = val; o.textContent = teks; sel.appendChild(o);
+    }
+  };
+  $("jJam").value = s.r[0] === s.r[1] ? String(s.r[0]) : s.r[0] + "-" + s.r[1];
+  tambahOpsi($("jKelas"), s.kelas_id, ijNamaKelas(s.kelas_id));
+  $("jKelas").value = s.kelas_id;
+  gantiGuruAsli();                                  // saring mapel sesuai jadwal
+  const mp = ijMapel(s.mapel_id);
+  tambahOpsi($("jMapel"), s.mapel_id, mp ? labelMapel(mp) : "-");
+  $("jMapel").value = s.mapel_id;
+  bersihkanErrorJurnal();
+  ijGambar();
+  await muatAbsensi();
+};
+
+window.ijModeManual = () => { _ijMode = "manual"; _ijSlot = null; ijKosongkanPilihan(); ijGambar(); };
+window.ijModeJadwal = () => { _ijMode = "jadwal"; _ijSlot = null; ijKosongkanPilihan(); ijGambar(); };
+
+/* Mode edit jurnal lama: isian dibiarkan, masuk mode manual. */
+function ijModeEdit(j){
+  _ijMode = "manual"; _ijSlot = null;
+  ijGambar();
+  const k = $("ijKonf"); if (k && j.luar_jadwal) k.checked = true;
+}
+
+/* Hasil pemeriksaan isian manual. */
+function ijPeriksaManual(){
+  const v = ($("jJam").value || "").replace(/\s+/g, "");
+  const kelasId = $("jKelas").value, hari = ijHariKe($("jTgl").value);
+  const hasil = { v, r: null, salah: "", luar: false, dobel: null };
+  if (!v) return hasil;
+  const r = rsRentang(v);
+  if (!r) { hasil.salah = "Format salah. Pakai angka (mis. 5) atau rentang (mis. 3-4)."; return hasil; }
+  const bel = hari ? rsJamBel(hari) : [];
+  if (bel.length && r[1] > bel.length) { hasil.salah = "Jam bel hari ini hanya sampai jam " + bel.length + "."; return hasil; }
+  hasil.r = r;
+  if (kelasId) {
+    const cocok = ijSlotHari().some(s => s.kelas_id === kelasId && s.r[0] <= r[1] && r[0] <= s.r[1]);
+    hasil.luar = !cocok;
+    hasil.dobel = ijJurnalBentrok(kelasId, r) || null;
+  }
+  return hasil;
+}
+
+window.ijCekManual = () => {
+  if (_ijMode !== "manual") return;
+  const h = ijPeriksaManual(), hint = $("ijHint"), warn = $("ijWarn");
+  if (!hint || !warn) return;
+  const konfLama = $("ijKonf") ? $("ijKonf").checked : false;
+  hint.innerHTML = !h.v ? "" : h.salah ? '<span style="color:#c92a2a">✗ ' + esc(h.salah) + '</span>'
+    : '<span style="color:#2b8a3e">✓ Format benar' + (ijWaktu(ijHariKe($("jTgl").value), h.r) ? ' · ' + esc(ijWaktu(ijHariKe($("jTgl").value), h.r)) : '') + '</span>';
+  let w = "";
+  if (h.r && h.luar) {
+    w += '<div class="ij-warn">⚠ <b>Tidak sesuai roster.</b> Jadwal hari ini tidak memuat ' + esc(ijNamaKelas($("jKelas").value)) +
+      ' jam ' + esc(h.v) + '. Jurnal akan ditandai <b>"Di luar jadwal"</b> agar terlihat admin/wakasek kurikulum.' +
+      '<label class="ij-cek"><input type="checkbox" id="ijKonf"' + (konfLama ? " checked" : "") + '> ' +
+      'Saya mengajar di luar jadwal (tukar jam / jam tambahan / perubahan roster)</label></div>';
+  }
+  if (h.r && h.dobel) {
+    w += '<div class="ij-warn">⚠ Sudah ada jurnal ' + esc(ijNamaKelas($("jKelas").value)) + ' jam ' + esc(h.dobel.jam_ke) +
+      ' pada tanggal ini (' + esc(h.dobel.mapel_nama || "") + (h.dobel.guru_nama ? ' · ' + esc(h.dobel.guru_nama) : '') +
+      '). Pastikan tidak mengisi dua kali.</div>';
+  }
+  warn.innerHTML = w;
+};
+
+/* Dipanggil di simpanJurnal(). null = lolos; selain itu {id, pesan}. */
+function ijValidasiSimpan(){
+  if (_ijMode === "jadwal") return _ijSlot ? null : { id:"jJam", pesan:"Pilih jadwal di atas, atau klik \"Di luar jadwal? Isi manual\"." };
+  const h = ijPeriksaManual();
+  if (!h.v) return null;                                   // kosong → sudah ditangani validasi lama
+  if (h.salah) return { id:"jJam", pesan:h.salah };
+  if (h.luar && !($("ijKonf") && $("ijKonf").checked)) return { id:"ijWarn", pesan:"Centang konfirmasi mengajar di luar jadwal." };
+  return null;
+}
+/* Nilai kolom luar_jadwal untuk disimpan. */
+function ijLuarJadwal(){ return _ijMode === "manual" && ijPeriksaManual().luar === true; }
+
 /* ============ MODUL DAFTAR JURNAL ============ */
 let _jurnalCache = [];
 let _fKelasList = [];   // kelas untuk dropdown filter
@@ -2698,7 +2917,7 @@ async function muatDaftarJurnal(){
   // guru default lihat semua miliknya; admin/kepsek default "Menunggu"
   const statusDefault = (bisaVerif && !isPengawas) ? "Menunggu" : "";
   // pengawas: default rentang hari ini
-  const hariIni = new Date().toISOString().slice(0,10);
+  const hariIni = ijTglLokal(new Date());
   const dariAwal = isPengawas ? hariIni : "";
   const sampaiAwal = isPengawas ? hariIni : "";
 
@@ -2716,6 +2935,9 @@ async function muatDaftarJurnal(){
         '<div><label>Kelas</label><select id="fKelas" onchange="renderDaftarJurnal()">' + opsiKelas + '</select></div>' +
         '<div><label>Dari Tanggal</label><input type="date" id="fDari" value="' + dariAwal + '" onchange="renderDaftarJurnal()"></div>' +
         '<div><label>Sampai</label><input type="date" id="fSampai" value="' + sampaiAwal + '" onchange="renderDaftarJurnal()"></div>' +
+        (bisaVerif ? '<div><label>Jadwal</label><select id="fJadwal" onchange="renderDaftarJurnal()">' +
+          '<option value="">Semua</option><option value="luar">Hanya di luar jadwal</option>' +
+          '<option value="sesuai">Sesuai jadwal</option></select></div>' : '') +
       '</div>' +
       '<div id="jurnalList"><div class="page-kosong">Memuat...</div></div>' +
     '</div>';
@@ -6005,6 +6227,7 @@ window.renderDaftarJurnal = async function(){
     const fKelas = $("fKelas") ? $("fKelas").value : "";
     const fDari = $("fDari") ? $("fDari").value : "";
     const fSampai = $("fSampai") ? $("fSampai").value : "";
+    const fJadwal = $("fJadwal") ? $("fJadwal").value : "";
 
     const periode = await ambilPeriodeAktif();
     let q = sb.from("jurnal").select("*");
@@ -6015,6 +6238,8 @@ window.renderDaftarJurnal = async function(){
     if (fKelas) q = q.eq("kelas_id", fKelas);
     if (fDari) q = q.gte("tanggal", fDari);
     if (fSampai) q = q.lte("tanggal", fSampai);
+    if (fJadwal === "luar") q = q.eq("luar_jadwal", true);
+    if (fJadwal === "sesuai") q = q.eq("luar_jadwal", false);
     q = q.order("dibuat", { ascending: false });
 
     const { data, error } = await q;
@@ -6049,7 +6274,8 @@ function gambarHalamanJurnal(){
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">' +
         '<div><b>' + esc(j.mapel_nama||"-") + '</b> — ' + esc(j.kelas_nama||"-") +
           '<div style="font-size:13px;color:#6b7280">' + esc(j.guru_nama||"-") + ' · ' +
-          esc(j.tanggal||"-") + ' · Jam ' + esc(j.jam_ke||"-") + '</div></div>' +
+          esc(j.tanggal||"-") + ' · Jam ' + esc(j.jam_ke||"-") +
+          (j.luar_jadwal ? ' <span class="ij-tag ij-tag-luar">⚠ Di luar jadwal</span>' : '') + '</div></div>' +
           (j.guru_asli ? '<div style="font-size:12px;color:#b78100">Menggantikan: ' +
           esc(j.guru_asli) + '</div>' : '') +
         '<span style="padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;background:' +
@@ -6258,6 +6484,7 @@ window.editJurnal = async (id) => {
   if ($("jMapel")) $("jMapel").value = j.mapel_id || "";
   $("jMateri").value = j.materi || "";
   $("jCatatan").value = j.catatan || "";
+  ijModeEdit(j);   // jurnal lama diedit lewat mode manual
 
   // muat absensi kelas, lalu terapkan status tersimpan
   await muatAbsensi();
@@ -6663,7 +6890,7 @@ async function muatJadwal(){
     const semuaProfil = await ambilSemua("profil");
     _jdGuruList = semuaProfil.filter(u => u.role === "guru")
       .sort((a,b) => String(a.nama||"").localeCompare(String(b.nama||"")));
-      await rsMuatWaktu();   // jam bel untuk waktu otomatis    
+    await rsMuatWaktu();   // jam bel untuk waktu otomatis
   } catch (e) {
     $("main").innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat data: ' +
       esc(e.message) + '</div></div>'; return;
