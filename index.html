@@ -481,6 +481,13 @@ tr.ab-pkl td{background:#e3fafc;color:#0b7285}
 .kh-tabel thead th.kh-th-pkl{background:#0b7285}
 .kh-pkl-n{color:#0b7285}
 .kh-box-pkl{background:#e3fafc;border:1px solid #99e9f2;color:#0b7285}
+/* ===== NOTIFIKASI JURNAL (Beranda) ===== */
+.nj-guru{border:1px solid var(--garis);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.nj-guru-kepala{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.nj-slot{font-size:13px;margin-top:4px}.nj-slot small{color:var(--ink-lembut)}
+.nj-kartu-guru{border:1px solid #ffe08a;background:#fff8e6}.nj-judul-guru{color:#8a5a00}
+[data-dark="1"] .nj-kartu-guru{background:#3a2f1a;border-color:#6b5a2a}
+[data-dark="1"] .nj-judul-guru{color:#ffd166}
 /* ===== ISI JURNAL: PILIH DARI JADWAL ===== */
 .ij-kotak{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin:4px 0 14px}
 .ij-judul{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:13px;font-weight:700;color:#1e3a5f;margin-bottom:8px}
@@ -1083,7 +1090,8 @@ async function muatBeranda(){
     '<div class="card"><h2>Selamat datang, ' + esc(ME.nama || ME.email) + '</h2>' +
     '<p style="color:#6b7280">Anda masuk sebagai <b>' + namaRole(ME.role) + '</b>. ' +
     'Gunakan tab di atas untuk berpindah menu.</p></div>';
-  $("main").innerHTML = html + '<div id="pengumumanArea"></div><div id="jadwalHariIni"></div>';
+  $("main").innerHTML = html + '<div id="pengumumanArea"></div><div id="notifJurnal"></div><div id="jadwalHariIni"></div>';
+  muatNotifJurnal();   // tidak ditunggu: Beranda tampil lebih dulu, kartu menyusul
 
   // ambil pengumuman (kalau ada)
   try {
@@ -1121,13 +1129,8 @@ async function muatJadwalHariIni(){
     '<div class="card"><h2>Jadwal Hari Ini — ' + HARI[hariIni] + '</h2>' +
     '<div class="empty">Memuat...</div></div>';
   try {
-    let q = sb.from("jadwal")
-      .select("id, hari, jam_ke, waktu, kelas_id, mapel_id, guru_id, " +
-              "kelas:kelas_id(nama_kelas), mapel:mapel_id(nama_mapel), guru:guru_id(nama, email)")
-      .eq("hari", hariIni);
-    if (ME.role === "guru") q = q.eq("guru_id", ME.id);   // guru: hanya jadwalnya
-    const { data, error } = await q;
-    if (error) throw new Error(error.message);
+    // guru: hanya jadwalnya. Di-cache 5 menit & dipakai bersama kartu notifikasi jurnal.
+    const data = await ambilJadwalHari(hariIni, ME.role === "guru" ? ME.id : null);
 
     const list = (data || []).sort((a,b) =>
       String(a.jam_ke).localeCompare(String(b.jam_ke), undefined, { numeric:true }));
@@ -1258,6 +1261,19 @@ async function muatPengaturan(){
       '<button class="btn" style="margin-top:14px" onclick="simpanBatasJurnal()">Simpan Batas Waktu</button>' +
       '<div id="setBatasMsg"></div>' +
     '</div>' +
+    // ---- Hari Libur ----
+    '<div class="card"><h2>Hari Libur</h2>' +
+      '<p style="color:#6b7280;font-size:13px;margin-bottom:10px">Tanggal tanpa KBM (libur nasional, cuti bersama, libur semester, kegiatan sekolah). ' +
+        'Tanggal ini tidak dianggap "jurnal belum diisi" di Beranda dan tidak ditandai di Kehadiran Harian / Rekap Bulanan. Bisa satu hari atau rentang.</p>' +
+      '<div class="row">' +
+        '<div><label>Dari tanggal</label><input type="date" id="hlMulai"></div>' +
+        '<div><label>Sampai tanggal (kosongkan bila 1 hari)</label><input type="date" id="hlSelesai"></div>' +
+      '</div>' +
+      '<label>Keterangan</label><input id="hlKet" placeholder="mis. Libur Maulid Nabi">' +
+      '<button class="btn" id="hlBtn" onclick="simpanHariLibur()">Tambah hari libur</button>' +
+      '<button class="btn btn-ghost btn-sm" id="hlBatal" style="margin-left:8px;display:none" onclick="batalEditHariLibur()">Batal Edit</button>' +
+      '<div id="hlList" style="margin-top:14px"><div class="page-kosong">Memuat...</div></div>' +
+    '</div>' +
     // ---- Mode Pemeliharaan ----
     '<div class="card"><h2>Mode Pemeliharaan</h2>' +
       '<p style="color:#6b7280;font-size:13px;margin-bottom:10px">Saat aktif, guru/kepsek/pengawas melihat ' +
@@ -1358,6 +1374,8 @@ async function muatPengaturan(){
     '</div>';
     tandaiTemaAktif();
     tandaiAksenAktif();
+    _editLiburId = null;
+    renderHariLibur();
 }
 
 window.simpanInfoSekolah = async () => {
@@ -4314,6 +4332,8 @@ async function khRenderHarian(){
     ]);
     _khHarian = khSusunHarian(hari, jadwal, jurnal, absensi, siswa, koreksi, pkl);
     _khHarian.tanggal = _khTanggal; _khHarian.kelas = khNamaKelas();
+    await ambilHariLibur();   // di-cache per sesi
+    _khHarian.libur = cariLibur(_khTanggal);
     khGambarHarian();
   } catch (e) {
     $("khHarianIsi").innerHTML = '<div class="page-kosong">Gagal memuat: ' + esc(e.message) + '</div>';
@@ -4363,12 +4383,17 @@ function khRingkasHtml(d){
 }
 function khGambarHarian(){
   const d = _khHarian;
+  if (d.libur && !d.adaJurnal) {
+    $("khHarianIsi").innerHTML = '<div class="kh-box kh-box-abu" style="margin:0"><b>🏖 Hari libur:</b> ' + esc(d.libur.keterangan) +
+      '. Tidak ada KBM; tanggal ini tidak dihitung.</div>';
+    return;
+  }
   if (!d.kolom.length) {
     $("khHarianIsi").innerHTML = '<div class="empty">Tidak ada jadwal maupun jurnal untuk kelas ini pada tanggal tersebut (libur / akhir pekan?).</div>';
     return;
   }
   if (!d.baris.length) { $("khHarianIsi").innerHTML = '<div class="empty">Belum ada siswa aktif di kelas ini.</div>'; return; }
-  $("khHarianIsi").innerHTML = khRingkasHtml(d) +
+  $("khHarianIsi").innerHTML = khBannerTanpaJurnal(d) + khRingkasHtml(d) +
     '<div style="overflow-x:auto">' + khTabelHarian(d, false) + '</div>' +
     '<div class="kh-legend"><span><i class="kh-H"></i>Hadir</span><span><i class="kh-S"></i>Sakit</span><span><i class="kh-I"></i>Izin</span>' +
       '<span><i class="kh-A"></i>Alpa</span><span><i class="kh-belum"></i>Jurnal belum diisi</span><span><i style="background:#fff9db"></i>Hadir sebagian</span>' +
@@ -4516,9 +4541,11 @@ async function khRenderBulanan(){
   try {
     const [th, bl] = _khBulan.split("-").map(Number);
     const awal = _khBulan + "-01", akhir = _khBulan + "-" + khPad(new Date(th, bl, 0).getDate());
-    const [siswa, jurnalRes] = await Promise.all([
+    const [siswa, jurnalRes, jadwalRes] = await Promise.all([
       khAmbilSiswa(),
-      sb.from("jurnal").select("id, tanggal").eq("kelas_id", _khKelasAktif).gte("tanggal", awal).lte("tanggal", akhir)
+      sb.from("jurnal").select("id, tanggal").eq("kelas_id", _khKelasAktif).gte("tanggal", awal).lte("tanggal", akhir),
+      sb.from("jadwal").select("hari, jam_ke").eq("kelas_id", _khKelasAktif),
+      ambilHariLibur()
     ]);
     if (jurnalRes.error) throw new Error(jurnalRes.error.message);
     const jurnal = jurnalRes.data || [];
@@ -4529,6 +4556,7 @@ async function khRenderBulanan(){
     ]);
     _khBulanan = khSusunBulanan(jurnal, absensi, siswa, koreksi, pkl);
     _khBulanan.bulan = _khBulan; _khBulanan.kelas = khNamaKelas();
+    _khBulanan.tanpaJurnal = khHariTanpaJurnal(awal, akhir, jurnal, jadwalRes.error ? [] : (jadwalRes.data || []));
     khGambarBulanan();
   } catch (e) {
     $("khBulananIsi").innerHTML = '<div class="page-kosong">Gagal memuat: ' + esc(e.message) + '</div>';
@@ -4554,12 +4582,13 @@ function khTabelBulanan(d, cetak){
 }
 function khGambarBulanan(){
   const d = _khBulanan;
-  if (!d.hariEfektif) { $("khBulananIsi").innerHTML = '<div class="empty">Belum ada jurnal untuk kelas ini pada ' + esc(khNamaBulan(_khBulan)) + '.</div>'; return; }
+  if (!d.hariEfektif) { $("khBulananIsi").innerHTML = khBoxTanpaJurnal(d) + '<div class="empty">Belum ada jurnal untuk kelas ini pada ' + esc(khNamaBulan(_khBulan)) + '.</div>'; return; }
   if (!d.baris.length) { $("khBulananIsi").innerHTML = '<div class="empty">Belum ada siswa aktif di kelas ini.</div>'; return; }
   const sisaSeri = d.baris.reduce((t, b) => t + b.seri, 0), siswaSeri = d.baris.filter(b => b.seri).length;
   $("khBulananIsi").innerHTML =
     (sisaSeri ? '<div class="kh-box kh-box-seri" style="margin:0 0 10px"><b>⚠ Masih ada ' + sisaSeri + ' hari seri belum dikoreksi (' + siswaSeri + ' siswa).</b> ' +
       'Selesaikan sebelum rekap dipakai untuk rapor: klik nama siswa → klik tanggalnya → koreksi di tampilan Harian.</div>' : '') +
+    khBoxTanpaJurnal(d) +
     '<div style="overflow-x:auto">' + khTabelBulanan(d, false) + '</div>' +
     '<div class="kh-box kh-box-abu"><b>Cara hitung (satuan hari, untuk rapor):</b> Hari efektif = hari yang punya minimal 1 jurnal ' +
     'untuk kelas ini (' + d.hariEfektif + ' hari). Hadir sebagian dihitung <b>Hadir</b>, jumlah harinya ditampilkan di kolom ⚠. ' +
@@ -9742,6 +9771,248 @@ window.pkExcel = () => {
   toast("Excel diunduh.");
 };
 /* ==================== AKHIR MODUL PKL ==================== */
+
+/* ==================== HARI LIBUR ==================== */
+/* Dimuat sekali per sesi (tabel kecil), dipakai Beranda & Kehadiran Harian. */
+let _liburCache = null;
+let _editLiburId = null;
+
+async function ambilHariLibur(paksa){
+  if (_liburCache && !paksa) return _liburCache;
+  try {
+    const { data, error } = await sb.from("hari_libur")
+      .select("id, tanggal_mulai, tanggal_selesai, keterangan").order("tanggal_mulai", { ascending:false });
+    if (error) throw error;
+    _liburCache = data || [];
+  } catch (e) { console.warn("hari_libur:", e.message); _liburCache = _liburCache || []; }
+  return _liburCache;
+}
+function cariLibur(tgl){ return (_liburCache || []).find(l => tgl >= l.tanggal_mulai && tgl <= l.tanggal_selesai) || null; }
+
+async function renderHariLibur(){
+  const el = $("hlList"); if (!el) return;
+  const L = await ambilHariLibur(true);
+  if (!$("hlList")) return;
+  if (!L.length) { el.innerHTML = '<div class="empty">Belum ada hari libur.</div>'; return; }
+  const f = t => new Date(t + "T00:00:00").toLocaleDateString("id-ID", { weekday:"short", day:"numeric", month:"short", year:"numeric" });
+  el.innerHTML = '<div style="overflow-x:auto"><table><tr><th>Tanggal</th><th>Keterangan</th><th class="aksi-cell">Aksi</th></tr>' +
+    L.map(x => '<tr><td style="white-space:nowrap">' + f(x.tanggal_mulai) + (x.tanggal_selesai !== x.tanggal_mulai ? ' – ' + f(x.tanggal_selesai) : '') + '</td>' +
+      '<td>' + esc(x.keterangan) + '</td><td class="aksi-cell">' +
+      '<button class="aksi-edit" onclick="editHariLibur(\'' + x.id + '\')">Edit</button>' +
+      '<button class="aksi-hapus" onclick="hapusHariLibur(\'' + x.id + '\')">Hapus</button></td></tr>').join("") + '</table></div>';
+}
+window.simpanHariLibur = async () => {
+  const mulai = $("hlMulai").value, selesai = $("hlSelesai").value || mulai, ket = $("hlKet").value.trim();
+  if (!mulai) return toast("Tanggal mulai wajib diisi.", "warning");
+  if (selesai < mulai) return toast("Tanggal selesai harus sama atau setelah tanggal mulai.", "warning");
+  if (!ket) return toast("Keterangan wajib diisi.", "warning");
+  const isi = { tanggal_mulai: mulai, tanggal_selesai: selesai, keterangan: ket };
+  try {
+    const { error } = _editLiburId
+      ? await sb.from("hari_libur").update(isi).eq("id", _editLiburId)
+      : await sb.from("hari_libur").insert(isi);
+    if (error) throw new Error(error.message);
+    toast(_editLiburId ? "Hari libur diperbarui." : "Hari libur ditambahkan.", "sukses");
+    batalEditHariLibur();
+    await renderHariLibur();
+  } catch (e) { toast("Gagal: " + e.message, "gagal"); }
+};
+window.editHariLibur = (id) => {
+  const x = (_liburCache || []).find(l => l.id === id); if (!x) return;
+  _editLiburId = id;
+  $("hlMulai").value = x.tanggal_mulai; $("hlSelesai").value = x.tanggal_selesai; $("hlKet").value = x.keterangan || "";
+  $("hlBtn").textContent = "Perbarui hari libur";
+  $("hlBatal").style.display = "inline-block";
+  $("hlMulai").scrollIntoView({ behavior:"smooth", block:"center" });
+};
+window.batalEditHariLibur = () => {
+  _editLiburId = null;
+  if ($("hlMulai")) $("hlMulai").value = "";
+  if ($("hlSelesai")) $("hlSelesai").value = "";
+  if ($("hlKet")) $("hlKet").value = "";
+  if ($("hlBtn")) $("hlBtn").textContent = "Tambah hari libur";
+  if ($("hlBatal")) $("hlBatal").style.display = "none";
+};
+window.hapusHariLibur = async (id) => {
+  const x = (_liburCache || []).find(l => l.id === id); if (!x) return;
+  if (!(await konfirmasi("Hapus Hari Libur", 'Hapus "' + x.keterangan + '"?', { bahaya:true }))) return;
+  try {
+    const { error } = await sb.from("hari_libur").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+    if (_editLiburId === id) batalEditHariLibur();
+    toast("Hari libur dihapus.", "sukses");
+    await renderHariLibur();
+  } catch (e) { toast("Gagal: " + e.message, "gagal"); }
+};
+
+/* ==================== NOTIFIKASI JURNAL (Beranda) ==================== */
+/* Hemat Supabase: hanya dijalankan saat Beranda dibuka (tanpa realtime/polling), kolom seperlunya,
+   guru hanya menarik datanya sendiri, jadwal di-cache 5 menit & dipakai bersama kartu "Jadwal Hari Ini". */
+const _jadwalHariCache = {};
+function ambilJadwalHari(hari, guruId){
+  const kunci = hari + "|" + (guruId || "semua");
+  const c = _jadwalHariCache[kunci];
+  if (c && Date.now() - c.t < 5 * 60000) return c.p;
+  let q = sb.from("jadwal")
+    .select("jam_ke, waktu, kelas_id, mapel_id, guru_id, kelas:kelas_id(nama_kelas), mapel:mapel_id(nama_mapel, kode), guru:guru_id(nama, email)")
+    .eq("hari", hari);
+  if (guruId) q = q.eq("guru_id", guruId);
+  const p = q.then(({ data, error }) => { if (error) throw new Error(error.message); return data || []; });
+  p.catch(() => { delete _jadwalHariCache[kunci]; });
+  _jadwalHariCache[kunci] = { t: Date.now(), p };
+  return p;
+}
+
+let _njMode = "ini";       // admin/kepsek: "ini" | "sebelum"
+let _njSekarang = null;    // waktu server (WITA) saat Beranda dibuka
+
+function njMenit(teks){ const m = String(teks || "").match(/(\d{1,2})[.:](\d{2})/); return m ? (+m[1]) * 60 + (+m[2]) : null; }
+function njLabelJam(s){ return s.r ? (s.r[0] === s.r[1] ? String(s.r[0]) : s.r[0] + "–" + s.r[1]) : (s.jam_ke || "-"); }
+function njMapel(s){ return (s.mapel && (s.mapel.kode || s.mapel.nama_mapel)) || "-"; }
+function njHariKbmSebelum(tgl){
+  let t = tgl;
+  for (let i = 0; i < 21; i++) { t = khGeserTgl(t, -1); if (khHariKe(t) && !cariLibur(t)) return t; }
+  return null;
+}
+
+/* Bandingkan slot roster dengan jurnal pada tanggal tgl. guruId null = semua guru.
+   Slot terisi bila ada jurnal kelas yang sama dengan jam beririsan (guru pengganti ikut dihitung). */
+async function njHitung(tgl, guruId){
+  const hari = khHariKe(tgl);
+  if (!hari) return { tgl, akhirPekan:true, slot:[] };
+  const libur = cariLibur(tgl);
+  if (libur) return { tgl, libur, slot:[] };
+  const jadwal = await ambilJadwalHari(hari, guruId);
+  if (!jadwal.length) return { tgl, slot:[] };
+  let q = sb.from("jurnal").select("kelas_id, jam_ke").eq("tanggal", tgl);
+  if (guruId) q = q.in("kelas_id", [...new Set(jadwal.map(j => j.kelas_id))]);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  const jurnal = data || [];
+  const hariIni = khTglLokal(_njSekarang);
+  const menitKini = _njSekarang.getHours() * 60 + _njSekarang.getMinutes();
+  const bel = rsJamBel(hari);
+  const slot = jadwal.map(j => {
+    const r = rsRentang(j.jam_ke);
+    const isi = !!r && jurnal.some(x => { const y = rsRentang(x.jam_ke); return x.kelas_id === j.kelas_id && y && y[0] <= r[1] && r[0] <= y[1]; });
+    let status = isi ? "isi" : "belum";
+    if (!isi && tgl === hariIni) {
+      // jam selesai: dari jam bel Roster; cadangan dari kolom waktu jadwal; tak diketahui → jangan ditagih dulu
+      let akhir = (r && bel[r[1]-1]) ? njMenit(bel[r[1]-1].selesai) : null;
+      if (akhir === null) akhir = njMenit(String(j.waktu || "").split(/[-–]/).pop());
+      if (akhir === null || menitKini < akhir) status = "nanti";
+    }
+    return { ...j, r, status };
+  }).sort((a,b) => (a.r ? a.r[0] : 99) - (b.r ? b.r[0] : 99));
+  return { tgl, slot };
+}
+
+async function muatNotifJurnal(){
+  if (!["admin","kepsek","guru"].includes(ME.role)) return;
+  try {
+    const [now] = await Promise.all([
+      ambilWaktuServer(), ambilHariLibur(),
+      (_rsWaktu && Object.keys(_rsWaktu).length) ? Promise.resolve() : rsMuatWaktu()
+    ]);
+    _njSekarang = now;
+    if (ME.role === "guru") return njGambarGuru(await njHitung(khTglLokal(now), ME.id));
+    await njGambarAdmin();
+  } catch (e) {
+    console.warn("Notifikasi jurnal:", e.message);
+    if ($("notifJurnal")) $("notifJurnal").innerHTML = "";
+  }
+}
+
+async function njGambarAdmin(){
+  const area = $("notifJurnal"); if (!area) return;
+  const hariIni = khTglLokal(_njSekarang);
+  const tgl = _njMode === "sebelum" ? njHariKbmSebelum(hariIni) : hariIni;
+  area.innerHTML = '<div class="card"><div class="page-kosong">Memeriksa jurnal...</div></div>';
+  const h = tgl ? await njHitung(tgl, null) : { tgl:null, akhirPekan:true, slot:[] };
+  const tombol = (m, l) => '<button class="btn btn-sm' + (_njMode === m ? '' : ' btn-ghost') + '" onclick="njSetMode(\'' + m + '\')">' + l + '</button>';
+  const kepala = '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">' +
+      '<h2 style="margin:0">Jurnal Belum Diisi</h2><span style="flex:1"></span>' + tombol("ini", "Hari ini") + tombol("sebelum", "Hari KBM sebelumnya") + '</div>' +
+    '<div style="font-size:13px;color:var(--ink-lembut);margin-bottom:10px">' + (tgl ? esc(khTglPanjang(tgl)) : "-") +
+      (_njMode === "ini" ? ' · pukul ' + khPad(_njSekarang.getHours()) + '.' + khPad(_njSekarang.getMinutes()) + ' WITA' : '') + '</div>';
+  let isi, adaBelum = false;
+  if (h.akhirPekan) isi = '<div class="empty">Akhir pekan — tidak ada jadwal.</div>';
+  else if (h.libur) isi = '<div class="empty">🏖 Hari libur: ' + esc(h.libur.keterangan) + '.</div>';
+  else if (!h.slot.length) isi = '<div class="empty">Belum ada jadwal di roster untuk hari ini.</div>';
+  else {
+    const n = { isi:0, belum:0, nanti:0 }; h.slot.forEach(s => n[s.status]++);
+    adaBelum = n.belum > 0;
+    const chip = (bg, fg, v, l) => '<div class="kh-chip" style="background:' + bg + ';color:' + fg + '"><b>' + v + '</b>' + l + '</div>';
+    const perGuru = {};
+    h.slot.filter(s => s.status === "belum").forEach(s => {
+      const g = (s.guru && (s.guru.nama || s.guru.email)) || "(tanpa guru)";
+      (perGuru[g] = perGuru[g] || []).push(s);
+    });
+    const daftar = Object.entries(perGuru).sort((a,b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
+    isi = '<div class="kh-chips">' + chip("#e7ecfb","#3b5bdb", h.slot.length, "Slot jadwal") + chip("#ebfbee","#2b8a3e", n.isi, "Sudah diisi") +
+        chip("#fff0f0","#c92a2a", n.belum, "Belum diisi (jam sudah lewat)") + (n.nanti ? chip("#f1f3f5","#495057", n.nanti, "Belum waktunya") : '') + '</div>' +
+      (daftar.length ? daftar.map(([g, arr]) => '<div class="nj-guru"><div class="nj-guru-kepala"><b>' + esc(g) + '</b>' +
+          '<span class="tag-perhatian" style="font-size:12px;padding:2px 10px">' + arr.length + ' jurnal</span></div>' +
+          arr.map(s => '<div class="nj-slot">• ' + esc((s.kelas && s.kelas.nama_kelas) || "-") + ' · jam ' + esc(njLabelJam(s)) + ' · ' + esc(njMapel(s)) +
+            (s.waktu ? ' <small>(' + esc(s.waktu) + ')</small>' : '') + '</div>').join("") + '</div>').join("")
+        : '<div style="color:#2b8a3e;font-weight:600">✓ Semua jurnal yang jamnya sudah lewat sudah diisi.</div>');
+  }
+  area.innerHTML = '<div class="card' + (adaBelum ? ' kartu-perhatian' : '') + '">' + kepala + isi +
+    '<p style="font-size:12px;color:var(--ink-lembut);margin-top:8px">Dibandingkan dengan roster. Jurnal guru pengganti dihitung terisi. ' +
+    'Hari libur (Pengaturan → Hari Libur) dan akhir pekan tidak dicek.</p></div>';
+}
+window.njSetMode = async (m) => {
+  _njMode = m;
+  try { await njGambarAdmin(); } catch (e) { toast("Gagal: " + e.message, "gagal"); }
+};
+
+/* Kartu guru: tampil hanya bila ada jurnal yang jamnya sudah lewat tetapi belum diisi. */
+function njGambarGuru(h){
+  const area = $("notifJurnal"); if (!area) return;
+  if (!h.slot.some(s => s.status === "belum")) { area.innerHTML = ""; return; }
+  const nIsi = h.slot.filter(s => s.status === "isi").length;
+  const baris = s => {
+    const teks = esc((s.kelas && s.kelas.nama_kelas) || "-") + ' · jam ' + esc(njLabelJam(s)) + ' · ' + esc(njMapel(s));
+    if (s.status === "isi") return '<div>✓ <span style="color:#2b8a3e">' + teks + '</span></div>';
+    if (s.status === "belum") return '<div>✗ <b style="color:#c92a2a">' + teks + '</b> — jam sudah lewat</div>';
+    return '<div style="color:var(--ink-lembut)">○ ' + teks + ' — belum waktunya</div>';
+  };
+  area.innerHTML = '<div class="card nj-kartu-guru"><h2 class="nj-judul-guru">Jurnal Anda Hari Ini</h2>' +
+    '<div style="font-size:14px;margin-bottom:8px"><b>' + nIsi + ' dari ' + h.slot.length + '</b> jurnal sudah diisi.</div>' +
+    '<div style="font-size:13px;line-height:1.8">' + h.slot.map(baris).join("") + '</div>' +
+    '<button class="btn btn-sm" style="margin-top:10px" onclick="njKeIsiJurnal()">✎ Isi jurnal sekarang</button></div>';
+}
+window.njKeIsiJurnal = () => {
+  const b = [...document.querySelectorAll("#nav button")].find(x => x.dataset.key === "isijurnal");
+  if (b) b.click();
+};
+
+/* ==================== KEHADIRAN: HARI KBM TANPA JURNAL ==================== */
+function khBannerTanpaJurnal(d){
+  if (d.adaJurnal || d.libur || d.tanggal >= khTglLokal(new Date())) return "";
+  return '<div class="kh-box kh-box-kuning" style="margin:0 0 10px"><b>⚠ Belum ada satu pun jurnal pada tanggal ini.</b><br>' +
+    'Roster memuat ' + d.kolom.length + ' slot pelajaran, tetapi tidak ada guru yang mengisi jurnal. Status kehadiran siswa belum bisa dihitung ' +
+    'dan tanggal ini <b>tidak masuk rekap bulanan</b> sampai ada jurnal. Bila tanggal ini libur, minta admin menandainya di Pengaturan → Hari Libur.</div>';
+}
+/* Hari (sebelum hari ini) yang ada jadwal di roster tetapi 0 jurnal, dan bukan hari libur. */
+function khHariTanpaJurnal(awal, akhir, jurnal, jadwal){
+  const jamPerHari = {};
+  jadwal.forEach(j => { const r = rsRentang(j.jam_ke); if (r) jamPerHari[j.hari] = (jamPerHari[j.hari] || 0) + (r[1] - r[0] + 1); });
+  const adaJurnal = new Set(jurnal.map(j => j.tanggal));
+  const hariIni = khTglLokal(new Date()), hasil = [];
+  for (let t = awal; t <= akhir && t < hariIni; t = khGeserTgl(t, 1)) {
+    const h = khHariKe(t);
+    if (!h || !jamPerHari[h] || adaJurnal.has(t) || cariLibur(t)) continue;
+    hasil.push({ tanggal: t, jam: jamPerHari[h] });
+  }
+  return hasil;
+}
+function khBoxTanpaJurnal(d){
+  const L = d.tanpaJurnal || []; if (!L.length) return "";
+  return '<div class="kh-box kh-box-kuning" style="margin:0 0 10px"><b>⚠ ' + L.length + ' hari ada jadwal tetapi tidak ada satu pun jurnal</b><br>' +
+    L.map(x => '<a href="#" onclick="khBukaTanggal(\'' + x.tanggal + '\');return false">' + esc(khTglPanjang(x.tanggal)) + '</a> (' + x.jam + ' jam di roster)').join(" · ") +
+    '<br><span style="font-size:12px">Tanggal itu <b>belum dihitung hari efektif</b>, jadi kehadiran siswa belum masuk rekap. ' +
+    'Bila libur, minta admin menandainya di Pengaturan → Hari Libur. Bila ada KBM, minta guru mengisi jurnalnya.</span></div>';
+}
 
 </script>
 </body>
