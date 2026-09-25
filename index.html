@@ -463,6 +463,24 @@
 .kh-c-X{background:#fff0f6;color:#a61e4d}
 .kh-box-seri{background:#fff0f6;border:1px solid #f3a5c4;color:#8c1941}
 .kh-tabel thead th.kh-th-seri{background:#a61e4d}
+/* ===== PKL ===== */
+.pkl-st{display:inline-block;font-size:12px;font-weight:700;border-radius:99px;padding:2px 10px}
+.pkl-sedang{background:#c5f6fa;color:#0b7285}.pkl-belum{background:#f1f3f5;color:#495057}.pkl-selesai{background:#d3f9d8;color:#2b8a3e}
+.pkl-info{font-size:11px;color:#6b7280;display:block;margin-top:2px}
+.pkl-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.pkl-chip{border-radius:10px;padding:8px 12px;font-size:13px;min-width:120px}.pkl-chip b{display:block;font-size:20px}
+.pkl-daftar{border:1px solid var(--garis);border-radius:8px;padding:8px 10px;max-height:200px;overflow-y:auto}
+.pkl-daftar label{display:flex;align-items:center;gap:8px;font-weight:400;margin:4px 0;font-size:13px}
+.pkl-daftar label input{width:auto}.pkl-daftar label.terkunci{color:#adb5bd}
+tr.ab-pkl td{background:#e3fafc;color:#0b7285}
+.ab-pkl-tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700}
+.kh-PKL{background:#e3fafc;color:#0b7285;font-weight:700}
+.kh-st-PKL{background:#c5f6fa;color:#0b7285}
+.kh-c-PKL{background:#e3fafc;color:#0b7285}
+.kh-tabel tr.kh-pkl td{background-color:#f3fcfd}
+.kh-tabel thead th.kh-th-pkl{background:#0b7285}
+.kh-pkl-n{color:#0b7285}
+.kh-box-pkl{background:#e3fafc;border:1px solid #99e9f2;color:#0b7285}
 /* ===== ISI JURNAL: PILIH DARI JADWAL ===== */
 .ij-kotak{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin:4px 0 14px}
 .ij-judul{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:13px;font-weight:700;color:#1e3a5f;margin-bottom:8px}
@@ -908,15 +926,15 @@ sb.auth.onAuthStateChange(async (event, session) => {
 /* ===== NAVIGASI ===== */
 // Menu per role. Untuk sekarang baru "kelas"; kita tambah modul lain nanti.
 const MENU = {
-  admin:  ["beranda", "jadwal", "roster", "isijurnal", "daftarjurnal", "rekapharian", "nilai", "walikelas", "bp", "kelas", "mapel", "siswa", "pengguna", "izinmenu", "pengaturan"],
+  admin:  ["beranda", "jadwal", "roster", "isijurnal", "daftarjurnal", "rekapharian", "nilai", "walikelas", "bp", "pkl", "kelas", "mapel", "siswa", "pengguna", "izinmenu", "pengaturan"],
   kepsek: ["beranda", "jadwal", "daftarjurnal", "rekapharian", "nilai", "walikelas"],
   pengawas: ["beranda", "jadwal", "daftarjurnal", "rekapharian", "nilai", "walikelas"],
-  guru:   ["beranda", "jadwal", "roster", "isijurnal", "daftarjurnal", "rekapharian", "nilai", "walikelas", "bp"]
+  guru:   ["beranda", "jadwal", "roster", "isijurnal", "daftarjurnal", "rekapharian", "nilai", "walikelas", "bp", "pkl"]
 };
 const LABEL = { beranda:"Beranda", kelas:"Kelas", mapel:"Mapel", siswa:"Siswa", jadwal:"Jadwal", roster:"Roster",
   pengguna:"Pengguna", isijurnal:"Isi Jurnal", daftarjurnal:"Daftar Jurnal", nilai:"Nilai",
   catatan:"Catatan", pengaturan:"Pengaturan", rekapharian:"Rekap Harian", izinmenu:"Izin Menu",
-  rekapabsensi:"Rekap Absensi", walikelas:"Wali Kelas", bp:"Bimbingan Konseling" };
+  rekapabsensi:"Rekap Absensi", walikelas:"Wali Kelas", bp:"Bimbingan Konseling", pkl:"PKL" };
 
 function bangunNav(){
   const nav = $("nav");
@@ -931,6 +949,7 @@ function bangunNav(){
     // Rekap Harian hanya untuk guru bila diizinkan (kepsek/pengawas selalu punya)
     if (ME.role === "guru" && !ME.izin_rekapharian) menu = menu.filter(k => k !== "rekapharian");
     if (!ME.izin_bp) menu = menu.filter(k => k !== "bp");
+    if (!ME.izin_pkl) menu = menu.filter(k => k !== "pkl");
   }
   menu.forEach((key, i) => {
     const b = document.createElement("button");
@@ -948,7 +967,7 @@ async function segarkanIzinMenu(){
   if (!ME || ME.role === "admin") return;   // admin tak terpengaruh izin
   try {
     const { data, error } = await sb.from("profil")
-      .select("izin_nilai, izin_catatan, izin_jadwal, izin_jadwal_edit, izin_rekapharian, izin_verifikasi, izin_absensi, izin_kartu, izin_rekapnilai, izin_bp").eq("id", ME.id).single();
+      .select("izin_nilai, izin_catatan, izin_jadwal, izin_jadwal_edit, izin_rekapharian, izin_verifikasi, izin_absensi, izin_kartu, izin_rekapnilai, izin_bp, izin_pkl").eq("id", ME.id).single();
     if (error || !data) return;
     const berubah =
       ME.izin_nilai   !== data.izin_nilai   ||
@@ -960,7 +979,8 @@ async function segarkanIzinMenu(){
       ME.izin_absensi !== data.izin_absensi ||
       ME.izin_kartu   !== data.izin_kartu ||
       ME.izin_rekapnilai !== data.izin_rekapnilai ||
-      ME.izin_bp !== data.izin_bp;
+      ME.izin_bp !== data.izin_bp ||
+      ME.izin_pkl !== data.izin_pkl;
     if (berubah) {
       ME.izin_nilai = data.izin_nilai;
       ME.izin_catatan = data.izin_catatan;
@@ -972,6 +992,7 @@ async function segarkanIzinMenu(){
       ME.izin_kartu = data.izin_kartu;
       ME.izin_rekapnilai = data.izin_rekapnilai;
       ME.izin_bp = data.izin_bp;
+      ME.izin_pkl = data.izin_pkl;
       const menuAktif = document.querySelector("#nav button.active");
       const keyAktif = menuAktif ? menuAktif.textContent : null;
       bangunNav();   // bangun ulang; menu yang dicabut akan hilang
@@ -999,6 +1020,7 @@ function buka(key, btn){
   if (key === "rekapabsensi") return muatRekapAbsensi();
   if (key === "walikelas") return muatWaliKelas();
   if (key === "bp") return muatBP();
+  if (key === "pkl") return muatPKL();
   if (key === "izinmenu") return muatIzinMenu();
 }
 
@@ -2380,21 +2402,50 @@ window.muatAbsensi = async () => {
     _absenSiswa = (data||[]).map(s => ({ siswa_id: s.id, nis: s.nis||"", nama: s.nama_siswa, status: "Hadir", keterangan: "" }));
     if (!_absenSiswa.length) { area.innerHTML =
       '<p style="color:#b78100;font-size:13px;margin-top:14px">Belum ada siswa di kelas ini.</p>'; return; }
+    await absenTerapkanPkl();
     renderAbsensi();
   } catch (e) {
     area.innerHTML = '<p style="color:#c92a2a;margin-top:14px">Gagal: ' + esc(e.message) + '</p>';
   }
 };
 
+/* Tandai siswa yang sedang PKL pada tanggal jurnal (tabel pkl). Tak mengubah status siswa lain. */
+async function absenTerapkanPkl(){
+  const tgl = $("jTgl") ? $("jTgl").value : "";
+  const ids = _absenSiswa.map(s => s.siswa_id);
+  const peta = {};
+  if (tgl && ids.length) {
+    try {
+      const { data, error } = await sb.from("pkl").select("siswa_id, tanggal_selesai, dudi:dudi_id(nama)")
+        .in("siswa_id", ids).lte("tanggal_mulai", tgl).gte("tanggal_selesai", tgl);
+      if (error) throw error;
+      (data || []).forEach(p => { peta[p.siswa_id] = { tempat: (p.dudi && p.dudi.nama) || "", selesai: p.tanggal_selesai }; });
+    } catch (e) { console.warn("Cek PKL:", e.message); }
+  }
+  _absenSiswa.forEach(s => {
+    if (peta[s.siswa_id]) { s.pkl = peta[s.siswa_id]; s.status = "PKL"; s.keterangan = ""; }
+    else if (s.pkl) { s.pkl = null; s.status = "Hadir"; s.keterangan = ""; }
+  });
+}
+
 const KELAS_ABSEN = { Hadir:"h", Sakit:"s", Izin:"i", Alpa:"a" };
 function renderAbsensi(){
   const opsi = ["Hadir","Sakit","Izin","Alpa"];
-  let html = '<label style="margin-top:16px">Absensi (' + _absenSiswa.length + ' siswa)</label>' +
+  const nPkl = _absenSiswa.filter(s => s.pkl).length;
+  let html = '<label style="margin-top:16px">Absensi (' + _absenSiswa.length + ' siswa' +
+      (nPkl ? ' · ' + (_absenSiswa.length - nPkl) + ' diabsen · <span style="color:#0b7285">' + nPkl + ' sedang PKL</span>' : '') + ')</label>' +
     '<div style="margin:8px 0">Tandai semua: ' +
-      opsi.map(o => '<button type="button" class="btn btn-ghost btn-sm" style="margin-right:4px" onclick="semuaAbsen(\'' + o + '\')">' + o + '</button>').join("") + '</div>' +
+      opsi.map(o => '<button type="button" class="btn btn-ghost btn-sm" style="margin-right:4px" onclick="semuaAbsen(\'' + o + '\')">' + o + '</button>').join("") +
+      (nPkl ? '<span style="font-size:12px;color:#6b7280"> (tidak mengubah siswa PKL)</span>' : '') + '</div>' +
     '<div style="overflow-x:auto"><table><tr><th>No</th><th>Nama</th>' +
       opsi.map(o => '<th style="text-align:center" class="absen-' + KELAS_ABSEN[o] + '">' + o + '</th>').join("") + '</tr>';
   _absenSiswa.forEach((s, i) => {
+    if (s.pkl) {   // sedang PKL: terkunci, tidak diabsen
+      html += '<tr class="ab-pkl"><td>' + (i+1) + '</td><td>' + esc(s.nama) + '</td><td colspan="' + opsi.length + '">' +
+        '<span class="ab-pkl-tag">🔒 Sedang PKL' + (s.pkl.tempat ? ' · ' + esc(s.pkl.tempat) : '') + '</span>' +
+        '<span class="pkl-info" style="color:#0b7285">s.d. ' + esc(pkTgl(s.pkl.selesai)) + ' — tidak perlu diabsen</span></td></tr>';
+      return;
+    }
     const perluKet = s.status !== "Hadir";   // keterangan hanya untuk Sakit/Izin/Alpa
     html += '<tr><td>' + (i+1) + '</td><td>' + esc(s.nama) + '</td>' +
       opsi.map(o => '<td style="text-align:center"><input type="radio" name="ab' + i + '" value="' + o + '" class="rb-' + KELAS_ABSEN[o] + '"' +
@@ -2415,7 +2466,7 @@ window.setAbsen = (i, status) => {
 };
 window.setKeterangan = (i, val) => { _absenSiswa[i].keterangan = val; };
 window.semuaAbsen = (status) => {
-  _absenSiswa.forEach(s => { s.status = status; if (status === "Hadir") s.keterangan = ""; });
+  _absenSiswa.forEach(s => { if (s.pkl) return; s.status = status; if (status === "Hadir") s.keterangan = ""; });
   renderAbsensi();
 };
 
@@ -2593,10 +2644,12 @@ window.simpanJurnal = async () => {
   }
 
   // ringkasan kehadiran
+  const absenDicatat = _absenSiswa.filter(x => !x.pkl);   // siswa PKL tidak dicatat di absensi
+  const nPkl = _absenSiswa.length - absenDicatat.length;
   let h=0,s=0,i=0,a=0;
-  _absenSiswa.forEach(x => { const v=x.status.toLowerCase();
+  absenDicatat.forEach(x => { const v=x.status.toLowerCase();
     if(v==="hadir")h++;else if(v==="sakit")s++;else if(v==="izin")i++;else a++; });
-  const kehadiran = "Hadir " + h + ", Sakit " + s + ", Izin " + i + ", Alpa " + a;
+  const kehadiran = "Hadir " + h + ", Sakit " + s + ", Izin " + i + ", Alpa " + a + (nPkl ? ", PKL " + nPkl : "");
 
   const { data: kelasRow } = await sb.from("kelas").select("nama_kelas").eq("id", kelasId).single();
   const { data: mapelRow } = await sb.from("mapel").select("nama_mapel").eq("id", mapelId).single();
@@ -2628,11 +2681,11 @@ window.simpanJurnal = async () => {
       tampilkanLoading("Menyimpan absensi siswa...", "Tahap 2 dari 3");
       const { error: errDel } = await sb.from("absensi").delete().eq("jurnal_id", jurnalId);
       if (errDel) throw new Error("Gagal hapus absensi lama: " + errDel.message);
-      const barisAbsen = _absenSiswa.map(x => ({
+      const barisAbsen = absenDicatat.map(x => ({
         jurnal_id: jurnalId, siswa_id: x.siswa_id, siswa_nis: x.nis, siswa_nama: x.nama,
         status: x.status, keterangan: (x.status !== "Hadir" ? (x.keterangan || "").trim() : "")
       }));
-      const { error: errAb } = await sb.from("absensi").insert(barisAbsen);
+      const { error: errAb } = barisAbsen.length ? await sb.from("absensi").insert(barisAbsen) : { error: null };
       if (errAb) throw new Error("Gagal simpan absensi: " + errAb.message);
 
       // foto: upload hanya bila guru memilih file baru
@@ -2678,11 +2731,11 @@ window.simpanJurnal = async () => {
       jurnalId = jur.id;
 
       tampilkanLoading("Menyimpan absensi siswa...", "Tahap 2 dari 3");
-      const barisAbsen = _absenSiswa.map(x => ({
+      const barisAbsen = absenDicatat.map(x => ({
         jurnal_id: jurnalId, siswa_id: x.siswa_id, siswa_nis: x.nis, siswa_nama: x.nama,
         status: x.status, keterangan: (x.status !== "Hadir" ? (x.keterangan || "").trim() : "")
       }));
-      const { error: errAb } = await sb.from("absensi").insert(barisAbsen);
+      const { error: errAb } = barisAbsen.length ? await sb.from("absensi").insert(barisAbsen) : { error: null };
       if (errAb) throw new Error("Absensi gagal: " + errAb.message);
 
       tampilkanLoading("Mengunggah foto dokumentasi...", "Tahap 3 dari 3 · mohon tunggu, jangan tutup halaman");
@@ -2776,6 +2829,7 @@ window.ijSegarkan = async () => {
   }
   if (_ijMode === "jadwal") { _ijSlot = null; ijKosongkanPilihan(); }
   ijGambar();
+  if (_absenSiswa.length) { await absenTerapkanPkl(); renderAbsensi(); }   // tanggal berubah → status PKL ikut berubah
 };
 
 function ijKosongkanPilihan(){
@@ -4041,7 +4095,7 @@ let _khHarian = null;          // hasil susun harian (untuk cetak & detail)
 let _khBulanan = null;         // hasil susun bulanan
 let _khPilih = null;           // pilihan status di form koreksi
 
-const KH_LABEL = { H:"Hadir", P:"Hadir sebagian", S:"Sakit", I:"Izin", A:"Alpa" };
+const KH_LABEL = { H:"Hadir", P:"Hadir sebagian", S:"Sakit", I:"Izin", A:"Alpa", PKL:"PKL" };
 
 /* ---------- HELPER ---------- */
 function khPad(n){ return String(n).padStart(2, "0"); }
@@ -4089,6 +4143,16 @@ async function khAmbilKoreksi(dari, sampai){
     .eq("kelas_id", _khKelasAktif).gte("tanggal", dari).lte("tanggal", sampai);
   if (error) { console.warn("absensi_harian:", error.message); return []; }   // tabel belum ada → tanpa koreksi
   return data || [];
+}
+/* Penempatan PKL siswa yang beririsan dengan [dari, sampai]. Gagal / tabel belum ada → []. */
+async function khAmbilPkl(siswaIds, dari, sampai){
+  if (!siswaIds.length) return [];
+  try {
+    const { data, error } = await sb.from("pkl").select("siswa_id, tanggal_mulai, tanggal_selesai, dudi:dudi_id(nama)")
+      .in("siswa_id", siswaIds).lte("tanggal_mulai", sampai).gte("tanggal_selesai", dari);
+    if (error) throw error;
+    return data || [];
+  } catch (e) { console.warn("pkl:", e.message); return []; }
 }
 
 /* ---------- MUAT TAB ---------- */
@@ -4163,7 +4227,7 @@ async function khAmbilAbsensi(jurnalIds){
 
 /* ---------- SUSUN HARIAN (murni, tanpa query) ---------- */
 /* jadwal: slot roster kelas pada hari itu; jurnal: jurnal kelas pada tanggal itu. */
-function khSusunHarian(hari, jadwal, jurnal, absensi, siswa, koreksi){
+function khSusunHarian(hari, jadwal, jurnal, absensi, siswa, koreksi, pkl){
   const bel = hari ? rsJamBel(hari) : [];
   const kolom = [];
   jadwal.forEach(j => {
@@ -4196,7 +4260,10 @@ function khSusunHarian(hari, jadwal, jurnal, absensi, siswa, koreksi){
   const korPer = {}; (koreksi || []).forEach(k => korPer[k.siswa_id] = k);
   const absPer = {};   // jurnal_id|siswa_id → absensi
   absensi.forEach(a => { absPer[a.jurnal_id + "|" + a.siswa_id] = a; });
+  const pklPer = {};   // siswa_id → penempatan PKL yang mencakup tanggal ini
+  (pkl || []).forEach(p => pklPer[p.siswa_id] = { tempat: (p.dudi && p.dudi.nama) || "", mulai: p.tanggal_mulai, selesai: p.tanggal_selesai });
   const baris = siswa.map(s => {
+    if (pklPer[s.id]) return { siswa: s, sel: kolom.map(() => ({ kode:"PKL" })), auto:"PKL", seri:"", kor:null, pkl: pklPer[s.id], status:"PKL" };
     const sel = kolom.map(k => {
       if (!k.jurnal) return { kode:"belum" };
       const a = absPer[k.jurnal.id + "|" + s.id];
@@ -4207,7 +4274,7 @@ function khSusunHarian(hari, jadwal, jurnal, absensi, siswa, koreksi){
     const kor = korPer[s.id] || null;
     return { siswa: s, sel, auto, seri: khSeri(kodeAda), kor, status: kor ? kor.status : auto };
   });
-  const ringkas = { H:0, P:0, S:0, I:0, A:0, K:0, X:0 };
+  const ringkas = { H:0, P:0, S:0, I:0, A:0, K:0, X:0, PKL:0 };
   baris.forEach(b => { if (b.status) ringkas[b.status]++; if (b.kor) ringkas.K++; if (b.seri && !b.kor) ringkas.X++; });
   const belum = kolom.filter(k => !k.jurnal);
   const adaJurnal = kolom.some(k => k.jurnal);
@@ -4240,11 +4307,12 @@ async function khRenderHarian(){
     if (jurnalRes.error) throw new Error(jurnalRes.error.message);
     const jurnal = jurnalRes.data || [];
     const jadwal = jadwalRes.error ? [] : (jadwalRes.data || []);   // tanpa akses jadwal → kolom dari jurnal saja
-    const [absensi, koreksi] = await Promise.all([
+    const [absensi, koreksi, pkl] = await Promise.all([
       jurnal.length ? khAmbilAbsensi(jurnal.map(j => j.id)) : Promise.resolve([]),
-      khAmbilKoreksi(_khTanggal, _khTanggal)
+      khAmbilKoreksi(_khTanggal, _khTanggal),
+      khAmbilPkl(siswa.map(s => s.id), _khTanggal, _khTanggal)
     ]);
-    _khHarian = khSusunHarian(hari, jadwal, jurnal, absensi, siswa, koreksi);
+    _khHarian = khSusunHarian(hari, jadwal, jurnal, absensi, siswa, koreksi, pkl);
     _khHarian.tanggal = _khTanggal; _khHarian.kelas = khNamaKelas();
     khGambarHarian();
   } catch (e) {
@@ -4255,11 +4323,13 @@ window.khPilihTgl = (v) => { _khTanggal = v || khTglLokal(new Date()); khRenderH
 window.khGeser = (n) => { _khTanggal = khGeserTgl(_khTanggal, n); khRenderHarian(); };
 
 function khSelHtml(c){
+  if (c.kode === "PKL") return '<td class="kh-PKL" title="Sedang PKL">PKL</td>';
   if (c.kode === "belum") return '<td class="kh-belum" title="Jurnal belum diisi guru">–</td>';
   if (c.kode === "-") return '<td class="kh-kosong" title="Tidak tercatat di absensi">·</td>';
   return '<td class="kh-' + c.kode + '"' + (c.ket ? ' title="' + esc(c.ket) + '"' : '') + '>' + c.kode + (c.ket ? '*' : '') + '</td>';
 }
 function khStatusSel(b, cetak){
+  if (b.status === "PKL") return khBadge("PKL") + (!cetak && b.pkl && b.pkl.tempat ? '<span class="kh-otomatis">' + esc(b.pkl.tempat) + '</span>' : '');
   if (!b.kor) return khBadge(b.status) +
     (b.seri && !cetak ? '<span class="kh-seri-tag">⚠ Seri (' + esc(b.seri) + ') — perlu dicek</span>' : '');
   return '<span class="kh-pena">✎</span> ' + khBadge(b.status) +
@@ -4272,11 +4342,11 @@ function khTabelHarian(d, cetak){
   let h = '<table class="kh-tabel"><thead><tr><th>No</th><th style="text-align:left">Nama Siswa</th>' +
     d.kolom.map(k => '<th>Jam ' + esc(k.jam) + '<small>' + esc(k.kode) + (k.waktu && !cetak ? ' · ' + esc(k.waktu) : '') + '</small></th>').join("") +
     '<th>Status Harian</th>' + (aksi ? '<th>Aksi</th>' : '') + '</tr></thead><tbody>';
-  h += d.baris.map((b, i) => '<tr class="' + (b.status === "P" ? "kh-waspada" : (b.seri && !b.kor ? "kh-seri" : "")) + '"><td>' + (i+1) + '</td>' +
+  h += d.baris.map((b, i) => '<tr class="' + (b.status === "PKL" ? "kh-pkl" : b.status === "P" ? "kh-waspada" : (b.seri && !b.kor ? "kh-seri" : "")) + '"><td>' + (i+1) + '</td>' +
     '<td class="kh-nm">' + (cetak ? esc(b.siswa.nama_siswa)
       : '<a class="ra-nama-link" onclick="khDetailHarian(' + i + ')">' + esc(b.siswa.nama_siswa) + '</a>') + '</td>' +
     b.sel.map(khSelHtml).join("") + '<td>' + khStatusSel(b, cetak) + '</td>' +
-    (aksi ? '<td><button class="btn btn-ghost btn-sm" onclick="khDetailHarian(' + i + ')">✎ Koreksi</button></td>' : '') +
+    (aksi ? '<td>' + (b.status === "PKL" ? '' : '<button class="btn btn-ghost btn-sm" onclick="khDetailHarian(' + i + ')">✎ Koreksi</button>') + '</td>' : '') +
     '</tr>').join("");
   return h + '</tbody></table>';
 }
@@ -4288,6 +4358,7 @@ function khRingkasHtml(d){
     chip("kh-c-S", r.S, "Sakit") + chip("kh-c-I", r.I, "Izin") + chip("kh-c-A", r.A, "Alpa") +
     chip("kh-c-B", d.belum.length + " dari " + jmlJam, "Jam belum diabsen") +
     (r.K ? chip("kh-c-K", r.K, "✎ Dikoreksi") : '') +
+    (r.PKL ? chip("kh-c-PKL", r.PKL, "Sedang PKL") : '') +
     (r.X ? chip("kh-c-X", r.X, "⚠ Seri, perlu dicek") : '') + '</div>';
 }
 function khGambarHarian(){
@@ -4302,6 +4373,7 @@ function khGambarHarian(){
     '<div class="kh-legend"><span><i class="kh-H"></i>Hadir</span><span><i class="kh-S"></i>Sakit</span><span><i class="kh-I"></i>Izin</span>' +
       '<span><i class="kh-A"></i>Alpa</span><span><i class="kh-belum"></i>Jurnal belum diisi</span><span><i style="background:#fff9db"></i>Hadir sebagian</span>' +
       '<span><i style="background:#fff0f6;border-color:#a61e4d"></i>Seri, perlu dicek</span>' +
+      '<span><i class="kh-PKL" style="border-color:#0b7285"></i>Sedang PKL</span>' +
       '<span>* = ada keterangan (arahkan kursor)</span><span>✎ = dikoreksi wali kelas</span></div>' +
     (d.ringkas.X ? '<div class="kh-box kh-box-seri"><b>' + d.ringkas.X + ' siswa berstatus seri.</b> Jumlah status terbanyak sama ' +
       '(mis. 2 guru Alpa, 2 guru Izin), jadi status sementara diambil dengan urutan S → I → A. ' +
@@ -4314,7 +4386,7 @@ function khGambarHarian(){
 }
 window.khDetailHarian = (i) => {
   const d = _khHarian, b = d && d.baris[i]; if (!b) return;
-  const boleh = khBolehKoreksi() && d.adaJurnal;
+  const boleh = khBolehKoreksi() && d.adaJurnal && b.status !== "PKL";
   _khPilih = b.kor ? b.kor.status : null;
   const rinci = '<table class="kh-tabel"><thead><tr><th>Jam</th><th style="text-align:left">Mapel</th><th style="text-align:left">Guru</th><th>Status</th><th style="text-align:left">Keterangan</th></tr></thead><tbody>' +
     d.kolom.map((k, j) => {
@@ -4343,6 +4415,8 @@ window.khDetailHarian = (i) => {
     'Sementara dihitung <b>' + KH_LABEL[b.auto] + '</b> (urutan S → I → A). ' +
     (boleh ? 'Tetapkan status final di bawah.' : 'Wali kelas dapat menetapkan status final.') + '</div>' : '';
   const isi = '<div style="margin-bottom:8px">' + esc(khTglPanjang(d.tanggal)) + ' · Status harian: ' + khStatusSel(b, false) + '</div>' +
+    (b.pkl ? '<div class="kh-box kh-box-pkl" style="margin:0 0 10px"><b>Sedang PKL</b>' + (b.pkl.tempat ? ' di ' + esc(b.pkl.tempat) : '') +
+      ' (' + esc(pkTgl(b.pkl.mulai)) + ' – ' + esc(pkTgl(b.pkl.selesai)) + '). Koreksi tidak berlaku untuk hari PKL; bila keliru, ubah tanggalnya di menu PKL.</div>' : '') +
     seriBox + riwayat + rinci + form;
   bukaModalDetailAbsensi(b.siswa.nama_siswa, b.siswa.nis || "-", d.kelas, isi);
   if (boleh) khGambarPilihan();
@@ -4386,7 +4460,7 @@ window.khHapusKoreksi = async (i) => {
 };
 
 /* ---------- SUSUN BULANAN (murni) ---------- */
-function khSusunBulanan(jurnal, absensi, siswa, koreksi){
+function khSusunBulanan(jurnal, absensi, siswa, koreksi, pkl){
   const tglJurnal = {}; jurnal.forEach(j => tglJurnal[j.id] = j.tanggal);
   const hariEfektif = [...new Set(jurnal.map(j => j.tanggal))].sort();
   const per = {};   // siswa_id → tanggal → [kode]
@@ -4397,12 +4471,18 @@ function khSusunBulanan(jurnal, absensi, siswa, koreksi){
   const efektifSet = new Set(hariEfektif);
   const korPer = {};   // siswa_id|tanggal → koreksi (hanya hari efektif)
   (koreksi || []).forEach(k => { if (efektifSet.has(k.tanggal)) korPer[k.siswa_id + "|" + k.tanggal] = k; });
+  const pklPer = {};   // siswa_id → [{mulai, selesai}]
+  (pkl || []).forEach(p => (pklPer[p.siswa_id] = pklPer[p.siswa_id] || []).push({ mulai: p.tanggal_mulai, selesai: p.tanggal_selesai }));
   const baris = siswa.map(s => {
+    const rentang = pklPer[s.id] || [];
+    const diPkl = t => rentang.some(r => t >= r.mulai && t <= r.selesai);
+    const pklHari = hariEfektif.filter(diPkl).length;
     const n = { H:0, P:0, S:0, I:0, A:0 }, hariTidakPenuh = [];
     let dikoreksi = 0, seri = 0;
     const tanggalSiswa = new Set(Object.keys(per[s.id] || {}));
     hariEfektif.forEach(t => { if (korPer[s.id + "|" + t]) tanggalSiswa.add(t); });
     tanggalSiswa.forEach(t => {
+      if (diPkl(t)) return;   // hari PKL tidak dihitung H/S/I/A
       const kor = korPer[s.id + "|" + t];
       const kode = (per[s.id] || {})[t] || [];
       const st = kor ? kor.status : khStatusHarian(kode);
@@ -4415,7 +4495,7 @@ function khSusunBulanan(jurnal, absensi, siswa, koreksi){
     });
     const hadir = n.H + n.P, tercatat = hadir + n.S + n.I + n.A;
     hariTidakPenuh.sort((a,b) => a.tanggal.localeCompare(b.tanggal));
-    return { siswa: s, efektif: hariEfektif.length, hadir, sebagian: n.P, sakit: n.S, izin: n.I, alpa: n.A, tercatat, dikoreksi, seri,
+    return { siswa: s, efektif: hariEfektif.length, hadir, sebagian: n.P, sakit: n.S, izin: n.I, alpa: n.A, tercatat, dikoreksi, seri, pkl: pklHari,
       persen: tercatat ? hadir / tercatat * 100 : null, hariTidakPenuh };
   });
   return { hariEfektif: hariEfektif.length, baris };
@@ -4442,11 +4522,12 @@ async function khRenderBulanan(){
     ]);
     if (jurnalRes.error) throw new Error(jurnalRes.error.message);
     const jurnal = jurnalRes.data || [];
-    const [absensi, koreksi] = await Promise.all([
+    const [absensi, koreksi, pkl] = await Promise.all([
       jurnal.length ? khAmbilAbsensi(jurnal.map(j => j.id)) : Promise.resolve([]),
-      khAmbilKoreksi(awal, akhir)
+      khAmbilKoreksi(awal, akhir),
+      khAmbilPkl(siswa.map(s => s.id), awal, akhir)
     ]);
-    _khBulanan = khSusunBulanan(jurnal, absensi, siswa, koreksi);
+    _khBulanan = khSusunBulanan(jurnal, absensi, siswa, koreksi, pkl);
     _khBulanan.bulan = _khBulan; _khBulanan.kelas = khNamaKelas();
     khGambarBulanan();
   } catch (e) {
@@ -4458,12 +4539,13 @@ window.khPilihBulan = (v) => { if (v) { _khBulan = v; khRenderBulanan(); } };
 function khTabelBulanan(d, cetak){
   const f = v => v === null ? "-" : v.toFixed(1).replace(".", ",") + "%";
   return '<table class="kh-tabel"><thead><tr><th>No</th><th>NIS</th><th style="text-align:left">Nama Siswa</th><th>Hari Efektif</th>' +
-    '<th>Hadir</th><th>Sakit</th><th>Izin</th><th>Tanpa Ket.</th><th>⚠ Hadir Sebagian</th><th>✎ Dikoreksi</th>' +
+    '<th>Hadir</th><th>Sakit</th><th>Izin</th><th>Tanpa Ket.</th><th class="kh-th-pkl">PKL<small>hari</small></th><th>⚠ Hadir Sebagian</th><th>✎ Dikoreksi</th>' +
     (cetak ? '' : '<th class="kh-th-seri">⚠ Seri<small>belum dikoreksi</small></th>') + '<th>% Hadir</th></tr></thead><tbody>' +
-    d.baris.map((b, i) => '<tr class="' + (b.seri && !cetak ? "kh-seri" : (b.sebagian ? "kh-waspada" : "")) + '"><td>' + (i+1) + '</td><td>' + esc(b.siswa.nis || "-") + '</td>' +
+    d.baris.map((b, i) => '<tr class="' + (b.seri && !cetak ? "kh-seri" : (b.sebagian ? "kh-waspada" : (b.pkl && b.pkl === b.efektif ? "kh-pkl" : ""))) + '"><td>' + (i+1) + '</td><td>' + esc(b.siswa.nis || "-") + '</td>' +
       '<td class="kh-nm">' + (cetak ? esc(b.siswa.nama_siswa)
         : '<a class="ra-nama-link" onclick="khDetailBulanan(' + i + ')">' + esc(b.siswa.nama_siswa) + '</a>') + '</td>' +
       '<td>' + b.efektif + '</td><td>' + b.hadir + '</td><td>' + b.sakit + '</td><td>' + b.izin + '</td><td>' + b.alpa + '</td>' +
+      '<td>' + (b.pkl ? '<b class="kh-pkl-n">' + b.pkl + '</b>' : 0) + '</td>' +
       '<td>' + (b.sebagian ? '<b>' + b.sebagian + '</b>' : 0) + '</td>' +
       '<td>' + (b.dikoreksi ? '<b class="kh-pena">' + b.dikoreksi + '</b>' : 0) + '</td>' +
       (cetak ? '' : '<td>' + (b.seri ? '<b class="kh-seri-n">' + b.seri + '</b>' : 0) + '</td>') +
@@ -4483,18 +4565,20 @@ function khGambarBulanan(){
     'untuk kelas ini (' + d.hariEfektif + ' hari). Hadir sebagian dihitung <b>Hadir</b>, jumlah harinya ditampilkan di kolom ⚠. ' +
     'Hari yang dikoreksi wali kelas memakai status koreksi (kolom ✎). ' +
     '<b>Hari seri</b> sementara memakai urutan S → I → A dan sudah masuk kolom Sakit/Izin/Tanpa Ket.; kolom ⚠ Seri hanya penanda. ' +
+    'Hari saat siswa <b>PKL</b> ada di kolom PKL dan tidak dihitung Hadir/Sakit/Izin/Tanpa Ket., jadi tidak menurunkan % hadir. ' +
     'Klik nama siswa untuk melihat tanggal-tanggalnya.</div>';
 }
 window.khDetailBulanan = (i) => {
   const d = _khBulanan, b = d && d.baris[i]; if (!b) return;
-  const isi = '<div style="margin-bottom:8px">' + esc(khNamaBulan(d.bulan)) + ' · Hadir ' + b.hadir + ' dari ' + b.tercatat + ' hari tercatat</div>' +
+  const isi = '<div style="margin-bottom:8px">' + esc(khNamaBulan(d.bulan)) + ' · Hadir ' + b.hadir + ' dari ' + b.tercatat + ' hari tercatat' + (b.pkl ? ' · PKL ' + b.pkl + ' hari' : '') + '</div>' +
     (b.seri ? '<div class="kh-box kh-box-seri" style="margin:0 0 10px">' + b.seri + ' hari seri belum dikoreksi. Klik tanggalnya untuk membuka tampilan Harian.</div>' : '') +
     (b.hariTidakPenuh.length
       ? '<table class="kh-tabel"><thead><tr><th style="text-align:left">Tanggal</th><th>Status Harian</th></tr></thead><tbody>' +
         b.hariTidakPenuh.map(x => '<tr class="' + (x.seri ? "kh-seri" : "") + '"><td class="kh-nm"><a href="#" onclick="khBukaTanggal(\'' + x.tanggal + '\');return false">' +
           esc(khTglPanjang(x.tanggal)) + '</a></td><td>' + (x.kor ? '<span class="kh-pena">✎</span> ' : '') + khBadge(x.status) +
           (x.seri ? '<span class="kh-seri-tag">⚠ Seri (' + esc(x.seri) + ') — belum dikoreksi</span>' : '') + '</td></tr>').join("") + '</tbody></table>'
-      : '<div class="empty">Hadir penuh setiap hari tercatat. 👍</div>');
+      : (b.tercatat ? '<div class="empty">Hadir penuh setiap hari tercatat. 👍</div>'
+          : '<div class="empty">Tidak ada hari di sekolah pada bulan ini' + (b.pkl ? ' (seluruhnya PKL)' : '') + '.</div>'));
   bukaModalDetailAbsensi(b.siswa.nama_siswa, b.siswa.nis || "-", d.kelas, isi);
 };
 /* Dari detail bulanan → lompat ke tampilan harian tanggal itu. */
@@ -4529,6 +4613,7 @@ async function khCetak(judul, meta, isi, orientasi){
     '.kh-tabel th{background:#e7ecf7}.kh-tabel th small{display:block;font-weight:normal;font-size:8.5px}.kh-nm{text-align:left!important}' +
     '.kh-H{background:#ebfbee}.kh-S{background:#e7f5ff}.kh-I{background:#f3f0ff}.kh-A{background:#ffe3e3}.kh-belum{background:#eee;color:#999}.kh-kosong{color:#999}' +
     'tr.kh-waspada td{background-color:#fff3bf}.kh-st{font-weight:bold}.kh-pena{font-weight:bold}' +
+    '.kh-PKL{background:#e3fafc}tr.kh-pkl td{background-color:#f3fcfd}' +
     '.kh-chips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.kh-chip{border:1px solid #bbb;border-radius:4px;padding:3px 8px}.kh-chip b{margin-right:4px}' +
     '.catatan{font-size:10px;margin-top:6px}' +
     '.ttd{width:100%;margin-top:30px;border-collapse:collapse;page-break-inside:avoid}.ttd td{border:0;padding:0 0 2px;font-size:12px}' +
@@ -4546,9 +4631,10 @@ window.khCetakHarian = async () => {
   if (!d || !d.kolom.length || !d.baris.length) return toast("Belum ada data untuk dicetak.");
   const r = d.ringkas;
   const ringkas = '<div class="kh-chips"><span class="kh-chip"><b>' + r.H + '</b>Hadir penuh</span><span class="kh-chip"><b>' + r.P + '</b>Hadir sebagian</span>' +
-    '<span class="kh-chip"><b>' + r.S + '</b>Sakit</span><span class="kh-chip"><b>' + r.I + '</b>Izin</span><span class="kh-chip"><b>' + r.A + '</b>Alpa</span></div>';
+    '<span class="kh-chip"><b>' + r.S + '</b>Sakit</span><span class="kh-chip"><b>' + r.I + '</b>Izin</span><span class="kh-chip"><b>' + r.A + '</b>Alpa</span>' +
+    (r.PKL ? '<span class="kh-chip"><b>' + r.PKL + '</b>PKL</span>' : '') + '</div>';
   const catatan = '<div class="catatan">H = Hadir, S = Sakit, I = Izin, A = Alpa, – = jurnal belum diisi, * = ada keterangan. ' +
-    'Baris berwarna = hadir sebagian. ✎ = dikoreksi wali kelas.' +
+    'Baris berwarna = hadir sebagian. ✎ = dikoreksi wali kelas. PKL = siswa sedang PKL.' +
     (d.ringkas.X ? ' <b>Masih ada ' + d.ringkas.X + ' siswa berstatus seri belum dikoreksi wali kelas.</b>' : '') + (d.belum.length ? ' Belum diabsen: ' + d.belum.map(k => 'jam ' + esc(k.jam) + ' (' + esc(k.mapel) + ')').join(", ") + '.' : '') + '</div>';
   await khCetak("Kehadiran Harian Siswa", '<b>Kelas:</b> ' + esc(d.kelas) + ' &nbsp; <b>Hari/Tanggal:</b> ' + esc(khTglPanjang(d.tanggal)),
     ringkas + khTabelHarian(d, true) + catatan, d.kolom.length > 8 ? "landscape" : "portrait");
@@ -4559,7 +4645,7 @@ window.khCetakBulanan = async () => {
   const sisaSeri = d.baris.reduce((t, b) => t + b.seri, 0);
   await khCetak("Rekap Kehadiran Bulanan (Hari)", '<b>Kelas:</b> ' + esc(d.kelas) + ' &nbsp; <b>Bulan:</b> ' + esc(khNamaBulan(d.bulan)) +
     ' &nbsp; <b>Hari efektif:</b> ' + d.hariEfektif,
-    khTabelBulanan(d, true) + '<div class="catatan">Hadir sebagian dihitung Hadir; jumlah harinya pada kolom ⚠. Kolom ✎ = jumlah hari yang dikoreksi wali kelas. Baris berwarna = ada hari hadir sebagian.' +
+    khTabelBulanan(d, true) + '<div class="catatan">Hadir sebagian dihitung Hadir; jumlah harinya pada kolom ⚠. Kolom ✎ = jumlah hari yang dikoreksi wali kelas. Baris berwarna = ada hari hadir sebagian. Kolom PKL = hari efektif saat siswa PKL (tidak mengurangi % hadir).' +
       (sisaSeri ? '<br><b>Catatan: masih ada ' + sisaSeri + ' hari seri belum dikoreksi wali kelas.</b>' : '') + '</div>',
     "portrait");
 };
@@ -4568,10 +4654,10 @@ window.khExcelBulanan = () => {
   if (!d || !d.baris.length) return toast("Belum ada data untuk diekspor.");
   if (typeof XLSX === "undefined") return toast("Library Excel belum termuat.");
   const data = d.baris.map((b, i) => ({ "No": i+1, "NIS": b.siswa.nis || "", "Nama": b.siswa.nama_siswa, "Hari Efektif": b.efektif,
-    "Hadir": b.hadir, "Sakit": b.sakit, "Izin": b.izin, "Tanpa Keterangan": b.alpa, "Hadir Sebagian": b.sebagian, "Dikoreksi Wali": b.dikoreksi,
+    "Hadir": b.hadir, "Sakit": b.sakit, "Izin": b.izin, "Tanpa Keterangan": b.alpa, "PKL (hari)": b.pkl, "Hadir Sebagian": b.sebagian, "Dikoreksi Wali": b.dikoreksi,
     "% Hadir": b.persen === null ? "" : Number(b.persen.toFixed(1)) }));
   const ws = XLSX.utils.json_to_sheet(data);
-  ws["!cols"] = [{wch:5},{wch:12},{wch:26},{wch:12},{wch:7},{wch:7},{wch:7},{wch:16},{wch:14},{wch:14},{wch:9}];
+  ws["!cols"] = [{wch:5},{wch:12},{wch:26},{wch:12},{wch:7},{wch:7},{wch:7},{wch:16},{wch:10},{wch:14},{wch:14},{wch:9}];
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Kehadiran " + d.bulan);
   XLSX.writeFile(wb, ("Kehadiran-Harian-" + d.kelas + "-" + d.bulan + ".xlsx").replace(/[^\w\-.]/g, "_"));
   toast("Excel diunduh.");
@@ -6138,6 +6224,9 @@ const IZIN_GRUP = [
   ]},
   { grup:"Bimbingan Konseling", item:[
     { label:"Menu BP", kolom:"izin_bp" }
+  ]},
+  { grup:"PKL", item:[
+    { label:"Kelola PKL (penempatan & tempat)", kolom:"izin_pkl" }
   ]}
 ];
 /* Semua kolom izin (untuk fitur "kosongkan semua"). */
@@ -6569,7 +6658,7 @@ window.editJurnal = async (id) => {
   if (absenLama && absenLama.length) {
     absenLama.forEach(a => {
       const idx = _absenSiswa.findIndex(s => s.siswa_id === a.siswa_id);
-      if (idx >= 0) { _absenSiswa[idx].status = a.status; _absenSiswa[idx].keterangan = a.keterangan || ""; }
+      if (idx >= 0 && !_absenSiswa[idx].pkl) { _absenSiswa[idx].status = a.status; _absenSiswa[idx].keterangan = a.keterangan || ""; }
     });
     renderAbsensi();
   }
@@ -9213,6 +9302,446 @@ function bpWaktuRingkas(t){
     " · " + d.toLocaleTimeString("id-ID", { hour:"2-digit", minute:"2-digit" });
 }
 /* ==================== AKHIR MODUL BP ==================== */
+
+/* ==================== MODUL PKL (Praktik Kerja Lapangan) ==================== */
+/* Status tiap penempatan (belum berangkat / sedang PKL / selesai) dihitung dari tanggal, tidak disimpan.
+   Siswa yang sedang PKL dikunci di absensi Isi Jurnal dan dihitung "PKL" di Kehadiran Harian. */
+const PK_PER_HAL = 20;
+const PK_LABEL = { belum:"Belum berangkat", sedang:"Sedang PKL", selesai:"Selesai" };
+const PK_URUT = { sedang:0, belum:1, selesai:2 };
+let _pkTab = "penempatan";
+let _pkKelas = [];          // kelas XII (fallback: semua kelas)
+let _pkNmKelas = {};        // kelas_id → nama_kelas (semua kelas)
+let _pkSiswa = [];          // siswa aktif di _pkKelas
+let _pkDudi = [];           // tempat PKL
+let _pkGuru = [];           // calon guru pembimbing
+let _pkKepsek = null;       // untuk tanda tangan cetak
+let _pkData = [];           // penempatan (join siswa, dudi, pembimbing)
+let _pkKelasForm = "";
+let _pkFilter = { status:"", kelas:"" };
+let _pkPg = 1;
+let _pkEditId = null, _pkEditDudiId = null;
+
+function pkBoleh(){ return ME.role === "admin" || !!ME.izin_pkl; }
+function pkHariIni(){ return ijTglLokal(new Date()); }
+function pkStatus(p, t){ t = t || pkHariIni(); return t < p.tanggal_mulai ? "belum" : (t > p.tanggal_selesai ? "selesai" : "sedang"); }
+function pkTgl(t){ return t ? new Date(t + "T00:00:00").toLocaleDateString("id-ID", { day:"numeric", month:"short", year:"numeric" }) : "-"; }
+function pkNamaSiswa(p){ return (p.siswa && p.siswa.nama_siswa) || "(siswa terhapus)"; }
+function pkKelasSiswa(p){ return (p.siswa && _pkNmKelas[p.siswa.kelas_id]) || "-"; }
+function pkPesanError(e){
+  if (e && e.code === "23P01") return "Periode bertumpuk dengan penempatan lain milik siswa yang sama.";
+  if (e && e.code === "23514") return "Tanggal kembali harus sama atau setelah tanggal berangkat.";
+  return (e && e.message) || String(e);
+}
+function pkMsg(teks, ok){
+  return '<div style="padding:10px;border-radius:8px;font-size:13px;margin-top:10px;' +
+    (ok ? 'background:#ebfbee;color:#2b8a3e' : 'background:#fff0f0;color:#c92a2a') + '">' + esc(teks) + '</div>';
+}
+
+async function muatPKL(){
+  if (!pkBoleh()) {
+    $("main").innerHTML = '<div class="card"><div class="page-kosong">Menu ini khusus admin &amp; guru yang diberi izin PKL.</div></div>';
+    return;
+  }
+  $("main").innerHTML = '<div class="card"><div class="page-kosong">Memuat...</div></div>';
+  try {
+    const [kl, sw, dd, pr] = await Promise.all([
+      sb.from("kelas").select("id, nama_kelas").order("nama_kelas"),
+      sb.from("siswa").select("id, nis, nama_siswa, kelas_id").eq("aktif", true).order("nama_siswa"),
+      sb.from("pkl_dudi").select("*").order("nama"),
+      sb.from("profil").select("id, nama, email, role, nip")
+    ]);
+    [kl, sw, dd, pr].forEach(r => { if (r.error) throw new Error(r.error.message); });
+    const semua = kl.data || [];
+    _pkNmKelas = Object.fromEntries(semua.map(k => [k.id, k.nama_kelas]));
+    _pkKelas = semua.filter(k => /^XII(\s|$)/i.test(String(k.nama_kelas || "").trim()));
+    if (!_pkKelas.length) _pkKelas = semua;
+    const idKelas = new Set(_pkKelas.map(k => k.id));
+    _pkSiswa = (sw.data || []).filter(s => idKelas.has(s.kelas_id));
+    _pkDudi = dd.data || [];
+    _pkGuru = (pr.data || []).filter(u => u.role === "guru")
+      .sort((a,b) => String(a.nama||"").localeCompare(String(b.nama||"")));
+    _pkKepsek = (pr.data || []).find(u => u.role === "kepsek") || null;
+  } catch (e) {
+    $("main").innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat: ' + esc(e.message) +
+      '<br><small>Pastikan SQL tabel PKL sudah dijalankan.</small></div></div>';
+    return;
+  }
+  if (!_pkKelas.find(k => k.id === _pkKelasForm)) _pkKelasForm = _pkKelas[0] ? _pkKelas[0].id : "";
+
+  $("main").innerHTML =
+    '<div class="card"><h2>Praktik Kerja Lapangan (PKL)</h2>' +
+      '<p style="color:var(--ink-lembut);font-size:13px;margin:-6px 0 14px">Kelola penempatan siswa. Status dihitung otomatis dari tanggal ' +
+        'dan dipakai absensi: siswa yang sedang PKL tidak perlu diabsen guru.</p>' +
+      '<div class="subtab-wk" id="pkSubtab">' +
+        '<button data-t="penempatan" onclick="pkGantiTab(\'penempatan\')">Penempatan</button>' +
+        '<button data-t="dudi" onclick="pkGantiTab(\'dudi\')">Tempat PKL (DUDI)</button>' +
+        '<button data-t="rekap" onclick="pkGantiTab(\'rekap\')">Rekap &amp; Cetak</button>' +
+      '</div>' +
+      '<div id="pkIsi" style="margin-top:16px"></div>' +
+    '</div>';
+  await pkGantiTab(_pkTab);
+}
+
+window.pkGantiTab = async (t) => {
+  _pkTab = t;
+  document.querySelectorAll("#pkSubtab button").forEach(b => b.classList.toggle("aktif", b.dataset.t === t));
+  $("pkIsi").innerHTML = '<div class="page-kosong">Memuat...</div>';
+  try { await pkMuatData(); }
+  catch (e) { $("pkIsi").innerHTML = '<div class="empty">Gagal memuat: ' + esc(e.message) + '</div>'; return; }
+  if (t === "dudi") return pkRenderDudi();
+  if (t === "rekap") return pkRenderRekap();
+  pkRenderPenempatan();
+};
+
+async function pkMuatData(){
+  const { data, error } = await sb.from("pkl")
+    .select("*, siswa:siswa_id(nama_siswa, nis, kelas_id), dudi:dudi_id(nama), pemb:pembimbing_id(nama, nip)")
+    .order("tanggal_mulai", { ascending:false });
+  if (error) throw new Error(error.message);
+  _pkData = data || [];
+}
+
+/* Penempatan yang lolos filter status + kelas, diurutkan. */
+function pkTersaring(urutKelas){
+  const t = pkHariIni();
+  return _pkData.filter(p =>
+      (!_pkFilter.status || pkStatus(p, t) === _pkFilter.status) &&
+      (!_pkFilter.kelas || (p.siswa && p.siswa.kelas_id === _pkFilter.kelas)))
+    .sort((a,b) => urutKelas
+      ? pkKelasSiswa(a).localeCompare(pkKelasSiswa(b)) || pkNamaSiswa(a).localeCompare(pkNamaSiswa(b))
+      : (PK_URUT[pkStatus(a, t)] - PK_URUT[pkStatus(b, t)]) || a.tanggal_mulai.localeCompare(b.tanggal_mulai));
+}
+function pkOpsiFilter(){
+  const st = [["","Semua"],["sedang","Sedang PKL"],["belum","Belum berangkat"],["selesai","Selesai"]]
+    .map(([v,l]) => '<option value="' + v + '"' + (v === _pkFilter.status ? " selected" : "") + '>' + l + '</option>').join("");
+  const kl = '<option value="">Semua kelas</option>' + _pkKelas.map(k =>
+    '<option value="' + esc(k.id) + '"' + (k.id === _pkFilter.kelas ? " selected" : "") + '>' + esc(k.nama_kelas) + '</option>').join("");
+  return '<div class="row" style="margin-bottom:8px">' +
+    '<div><label>Status</label><select onchange="pkSetFilter(\'status\',this.value)">' + st + '</select></div>' +
+    '<div><label>Kelas</label><select onchange="pkSetFilter(\'kelas\',this.value)">' + kl + '</select></div></div>';
+}
+window.pkSetFilter = (k, v) => { _pkFilter[k] = v; _pkPg = 1; _pkTab === "rekap" ? pkRenderRekap() : pkGambarDaftar(); };
+
+/* ---------- TAB PENEMPATAN ---------- */
+/* Siswa yang punya penempatan belum selesai (tak boleh ditempatkan lagi). */
+function pkSiswaTerisi(){
+  const t = pkHariIni();
+  return new Set(_pkData.filter(p => pkStatus(p, t) !== "selesai").map(p => p.siswa_id));
+}
+function pkDaftarSiswaHtml(){
+  const terisi = pkSiswaTerisi();
+  const list = _pkSiswa.filter(s => s.kelas_id === _pkKelasForm);
+  if (!list.length) return '<div style="color:var(--ink-lembut);font-size:13px">Belum ada siswa aktif di kelas ini.</div>';
+  return list.map(s => {
+    const ada = terisi.has(s.id);
+    return '<label class="' + (ada ? "terkunci" : "") + '"><input type="checkbox" class="pkCekSiswa" value="' + esc(s.id) + '"' +
+      (ada ? " disabled" : "") + '> ' + esc(s.nama_siswa) + (s.nis ? ' <small>(' + esc(s.nis) + ')</small>' : '') +
+      (ada ? ' <small>— sudah ditempatkan</small>' : '') + '</label>';
+  }).join("");
+}
+window.pkGantiKelasForm = (v) => { _pkKelasForm = v; const el = $("pkDaftarSiswa"); if (el) el.innerHTML = pkDaftarSiswaHtml(); };
+window.pkPilihSemua = () => { document.querySelectorAll(".pkCekSiswa:not(:disabled)").forEach(c => c.checked = true); };
+
+function pkRenderPenempatan(){
+  const t = pkHariIni();
+  const n = { sedang:0, belum:0, selesai:0 };
+  _pkData.forEach(p => n[pkStatus(p, t)]++);
+  const punya = new Set(_pkData.map(p => p.siswa_id));
+  const belumTempat = _pkSiswa.filter(s => !punya.has(s.id)).length;
+  const chip = (bg, fg, v, l) => '<div class="pkl-chip" style="background:' + bg + ';color:' + fg + '"><b>' + v + '</b>' + l + '</div>';
+  const edit = _pkEditId ? _pkData.find(p => p.id === _pkEditId) : null;
+  const opsiDudi = '<option value="">-- pilih tempat PKL --</option>' +
+    _pkDudi.filter(d => d.aktif !== false || (edit && edit.dudi_id === d.id)).map(d =>
+      '<option value="' + esc(d.id) + '"' + (edit && edit.dudi_id === d.id ? " selected" : "") + '>' + esc(d.nama) + '</option>').join("");
+  const opsiGuru = '<option value="">-- pilih guru pembimbing --</option>' + _pkGuru.map(g =>
+    '<option value="' + esc(g.id) + '"' + (edit && edit.pembimbing_id === g.id ? " selected" : "") + '>' + esc(g.nama || g.email) + '</option>').join("");
+  const opsiKelas = _pkKelas.map(k =>
+    '<option value="' + esc(k.id) + '"' + (k.id === _pkKelasForm ? " selected" : "") + '>' + esc(k.nama_kelas) + '</option>').join("");
+
+  const blokSiswa = edit
+    ? '<label>Siswa</label><div style="padding:10px 12px;border:1px solid var(--garis);border-radius:8px"><b>' + esc(pkNamaSiswa(edit)) + '</b> · ' + esc(pkKelasSiswa(edit)) + '</div>'
+    : '<div class="row"><div><label>Kelas</label><select onchange="pkGantiKelasForm(this.value)">' + opsiKelas + '</select></div>' +
+        '<div><label>Tempat PKL</label><select id="pkDudi">' + opsiDudi + '</select></div></div>' +
+      '<label>Siswa <span style="font-weight:400;color:var(--ink-lembut)">(bisa pilih beberapa — satu kelompok berangkat bersama)</span> ' +
+        '<a class="ra-nama-link" style="font-weight:600;font-size:12px" onclick="pkPilihSemua()">Pilih semua</a></label>' +
+      '<div class="pkl-daftar" id="pkDaftarSiswa">' + pkDaftarSiswaHtml() + '</div>';
+
+  $("pkIsi").innerHTML =
+    '<div class="pkl-chips">' +
+      chip("#e3fafc","#0b7285", n.sedang, "Sedang PKL") + chip("#f1f3f5","#495057", n.belum, "Belum berangkat") +
+      chip("#ebfbee","#2b8a3e", n.selesai, "Selesai") + chip("#fff4e6","#d9480f", belumTempat, "Belum pernah ditempatkan") +
+    '</div>' +
+    '<h3 style="font-size:15px;margin-bottom:8px">' + (edit ? "Edit penempatan" : "Tambah penempatan") + '</h3>' +
+    blokSiswa +
+    (edit ? '<div class="row"><div><label>Tempat PKL</label><select id="pkDudi">' + opsiDudi + '</select></div><div></div></div>' : '') +
+    '<div class="row">' +
+      '<div><label>Tanggal berangkat</label><input type="date" id="pkMulai" value="' + esc(edit ? edit.tanggal_mulai : t) + '"></div>' +
+      '<div><label>Tanggal kembali (rencana)</label><input type="date" id="pkSelesai" value="' + esc(edit ? edit.tanggal_selesai : "") + '"></div>' +
+    '</div>' +
+    '<div class="row">' +
+      '<div><label>Guru pembimbing</label><select id="pkPemb">' + opsiGuru + '</select></div>' +
+      '<div><label>Pembimbing industri (opsional)</label><input id="pkPembInd" value="' + esc(edit ? (edit.pembimbing_industri || "") : "") + '" placeholder="Nama pembimbing di tempat PKL"></div>' +
+    '</div>' +
+    '<button class="btn" onclick="pkSimpan()">' + (edit ? "Perbarui penempatan" : "Simpan penempatan") + '</button>' +
+    (edit ? '<button class="btn btn-ghost btn-sm" style="margin-left:8px" onclick="pkBatalEdit()">Batal Edit</button>' : '') +
+    (_pkDudi.length ? '' : '<div class="bp-catatan" style="margin-top:10px">Belum ada tempat PKL. Tambahkan dulu di tab <b>Tempat PKL (DUDI)</b>.</div>') +
+    '<h3 style="font-size:15px;margin:24px 0 8px">Daftar penempatan</h3>' + pkOpsiFilter() +
+    '<div id="pkDaftar"></div>' +
+    '<div class="bp-catatan" style="margin-top:12px">Status dihitung per hari ini (' + esc(pkTgl(t)) + '). ' +
+      '<b>Akhiri</b> = siswa pulang lebih awal: tanggal kembali diubah ke hari ini, sehingga mulai besok ia diabsen normal lagi.</div>';
+  pkGambarDaftar();
+}
+
+function pkGambarDaftar(){
+  const el = $("pkDaftar"); if (!el) return;
+  const t = pkHariIni(), arr = pkTersaring(false);
+  if (!arr.length) { el.innerHTML = '<div class="empty">Belum ada penempatan yang cocok.</div>'; return; }
+  const totalHal = Math.ceil(arr.length / PK_PER_HAL);
+  if (_pkPg > totalHal) _pkPg = totalHal;
+  if (_pkPg < 1) _pkPg = 1;
+  const mulai = (_pkPg - 1) * PK_PER_HAL;
+  el.innerHTML = '<div style="overflow-x:auto"><table><thead><tr><th>Siswa</th><th>Tempat PKL</th><th>Periode</th><th>Pembimbing</th>' +
+    '<th>Status</th><th class="bp-th-aksi">Aksi</th></tr></thead><tbody>' +
+    arr.slice(mulai, mulai + PK_PER_HAL).map(p => {
+      const st = pkStatus(p, t);
+      return '<tr><td><b>' + esc(pkNamaSiswa(p)) + '</b><span class="pkl-info">' + esc(pkKelasSiswa(p)) + '</span></td>' +
+        '<td>' + esc((p.dudi && p.dudi.nama) || "-") + '</td>' +
+        '<td style="white-space:nowrap">' + esc(pkTgl(p.tanggal_mulai)) + ' –<br>' + esc(pkTgl(p.tanggal_selesai)) + '</td>' +
+        '<td style="font-size:12px">' + esc((p.pemb && p.pemb.nama) || "-") +
+          (p.pembimbing_industri ? '<span class="pkl-info">' + esc(p.pembimbing_industri) + '</span>' : '') + '</td>' +
+        '<td><span class="pkl-st pkl-' + st + '">' + PK_LABEL[st] + '</span></td>' +
+        '<td class="bp-sel-aksi">' +
+          '<button class="bp-btn-aksi" onclick="pkEdit(\'' + p.id + '\')">✎<span class="lbl"> Edit</span></button>' +
+          (st === "sedang" ? '<button class="bp-btn-aksi" onclick="pkAkhiri(\'' + p.id + '\')" title="Set tanggal kembali = hari ini">⏹<span class="lbl"> Akhiri</span></button>' : '') +
+          '<button class="bp-btn-hapus" onclick="pkHapus(\'' + p.id + '\')">🗑<span class="lbl"> Hapus</span></button>' +
+        '</td></tr>';
+    }).join("") + '</tbody></table></div>' + kontrolHalaman(_pkPg, totalHal, "pkGantiHal");
+}
+window.pkGantiHal = (arah) => { _pkPg += arah; pkGambarDaftar(); };
+
+window.pkSimpan = async () => {
+  const dudi_id = $("pkDudi") ? ($("pkDudi").value || null) : null;
+  const mulai = $("pkMulai").value, selesai = $("pkSelesai").value;
+  if (!dudi_id) return toast("Pilih tempat PKL dulu.", "warning");
+  if (!mulai || !selesai) return toast("Tanggal berangkat & kembali wajib diisi.", "warning");
+  if (selesai < mulai) return toast("Tanggal kembali harus setelah tanggal berangkat.", "warning");
+  const isi = { dudi_id, tanggal_mulai: mulai, tanggal_selesai: selesai,
+    pembimbing_id: $("pkPemb").value || null, pembimbing_industri: $("pkPembInd").value.trim() || null };
+  let ids = [];
+  if (!_pkEditId) {
+    ids = [...document.querySelectorAll(".pkCekSiswa:checked")].map(c => c.value);
+    if (!ids.length) return toast("Centang minimal satu siswa.", "warning");
+  }
+  tampilkanLoading("Menyimpan penempatan PKL...");
+  try {
+    if (_pkEditId) {
+      const { error } = await sb.from("pkl").update(isi).eq("id", _pkEditId);
+      if (error) throw error;
+      _pkEditId = null;
+      toast("Penempatan diperbarui.", "sukses");
+    } else {
+      const { error } = await sb.from("pkl").insert(ids.map(siswa_id => ({ siswa_id, ...isi, dibuat_oleh: ME.id })));
+      if (error) throw error;
+      toast(ids.length + " siswa ditempatkan.", "sukses");
+    }
+    await pkMuatData();
+    pkRenderPenempatan();
+  } catch (e) {
+    toast("Gagal: " + pkPesanError(e), "gagal");
+  } finally { sembunyikanLoading(); }
+};
+window.pkEdit = (id) => { _pkEditId = id; pkRenderPenempatan(); window.scrollTo({ top:0, behavior:"smooth" }); };
+window.pkBatalEdit = () => { _pkEditId = null; pkRenderPenempatan(); };
+
+window.pkAkhiri = async (id) => {
+  const p = _pkData.find(x => x.id === id); if (!p) return;
+  const t = pkHariIni();
+  if (!(await konfirmasi("Akhiri PKL", pkNamaSiswa(p) + " selesai PKL hari ini (" + pkTgl(t) + ")?\nMulai besok siswa ini diabsen normal lagi."))) return;
+  try {
+    const { error } = await sb.from("pkl").update({ tanggal_selesai: t }).eq("id", id);
+    if (error) throw error;
+    toast("PKL diakhiri.", "sukses");
+    await pkMuatData(); pkRenderPenempatan();
+  } catch (e) { toast("Gagal: " + pkPesanError(e), "gagal"); }
+};
+window.pkHapus = async (id) => {
+  const p = _pkData.find(x => x.id === id); if (!p) return;
+  if (!(await konfirmasi("Hapus Penempatan", "Hapus penempatan PKL " + pkNamaSiswa(p) + "?\nHari-hari PKL-nya tidak lagi dihitung PKL di rekap kehadiran.", { bahaya:true }))) return;
+  try {
+    const { error } = await sb.from("pkl").delete().eq("id", id);
+    if (error) throw error;
+    if (_pkEditId === id) _pkEditId = null;
+    toast("Penempatan dihapus.", "sukses");
+    await pkMuatData(); pkRenderPenempatan();
+  } catch (e) { toast("Gagal: " + pkPesanError(e), "gagal"); }
+};
+
+/* ---------- TAB TEMPAT PKL (DUDI) ---------- */
+function pkRenderDudi(){
+  const t = pkHariIni();
+  const d = _pkEditDudiId ? _pkDudi.find(x => x.id === _pkEditDudiId) : null;
+  const v = f => esc(d ? (d[f] || "") : "");
+  const aktif = id => _pkData.filter(p => p.dudi_id === id && pkStatus(p, t) === "sedang").length;
+  $("pkIsi").innerHTML =
+    '<div class="bp-catatan">Daftar tempat PKL (Dunia Usaha / Dunia Industri). Cukup diisi sekali, lalu dipilih saat penempatan.</div>' +
+    '<h3 style="font-size:15px;margin-bottom:8px">' + (d ? "Edit tempat PKL" : "Tambah tempat PKL") + '</h3>' +
+    '<div class="row"><div><label>Nama tempat *</label><input id="pkdNama" value="' + v("nama") + '" placeholder="mis. PT Samudra Perikanan"></div>' +
+      '<div><label>Bidang usaha</label><input id="pkdBidang" value="' + v("bidang") + '"></div></div>' +
+    '<div class="row"><div><label>Alamat</label><input id="pkdAlamat" value="' + v("alamat") + '"></div>' +
+      '<div><label>Kontak</label><input id="pkdKontak" value="' + v("kontak") + '" placeholder="Nama &amp; nomor HP"></div></div>' +
+    (d ? '<label class="izin-toggle"><input type="checkbox" id="pkdAktif" style="width:18px;height:18px"' + (d.aktif !== false ? " checked" : "") +
+      '> Aktif (tampil di pilihan penempatan)</label>' : '') +
+    '<button class="btn" onclick="pkSimpanDudi()">' + (d ? "Perbarui tempat" : "Tambah tempat") + '</button>' +
+    (d ? '<button class="btn btn-ghost btn-sm" style="margin-left:8px" onclick="pkBatalDudi()">Batal Edit</button>' : '') +
+    '<div style="overflow-x:auto;margin-top:18px">' + (!_pkDudi.length ? '<div class="empty">Belum ada tempat PKL.</div>' :
+      '<table><thead><tr><th>Nama</th><th>Bidang</th><th>Alamat</th><th>Kontak</th><th>Siswa aktif</th><th class="bp-th-aksi">Aksi</th></tr></thead><tbody>' +
+      _pkDudi.map(x => '<tr' + (x.aktif === false ? ' style="opacity:.55"' : '') + '><td><b>' + esc(x.nama) + '</b>' +
+          (x.aktif === false ? '<span class="pkl-info">Nonaktif</span>' : '') + '</td>' +
+        '<td>' + esc(x.bidang || "-") + '</td><td>' + esc(x.alamat || "-") + '</td><td>' + esc(x.kontak || "-") + '</td>' +
+        '<td>' + aktif(x.id) + '</td>' +
+        '<td class="bp-sel-aksi"><button class="bp-btn-aksi" onclick="pkEditDudi(\'' + x.id + '\')">✎<span class="lbl"> Edit</span></button>' +
+          '<button class="bp-btn-hapus" onclick="pkHapusDudi(\'' + x.id + '\')">🗑<span class="lbl"> Hapus</span></button></td></tr>').join("") +
+      '</tbody></table>') + '</div>';
+}
+async function pkMuatDudi(){
+  const { data, error } = await sb.from("pkl_dudi").select("*").order("nama");
+  if (error) throw error;
+  _pkDudi = data || [];
+}
+window.pkSimpanDudi = async () => {
+  const nama = $("pkdNama").value.trim();
+  if (!nama) return toast("Nama tempat wajib diisi.", "warning");
+  const isi = { nama, bidang: $("pkdBidang").value.trim() || null, alamat: $("pkdAlamat").value.trim() || null,
+    kontak: $("pkdKontak").value.trim() || null };
+  if (_pkEditDudiId && $("pkdAktif")) isi.aktif = $("pkdAktif").checked;
+  tampilkanLoading("Menyimpan tempat PKL...");
+  try {
+    const { error } = _pkEditDudiId
+      ? await sb.from("pkl_dudi").update(isi).eq("id", _pkEditDudiId)
+      : await sb.from("pkl_dudi").insert(isi);
+    if (error) throw error;
+    toast(_pkEditDudiId ? "Tempat diperbarui." : "Tempat ditambahkan.", "sukses");
+    _pkEditDudiId = null;
+    await pkMuatDudi(); pkRenderDudi();
+  } catch (e) { toast("Gagal: " + pkPesanError(e), "gagal"); }
+  finally { sembunyikanLoading(); }
+};
+window.pkEditDudi = (id) => { _pkEditDudiId = id; pkRenderDudi(); window.scrollTo({ top:0, behavior:"smooth" }); };
+window.pkBatalDudi = () => { _pkEditDudiId = null; pkRenderDudi(); };
+window.pkHapusDudi = async (id) => {
+  const d = _pkDudi.find(x => x.id === id); if (!d) return;
+  const dipakai = _pkData.filter(p => p.dudi_id === id).length;
+  if (!(await konfirmasi("Hapus Tempat PKL", 'Hapus "' + d.nama + '"?' +
+    (dipakai ? "\n" + dipakai + " penempatan memakai tempat ini dan akan kehilangan nama tempatnya. Lebih aman dinonaktifkan lewat Edit." : ""),
+    { bahaya:true }))) return;
+  try {
+    const { error } = await sb.from("pkl_dudi").delete().eq("id", id);
+    if (error) throw error;
+    toast("Tempat dihapus.", "sukses");
+    await pkMuatDudi(); await pkMuatData(); pkRenderDudi();
+  } catch (e) { toast("Gagal: " + pkPesanError(e), "gagal"); }
+};
+
+/* ---------- TAB REKAP & CETAK ---------- */
+function pkRenderRekap(){
+  const t = pkHariIni(), arr = pkTersaring(true);
+  $("pkIsi").innerHTML =
+    '<div class="bp-catatan">Pilih filter, lalu cetak atau unduh Excel. Status dihitung per hari ini.</div>' + pkOpsiFilter() +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 14px">' +
+      '<button class="btn btn-sm" style="background:#2b8a3e" onclick="pkCetakDaftar()">🖨 Daftar penempatan</button>' +
+      '<button class="btn btn-sm" style="background:#2b8a3e" onclick="pkCetakPerTempat()">🖨 Per tempat PKL</button>' +
+      '<button class="btn btn-sm btn-ghost" onclick="pkExcel()">📊 Excel</button>' +
+    '</div>' +
+    (!arr.length ? '<div class="empty">Tidak ada data.</div>' :
+      '<div style="overflow-x:auto"><table><thead><tr><th>No</th><th>Siswa</th><th>Kelas</th><th>Tempat PKL</th><th>Periode</th><th>Pembimbing</th><th>Status</th></tr></thead><tbody>' +
+      arr.map((p, i) => { const st = pkStatus(p, t);
+        return '<tr><td>' + (i+1) + '</td><td>' + esc(pkNamaSiswa(p)) + '</td><td>' + esc(pkKelasSiswa(p)) + '</td>' +
+          '<td>' + esc((p.dudi && p.dudi.nama) || "-") + '</td><td style="white-space:nowrap">' + esc(pkTgl(p.tanggal_mulai)) + ' – ' + esc(pkTgl(p.tanggal_selesai)) + '</td>' +
+          '<td>' + esc((p.pemb && p.pemb.nama) || "-") + '</td><td><span class="pkl-st pkl-' + st + '">' + PK_LABEL[st] + '</span></td></tr>'; }).join("") +
+      '</tbody></table></div>');
+}
+
+function pkTeksFilter(){
+  const kls = _pkFilter.kelas ? (_pkNmKelas[_pkFilter.kelas] || "-") : "Semua kelas";
+  const st = _pkFilter.status ? PK_LABEL[_pkFilter.status] : "Semua status";
+  return '<b>Kelas:</b> ' + esc(kls) + ' &nbsp; <b>Status:</b> ' + esc(st) + ' &nbsp; <b>Per tanggal:</b> ' + esc(pkTgl(pkHariIni()));
+}
+async function pkCetak(judul, meta, isi){
+  const info = await ambilInfoApp();
+  const namaSekolah = (info.nama_sekolah || "").trim();
+  const tglTtd = await kotaTanggalTtd();
+  const tglCetak = new Date().toLocaleDateString("id-ID", { day:"numeric", month:"long", year:"numeric" });
+  const ks = _pkKepsek || {};
+  const blokTtd =
+    '<table class="ttd">' +
+      '<tr><td class="kolom-kiri"></td><td class="kolom-kanan">' + esc(tglTtd) + '</td></tr>' +
+      '<tr><td class="kolom-kiri">Mengetahui:<br>Kepala Sekolah,</td><td class="kolom-kanan">&nbsp;<br>Koordinator PKL,</td></tr>' +
+      '<tr class="spasi-ttd"><td></td><td></td></tr>' +
+      '<tr><td class="kolom-kiri"><span class="nama-ttd">' + esc(ks.nama || "(Kepala Sekolah)") + '</span>' +
+        (ks.nip ? '<br><span class="nip-ttd">NIP. ' + esc(ks.nip) + '</span>' : '') + '</td>' +
+        '<td class="kolom-kanan"><span class="nama-ttd">' + esc(ME.nama || ME.email || "") + '</span>' +
+        (ME.nip ? '<br><span class="nip-ttd">NIP. ' + esc(ME.nip) + '</span>' : '') + '</td></tr>' +
+    '</table>';
+  const w = window.open("", "_blank");
+  if (!w) return toast("Popup diblokir. Izinkan popup untuk mencetak.");
+  w.document.write('<html><head><title>' + esc(judul) + '</title>' +
+    '<style>@page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;padding:0 0 30px;color:#000;font-size:12px}' +
+    'h2{margin:0 0 4px}h3{margin:14px 0 2px;font-size:13px}table{width:100%;border-collapse:collapse;margin-top:8px}' +
+    'th,td{border:1px solid #999;padding:4px 6px;text-align:left;font-size:11px}th{background:#eee}' +
+    '.meta{margin:6px 0 4px;line-height:1.6}' +
+    '.kop{text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:14px}' +
+    '.kop .nm-sek{font-size:18px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px}' +
+    '.kaki-cetak{position:fixed;bottom:0;left:0;right:0;text-align:center;font-size:10px;color:#555;border-top:1px solid #ccc;padding-top:4px;background:#fff}' +
+    '.ttd{margin-top:40px;border:none;page-break-inside:avoid;break-inside:avoid}' +
+    '.ttd td{border:none;padding:0 0 2px;vertical-align:top;font-size:13px}.ttd .kolom-kiri{width:65%}.ttd .kolom-kanan{width:35%}' +
+    '.ttd .spasi-ttd td{height:60px}.ttd .nama-ttd{font-weight:bold;text-decoration:underline}.ttd .nip-ttd{font-size:11px}' +
+    'thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}</style></head><body>' +
+    '<div class="kaki-cetak">' + (namaSekolah ? esc(namaSekolah) + ' &middot; ' : '') + 'Dicetak ' + esc(tglCetak) + '</div>' +
+    (namaSekolah ? '<div class="kop"><div class="nm-sek">' + esc(namaSekolah) + '</div></div>' : '') +
+    '<h2>' + esc(judul) + '</h2><div class="meta">' + meta + '</div>' + isi + blokTtd + '</body></html>');
+  w.document.close(); w.focus();
+  w.onload = () => { try { w.print(); } catch(e){} };
+}
+window.pkCetakDaftar = async () => {
+  const arr = pkTersaring(true), t = pkHariIni();
+  if (!arr.length) return toast("Tidak ada data untuk dicetak.");
+  const rows = arr.map((p, i) => '<tr><td>' + (i+1) + '</td><td>' + esc((p.siswa && p.siswa.nis) || "-") + '</td><td>' + esc(pkNamaSiswa(p)) + '</td>' +
+    '<td>' + esc(pkKelasSiswa(p)) + '</td><td>' + esc((p.dudi && p.dudi.nama) || "-") + '</td>' +
+    '<td>' + esc(pkTgl(p.tanggal_mulai)) + ' – ' + esc(pkTgl(p.tanggal_selesai)) + '</td>' +
+    '<td>' + esc((p.pemb && p.pemb.nama) || "-") + '</td><td>' + PK_LABEL[pkStatus(p, t)] + '</td></tr>').join("");
+  await pkCetak("Daftar Penempatan PKL", pkTeksFilter(),
+    '<table><thead><tr><th>No</th><th>NIS</th><th>Nama</th><th>Kelas</th><th>Tempat PKL</th><th>Periode</th><th>Pembimbing</th><th>Status</th></tr></thead><tbody>' +
+    rows + '</tbody></table>');
+};
+window.pkCetakPerTempat = async () => {
+  const arr = pkTersaring(true);
+  if (!arr.length) return toast("Tidak ada data untuk dicetak.");
+  const grup = {};
+  arr.forEach(p => { const k = (p.dudi && p.dudi.nama) || "(Tanpa tempat)"; (grup[k] = grup[k] || []).push(p); });
+  const isi = Object.keys(grup).sort().map(k =>
+    '<h3>' + esc(k) + ' (' + grup[k].length + ' siswa)</h3>' +
+    '<table><thead><tr><th style="width:30px">No</th><th>Nama</th><th>Kelas</th><th>Periode</th><th>Pembimbing</th></tr></thead><tbody>' +
+    grup[k].map((p, i) => '<tr><td>' + (i+1) + '</td><td>' + esc(pkNamaSiswa(p)) + '</td><td>' + esc(pkKelasSiswa(p)) + '</td>' +
+      '<td>' + esc(pkTgl(p.tanggal_mulai)) + ' – ' + esc(pkTgl(p.tanggal_selesai)) + '</td>' +
+      '<td>' + esc((p.pemb && p.pemb.nama) || "-") + (p.pembimbing_industri ? ' / ' + esc(p.pembimbing_industri) : '') + '</td></tr>').join("") +
+    '</tbody></table>').join("");
+  await pkCetak("Daftar PKL per Tempat", pkTeksFilter(), isi);
+};
+window.pkExcel = () => {
+  const arr = pkTersaring(true), t = pkHariIni();
+  if (!arr.length) return toast("Tidak ada data untuk diekspor.");
+  if (typeof XLSX === "undefined") return toast("Library Excel belum termuat.");
+  const data = arr.map((p, i) => ({ "No": i+1, "NIS": (p.siswa && p.siswa.nis) || "", "Nama": pkNamaSiswa(p), "Kelas": pkKelasSiswa(p),
+    "Tempat PKL": (p.dudi && p.dudi.nama) || "", "Berangkat": p.tanggal_mulai, "Kembali": p.tanggal_selesai,
+    "Guru Pembimbing": (p.pemb && p.pemb.nama) || "", "Pembimbing Industri": p.pembimbing_industri || "", "Status": PK_LABEL[pkStatus(p, t)] }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  ws["!cols"] = [{wch:5},{wch:12},{wch:26},{wch:12},{wch:28},{wch:12},{wch:12},{wch:24},{wch:24},{wch:16}];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "PKL");
+  XLSX.writeFile(wb, "Daftar-PKL-" + t + ".xlsx");
+  toast("Excel diunduh.");
+};
+/* ==================== AKHIR MODUL PKL ==================== */
 
 </script>
 </body>
