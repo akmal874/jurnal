@@ -9884,9 +9884,11 @@ async function njHitung(tgl, guruId){
   if (libur) return { tgl, libur, slot:[] };
   const jadwal = await ambilJadwalHari(hari, guruId);
   if (!jadwal.length) return { tgl, slot:[] };
-  let q = sb.from("jurnal").select("kelas_id, jam_ke").eq("tanggal", tgl);
-  if (guruId) q = q.in("kelas_id", [...new Set(jadwal.map(j => j.kelas_id))]);
-  const { data, error } = await q;
+  // Guru: lewat RPC jurnal_terisi (hanya kelas & jam, tanpa isi jurnal) agar jurnal guru pengganti ikut
+  // terlihat tanpa melonggarkan RLS jurnal. Admin/kepsek: baca langsung (sudah diizinkan bisa_baca_jurnal).
+  const { data, error } = guruId
+    ? await sb.rpc("jurnal_terisi", { p_tanggal: tgl, p_kelas: [...new Set(jadwal.map(j => String(j.kelas_id)))] })
+    : await sb.from("jurnal").select("kelas_id, jam_ke").eq("tanggal", tgl);
   if (error) throw new Error(error.message);
   const jurnal = data || [];
   const hariIni = khTglLokal(_njSekarang);
@@ -9894,7 +9896,7 @@ async function njHitung(tgl, guruId){
   const bel = rsJamBel(hari);
   const slot = jadwal.map(j => {
     const r = rsRentang(j.jam_ke);
-    const isi = !!r && jurnal.some(x => { const y = rsRentang(x.jam_ke); return x.kelas_id === j.kelas_id && y && y[0] <= r[1] && r[0] <= y[1]; });
+    const isi = !!r && jurnal.some(x => { const y = rsRentang(x.jam_ke); return String(x.kelas_id) === String(j.kelas_id) && y && y[0] <= r[1] && r[0] <= y[1]; });
     let status = isi ? "isi" : "belum";
     if (!isi && tgl === hariIni) {
       // jam selesai: dari jam bel Roster; cadangan dari kolom waktu jadwal; tak diketahui → jangan ditagih dulu
