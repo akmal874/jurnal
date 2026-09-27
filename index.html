@@ -532,7 +532,7 @@ input#jJam[readonly]{background:#f1f5f9;color:#1e3a5f;font-weight:700}
 .sg-user{min-width:0}
 .sg-user b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sg-peran{font-size:11px;color:var(--ink-lembut)}
-#whoPeriode::before{content:" · "}
+#whoRole{display:block}
 .sg-keluar{flex:0 0 auto}
 .sg-kecil-btn{background:none;border:0;border-top:1px solid var(--garis);padding:10px;font-size:12px;color:var(--ink-lembut);cursor:pointer;font-family:inherit}
 .sg-kecil-btn:hover{color:var(--aksen)}
@@ -625,6 +625,75 @@ input#jJam[readonly]{background:#f1f5f9;color:#1e3a5f;font-weight:700}
   linear-gradient(135deg,var(--aksen),#1e3a5f)}
 .dl-pra-kaca::before{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.45)}
 .dl-pra-kaca b{background:rgba(255,255,255,.85)}.dl-pra-kaca .dl-btn{background:#fff}
+/* ===== LOGO SEKOLAH ===== */
+.login-logo img,.sg-logo img{width:100%;height:100%;object-fit:contain;display:block}
+.login-logo.ada-logo{width:76px;height:76px;border-radius:50%;background:#fff;border:3px solid rgba(255,255,255,.7);padding:8px;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+.sg-logo.ada-logo{background:none}
+.hd-logo{display:none}
+/* ===== DESAIN HALAMAN: KLASIK (menu berjajar di atas) ===== */
+#app.tata-klasik{display:block}
+#app.tata-klasik .sg{position:sticky;top:0;left:auto;width:auto;max-width:none;height:auto;flex-basis:auto;transform:none;box-shadow:none;
+  display:grid;grid-template-columns:1fr auto;grid-template-areas:"atas bawah" "menu menu";border-right:0;
+  background:var(--header-bg, var(--aksen));z-index:50;transition:none}
+#app.tata-klasik .sg-atas{grid-area:atas;border:0;padding:12px 20px}
+#app.tata-klasik .sg-app{color:#fff}
+#app.tata-klasik .sg-logo:not(.ada-logo){background:rgba(255,255,255,.2)}
+#app.tata-klasik .sg-bawah{grid-area:bawah;border:0;padding:8px 20px;color:#fff}
+#app.tata-klasik .sg-peran{color:rgba(255,255,255,.85)}
+#app.tata-klasik #nav.sg-menu{grid-area:menu;display:flex;overflow-x:auto;overflow-y:hidden;background:var(--card);border-bottom:1px solid var(--garis);padding:0}
+#app.tata-klasik #nav .sg-grup{display:contents}
+#app.tata-klasik #nav .sg-kepala,#app.tata-klasik .sg-ik{display:none}
+#app.tata-klasik #nav .sg-item,#app.tata-klasik #nav .sg-grup.lipat .sg-item{display:flex;width:auto;flex:0 0 auto;border-left:0;border-bottom:3px solid transparent;
+  padding:13px 16px;color:var(--ink-lembut);background:none}
+#app.tata-klasik #nav .sg-item.active{color:var(--aksen);border-bottom-color:var(--aksen);background:none;font-weight:600}
+#app.tata-klasik .sg-x,#app.tata-klasik .sg-kecil-btn,#app.tata-klasik .sg-tirai,#app.tata-klasik .konten>header{display:none}
+@media (max-width:768px){ #app.tata-klasik .sg-user{display:none} #app.tata-klasik .sg-atas{padding:12px 14px} }
+/* ===== DESAIN HALAMAN: BOTTOM BAR (HP saja; di PC tampil sebagai sidebar) ===== */
+.bb{display:none}
+@media (max-width:768px){
+  #app.tata-bottom .hd-ham{display:none}
+  #app.tata-bottom .hd-logo{display:grid;width:30px;height:30px;border-radius:8px;background:rgba(255,255,255,.2);color:#fff;place-items:center;font-weight:700;overflow:hidden;flex:0 0 auto}
+  #app.tata-bottom .hd-logo.ada-logo{background:#fff;padding:2px}
+  #app.tata-bottom main{padding-bottom:90px}
+  #app.tata-bottom .bb{display:flex;position:fixed;left:0;right:0;top:auto;bottom:0;z-index:58;background:var(--card);border-top:1px solid var(--garis);
+    border-bottom:0;overflow:visible;padding-bottom:env(safe-area-inset-bottom, 0px)}
+  #app.tata-bottom .bb button{flex:1;min-width:0;background:none;border:0;padding:8px 2px 10px;display:flex;flex-direction:column;align-items:center;gap:2px;
+    font-size:10px;color:var(--ink-lembut);cursor:pointer;font-family:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #app.tata-bottom .bb button .sg-ik{font-size:20px;width:auto}
+  #app.tata-bottom .bb button.active{color:var(--aksen);font-weight:600}
+  /* sidebar menjadi panel "Semua Menu" dari bawah */
+  #app.tata-bottom .sg{left:0;right:0;top:auto;bottom:0;width:100%;max-width:none;height:auto;max-height:80%;border-right:0;
+    border-radius:18px 18px 0 0;transform:translateY(100%);z-index:60}
+  #app.tata-bottom.sg-buka .sg{transform:none;box-shadow:0 -8px 30px rgba(0,0,0,.2)}
+  #app.tata-bottom .sg-atas{padding:12px 16px}
+  #app.tata-bottom #nav .sg-grup{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:0 12px}
+  #app.tata-bottom #nav .sg-kepala{grid-column:1/-1;padding:12px 4px 4px;cursor:default}
+  #app.tata-bottom #nav .sg-panah{display:none}
+  #app.tata-bottom #nav .sg-item,#app.tata-bottom #nav .sg-grup.lipat .sg-item{display:flex;border:1px solid var(--garis);border-radius:10px;padding:10px;
+    font-size:13px;white-space:normal;background:var(--bg);gap:6px}
+  #app.tata-bottom #nav .sg-item.active{background:var(--aksen);color:#fff;border-color:var(--aksen)}
+}
+/* ===== Pengaturan: pilihan desain halaman ===== */
+.dl-pra-tk i{left:0;right:0;top:0;height:18%;background:var(--aksen)}
+.dl-pra-tk::before{top:30%;bottom:auto;height:34%}
+.dl-pra-tk b:nth-of-type(1){top:21%;left:8%;right:auto;width:16%;height:4px;background:var(--aksen)}
+.dl-pra-tk b:nth-of-type(2){top:22%;left:30%;right:auto;width:16%;height:3px}
+.dl-pra-tk .dl-btn{top:76%;left:14%;right:14%;height:7px;background:var(--garis)}
+.dl-pra-ts i{left:0;top:0;bottom:0;width:30%;background:var(--card);border-right:2px solid var(--garis);z-index:2}
+.dl-pra-ts::before{left:38%;right:6%;top:12%;bottom:auto;height:36%}
+.dl-pra-ts b:nth-of-type(1){left:5%;right:auto;width:20%;top:14%;height:6px;z-index:3}
+.dl-pra-ts b:nth-of-type(2){left:5%;right:auto;width:20%;top:38%;height:6px;z-index:3}
+.dl-pra-ts .dl-btn{left:5%;right:auto;width:20%;top:26%;height:6px;background:var(--aksen);z-index:3}
+.dl-pra-tb i{left:0;right:0;top:0;height:16%;background:var(--aksen)}
+.dl-pra-tb::before{top:24%;bottom:auto;height:34%}
+.dl-pra-tb b:nth-of-type(1){left:0;right:0;top:auto;bottom:0;height:16%;border-radius:0;background:var(--card);border-top:2px solid var(--garis)}
+.dl-pra-tb b:nth-of-type(2){left:10%;right:auto;width:12%;top:auto;bottom:5%;height:5px;background:var(--aksen);z-index:3}
+.dl-pra-tb .dl-btn{left:70%;right:auto;width:12%;top:auto;bottom:5%;height:5px;background:var(--garis);z-index:3}
+.logo-baris{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.logo-pra{width:96px;height:96px;border-radius:14px;border:2px dashed var(--garis);display:grid;place-items:center;text-align:center;font-size:12px;
+  color:var(--ink-lembut);padding:8px;background:var(--bg)}
+.logo-pra img{width:100%;height:100%;object-fit:contain}
+.logo-aksi{display:flex;flex-direction:column;gap:6px}.logo-aksi .btn{margin-top:0}.logo-aksi .btn:disabled{opacity:.45;cursor:not-allowed}
 </style>
 </head>
 <body>
@@ -665,11 +734,17 @@ try {
     el.className = "login-" + dl;
     if (dl === "pita") document.getElementById("loginJudul").textContent = "Masuk";
   }
+  /* logo sekolah terakhir (dari cache perangkat) */
+  var lg = localStorage.getItem("logoSekolah");
+  if (lg) document.querySelectorAll("#login .login-logo").forEach(function (e) {
+    var im = document.createElement("img"); im.src = lg; im.alt = "Logo sekolah";
+    e.textContent = ""; e.appendChild(im); e.classList.add("ada-logo");
+  });
 } catch (e) {}
 </script>
 
 <!-- ===== APP ===== -->
-<div id="app" class="hidden">
+<div id="app" class="hidden tata-sidebar">
   <aside class="sg" id="sidebar">
     <div class="sg-atas">
       <div class="sg-app"><span class="sg-logo">J</span><span class="sg-teks">Jurnal PBM</span></div>
@@ -681,7 +756,7 @@ try {
         <b id="whoNama">-</b>
         <div class="sg-peran"><span id="whoRole">-</span><span id="whoPeriode" style="display:none"></span></div>
       </div>
-      <button type="button" class="btn btn-sm btn-ghost sg-keluar" onclick="keluar()" aria-label="Keluar" title="Keluar">⏻<span class="sg-teks"> Keluar</span></button>
+      <button type="button" class="btn btn-sm btn-ghost sg-keluar" onclick="keluar()" aria-label="Keluar" title="Keluar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><span class="sg-teks"> Keluar</span></button>
     </div>
     <button type="button" class="sg-kecil-btn" id="sgKecilBtn" onclick="toggleSidebarKecil()">« Ciutkan menu</button>
   </aside>
@@ -689,12 +764,14 @@ try {
   <div class="konten">
     <header>
       <button type="button" class="hd-ham" onclick="bukaSidebar()" aria-label="Buka menu">☰</button>
+      <span class="sg-logo hd-logo">J</span>
       <h1 id="judulHalaman">Jurnal PBM</h1>
       <span class="hd-grup" id="grupHalaman"></span>
     </header>
     <main id="main"><div class="page-kosong">Memuat...</div></main>
     <div class="app-footer" id="appFooter"></div>
   </div>
+  <nav class="bb" id="bbNav" aria-label="Menu utama"></nav>
 </div>
 
 <div id="modalKonfirmasi" class="modal-overlay hidden" style="z-index:1000001">
@@ -954,13 +1031,16 @@ window.sembunyikanLoading = () => {
 let _infoApp = null;
 async function ambilInfoApp(paksa){
   if (_infoApp && !paksa) return _infoApp;
-  _infoApp = { versi: "1.0", pembuat: "Administrator Sekolah", nama_sekolah: "", login_desain: "klasik" };
+  _infoApp = { versi: "1.0", pembuat: "Administrator Sekolah", nama_sekolah: "", login_desain: "klasik", logo_url: null };
   try {
-    let r = await sb.from("pengaturan")
-      .select("versi, pembuat, nama_sekolah, login_desain").eq("id","app").maybeSingle();
-    if (r.error)   // kolom login_desain belum ada (SQL belum dijalankan) → pakai kolom lama
-      r = await sb.from("pengaturan").select("versi, pembuat, nama_sekolah").eq("id","app").maybeSingle();
-    if (r.data) _infoApp = { ..._infoApp, ...r.data };
+    // coba kolom terlengkap dulu; bila SQL terbaru belum dijalankan, turun ke kolom yang pasti ada
+    const pilihan = ["versi, pembuat, nama_sekolah, login_desain, logo_url", "versi, pembuat, nama_sekolah, login_desain", "versi, pembuat, nama_sekolah"];
+    let r = null;
+    for (const kolom of pilihan) {
+      r = await sb.from("pengaturan").select(kolom).eq("id","app").maybeSingle();
+      if (!r.error) break;
+    }
+    if (r && r.data) _infoApp = { ..._infoApp, ...r.data };
   } catch (e) {}
   return _infoApp;
 }
@@ -986,6 +1066,7 @@ async function isiFooter(elId){
   const hero = $("loginSekolahHero");
   if (hero) hero.textContent = (info.nama_sekolah || "").trim();
   terapkanDesainLogin(info.login_desain);
+  terapkanLogo(info.logo_url);
 }
 
 /* ===== DESAIN HALAMAN LOGIN (klasik / pita / kaca) ===== */
@@ -1115,6 +1196,7 @@ sb.auth.onAuthStateChange(async (event, session) => {
     }
   });
   bangunNav();
+  muatTataLetak();   // desain halaman pilihan admin (cache perangkat sudah dipakai lebih dulu)
   isiFooter("appFooter");
 });
 
@@ -1169,13 +1251,14 @@ function bangunNav(){
     });
     nav.appendChild(blok);
   });
+  bangunBarBawah();
   const awal = menu[0] && nav.querySelector('.sg-item[data-key="' + menu[0] + '"]');
   if (awal) buka(menu[0], awal);
 }
 
 /* ===== NAVIGASI SIDEBAR ===== */
-const NAV_IKON = { beranda:"🏠", isijurnal:"✎", daftarjurnal:"📖", rekapharian:"📊", jadwal:"🗓", roster:"📋",
-  nilai:"💯", walikelas:"👥", bp:"🧭", pkl:"🏭", kelas:"🏫", siswa:"🧑‍🎓", mapel:"📚",
+const NAV_IKON = { beranda:"🏠", isijurnal:"✎", daftarjurnal:"📖", rekapharian:"📊", jadwal:"📅", roster:"📋",
+  nilai:"💯", walikelas:"👥", bp:"💬", pkl:"🏭", kelas:"🏫", siswa:"🎓", mapel:"📚",
   pengguna:"👤", izinmenu:"🔑", pengaturan:"⚙️", catatan:"📝", rekapabsensi:"📊" };
 const NAV_GRUP = [
   ["Harian",      ["beranda", "isijurnal", "daftarjurnal", "rekapharian"]],
@@ -1204,6 +1287,12 @@ function navTandai(key, btn){
   if (blok) blok.classList.remove("lipat");
   if ($("judulHalaman")) $("judulHalaman").textContent = (NAV_IKON[key] ? NAV_IKON[key] + " " : "") + (LABEL[key] || key);
   if ($("grupHalaman")) $("grupHalaman").textContent = blok ? blok.dataset.grup : "";
+  // bar bawah: tandai menu yang sama; bila bukan menu utama, tandai tombol "Menu"
+  const bb = document.querySelectorAll("#bbNav button");
+  let adaDiBar = false;
+  bb.forEach(x => { const on = x.dataset.key === key; x.classList.toggle("active", on); if (on) adaDiBar = true; });
+  const bbMenu = document.querySelector('#bbNav button[data-key="__menu"]');
+  if (bbMenu && !adaDiBar && key) bbMenu.classList.add("active");
   tutupSidebar();
 }
 window.bukaSidebar = () => $("app").classList.add("sg-buka");
@@ -1220,6 +1309,144 @@ window.toggleSidebarKecil = () => {
   navTombolKecil();
 };
 (function(){ try { if (localStorage.getItem("navKecil") === "1") $("app").classList.add("sg-kecil"); } catch (e) {} navTombolKecil(); })();
+
+/* ===== BAR BAWAH (desain Bottom bar, HP) — 4 menu pertama milik pengguna + tombol Menu ===== */
+function bangunBarBawah(){
+  const bar = $("bbNav"); if (!bar) return;
+  const utama = [...document.querySelectorAll("#nav .sg-item")].slice(0, 4);
+  bar.innerHTML = "";
+  utama.forEach(it => {
+    const k = it.dataset.key;
+    const b = document.createElement("button");
+    b.type = "button"; b.dataset.key = k;
+    b.innerHTML = '<span class="sg-ik">' + (NAV_IKON[k] || "•") + '</span>' + esc(LABEL[k] || k);
+    b.onclick = () => buka(k, document.querySelector('#nav .sg-item[data-key="' + k + '"]'));
+    bar.appendChild(b);
+  });
+  const m = document.createElement("button");
+  m.type = "button"; m.dataset.key = "__menu";
+  m.innerHTML = '<span class="sg-ik">☰</span>Menu';
+  m.onclick = () => bukaSidebar();
+  bar.appendChild(m);
+}
+
+/* ===== DESAIN HALAMAN APLIKASI (klasik / sidebar / bottom) — diatur admin ===== */
+const TATA_LETAK = ["klasik", "sidebar", "bottom"];
+function pasangKelasTata(t){
+  if (!TATA_LETAK.includes(t)) t = "sidebar";
+  const app = $("app"); if (!app) return t;
+  TATA_LETAK.forEach(x => app.classList.toggle("tata-" + x, x === t));
+  // mode ciut (ikon) hanya untuk sidebar
+  let kecil = false; try { kecil = localStorage.getItem("navKecil") === "1"; } catch (e) {}
+  app.classList.toggle("sg-kecil", t !== "klasik" && kecil);
+  tutupSidebar(); navTombolKecil();
+  return t;
+}
+function terapkanTataLetak(t){
+  t = pasangKelasTata(t);
+  try { localStorage.setItem("tataLetak", t); } catch (e) {}
+}
+(function(){ let t = "sidebar"; try { t = localStorage.getItem("tataLetak") || "sidebar"; } catch (e) {} pasangKelasTata(t); })();
+/* Dipanggil setelah login: baca pilihan admin (satu query ringan). */
+async function muatTataLetak(){
+  try {
+    const { data, error } = await sb.from("pengaturan").select("tata_letak").eq("id","app").maybeSingle();
+    if (!error && data && data.tata_letak) terapkanTataLetak(data.tata_letak);
+  } catch (e) {}
+}
+function tataTerpilih(){ const r = document.querySelector('input[name="setTataLetak"]:checked'); return r ? r.value : "sidebar"; }
+window.simpanTataLetak = async () => {
+  const setMsg = (t, ok) => { $("setTataMsg").innerHTML =
+    '<div style="padding:10px;border-radius:8px;font-size:13px;margin-top:12px;' +
+    (ok?'background:#ebfbee;color:#2b8a3e':'background:#fff0f0;color:#c92a2a') + '">' + esc(t) + '</div>'; };
+  const v = tataTerpilih();
+  try {
+    const { error } = await sb.from("pengaturan").update({ tata_letak: v, diubah: new Date().toISOString() }).eq("id","app");
+    if (error) throw new Error(error.message);
+    terapkanTataLetak(v);
+    setMsg("Desain halaman tersimpan. Pengguna lain melihatnya setelah masuk ulang / memuat ulang halaman.", true);
+  } catch (e) { setMsg("Gagal menyimpan: " + e.message, false); }
+};
+/* Pratinjau: hanya di perangkat ini, tidak disimpan. Muat ulang halaman untuk membatalkan. */
+window.pratinjauTataLetak = () => {
+  pasangKelasTata(tataTerpilih());
+  toast("Pratinjau di perangkat ini saja. Simpan agar berlaku untuk semua, atau muat ulang untuk membatalkan.", "info");
+};
+
+/* ===== LOGO SEKOLAH ===== */
+const LOGO_PATH = "logo-sekolah.png";
+let _logoBaru = null;   // Blob hasil perkecil, menunggu disimpan
+function terapkanLogo(url){
+  document.querySelectorAll("#login .login-logo, .sg-logo").forEach(el => {
+    el.textContent = "";
+    if (url) {
+      const im = document.createElement("img"); im.src = url; im.alt = "Logo sekolah";
+      im.onerror = () => { el.textContent = "J"; el.classList.remove("ada-logo"); };
+      el.appendChild(im); el.classList.add("ada-logo");
+    } else { el.textContent = "J"; el.classList.remove("ada-logo"); }
+  });
+  try { if (url) localStorage.setItem("logoSekolah", url); else localStorage.removeItem("logoSekolah"); } catch (e) {}
+}
+(function(){ try { const u = localStorage.getItem("logoSekolah"); if (u) terapkanLogo(u); } catch (e) {} })();
+/* Perkecil gambar ke maks. 256 px, simpan sebagai PNG (latar transparan tetap). */
+function perkecilLogo(file){
+  return new Promise((resolve, reject) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const s = Math.min(1, 256 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(img.width * s)); c.height = Math.max(1, Math.round(img.height * s));
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      c.toBlob(b => b ? resolve(b) : reject(new Error("Gagal memproses gambar.")), "image/png");
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("File bukan gambar yang valid.")); };
+    img.src = url;
+  });
+}
+window.pilihLogo = async (ev) => {
+  const f = ev.target.files && ev.target.files[0]; if (!f) return;
+  try {
+    _logoBaru = await perkecilLogo(f);
+    $("logoPra").innerHTML = '<img src="' + URL.createObjectURL(_logoBaru) + '" alt="Pratinjau logo">';
+    $("logoSimpanBtn").disabled = false;
+    $("logoMsg").innerHTML = '<div style="font-size:12px;color:var(--ink-lembut);margin-top:8px">Siap disimpan (' +
+      Math.round(_logoBaru.size / 1024) + ' KB). Klik "Simpan logo".</div>';
+  } catch (e) { toast("Gagal: " + e.message, "gagal"); }
+  ev.target.value = "";
+};
+window.simpanLogo = async () => {
+  if (!_logoBaru) return toast("Pilih gambar dulu.", "warning");
+  tampilkanLoading("Mengunggah logo sekolah...");
+  try {
+    const { error } = await sb.storage.from("publik").upload(LOGO_PATH, _logoBaru, { upsert:true, contentType:"image/png", cacheControl:"3600" });
+    if (error) throw new Error(error.message);
+    const { data } = sb.storage.from("publik").getPublicUrl(LOGO_PATH);
+    const url = data.publicUrl + "?v=" + Date.now();   // versi baru → tidak tertahan cache
+    const { error: e2 } = await sb.from("pengaturan").update({ logo_url: url, diubah: new Date().toISOString() }).eq("id","app");
+    if (e2) throw new Error(e2.message);
+    _logoBaru = null; _infoApp = null;
+    terapkanLogo(url);
+    $("logoSimpanBtn").disabled = true;
+    $("logoMsg").innerHTML = '<div style="padding:10px;border-radius:8px;font-size:13px;margin-top:10px;background:#ebfbee;color:#2b8a3e">Logo tersimpan.</div>';
+    $("logoHapusBtn").style.display = "";
+  } catch (e) {
+    $("logoMsg").innerHTML = '<div style="padding:10px;border-radius:8px;font-size:13px;margin-top:10px;background:#fff0f0;color:#c92a2a">Gagal: ' + esc(e.message) + '</div>';
+  } finally { sembunyikanLoading(); }
+};
+window.hapusLogo = async () => {
+  if (!(await konfirmasi("Hapus Logo", "Hapus logo sekolah? Halaman login & sidebar kembali memakai huruf J.", { bahaya:true }))) return;
+  try {
+    await sb.storage.from("publik").remove([LOGO_PATH]);
+    const { error } = await sb.from("pengaturan").update({ logo_url: null, diubah: new Date().toISOString() }).eq("id","app");
+    if (error) throw new Error(error.message);
+    _infoApp = null; _logoBaru = null;
+    terapkanLogo(null);
+    $("logoPra").innerHTML = '<span>Belum ada logo<br><small>(tampil huruf J)</small></span>';
+    $("logoHapusBtn").style.display = "none"; $("logoSimpanBtn").disabled = true; $("logoMsg").innerHTML = "";
+    toast("Logo dihapus.", "sukses");
+  } catch (e) { toast("Gagal: " + e.message, "gagal"); }
+};
 document.addEventListener("keydown", e => { if (e.key === "Escape") tutupSidebar(); });
 
 /* Cek izin terbaru dari DB; kalau beda dari ME, perbarui ME + bangun ulang nav.
@@ -1342,7 +1569,7 @@ async function muatBeranda(){
   let html =
     '<div class="card"><h2>Selamat datang, ' + esc(ME.nama || ME.email) + '</h2>' +
     '<p style="color:#6b7280">Anda masuk sebagai <b>' + namaRole(ME.role) + '</b>. ' +
-    'Gunakan menu di samping (tombol ☰ di HP) untuk berpindah halaman.</p></div>';
+    'Gunakan menu untuk berpindah halaman.</p></div>';
   $("main").innerHTML = html + '<div id="pengumumanArea"></div><div id="notifJurnal"></div><div id="jadwalHariIni"></div>';
   muatNotifJurnal();   // tidak ditunggu: Beranda tampil lebih dulu, kartu menyusul
 
@@ -1599,6 +1826,33 @@ async function muatPengaturan(){
       '<button class="btn" onclick="simpanDesainLogin()">Simpan Desain Login</button>' +
       '<button class="btn btn-ghost" style="margin-left:8px" onclick="pratinjauDesainLogin()">Pratinjau</button>' +
       '<div id="setLoginMsg"></div>' +
+    '</div>' +
+    // ---- Desain Halaman Aplikasi ----
+    '<div class="card"><h2>Desain Halaman Aplikasi</h2>' +
+      '<p style="color:#6b7280;font-size:13px;margin-bottom:12px">Letak menu untuk semua pengguna setelah masuk. Isi setiap menu tetap sama. ' +
+        'Bottom bar hanya untuk HP; di PC otomatis tampil sebagai sidebar.</p>' +
+      '<div class="dl-pilih">' + [["klasik","Klasik","tk"],["sidebar","Sidebar","ts"],["bottom","Bottom bar","tb"]].map(([v, l, c]) =>
+        '<label class="dl-opsi"><input type="radio" name="setTataLetak" value="' + v + '"' +
+          ((cfg.tata_letak || "sidebar") === v ? " checked" : "") + '>' +
+          '<span class="dl-pra dl-pra-' + c + '"><i></i><b></b><b></b><b class="dl-btn"></b></span>' + l + '</label>').join("") +
+      '</div>' +
+      '<button class="btn" onclick="simpanTataLetak()">Simpan Desain Halaman</button>' +
+      '<button class="btn btn-ghost" style="margin-left:8px" onclick="pratinjauTataLetak()">Pratinjau</button>' +
+      '<div id="setTataMsg"></div>' +
+    '</div>' +
+    // ---- Logo Sekolah ----
+    '<div class="card"><h2>Logo Sekolah</h2>' +
+      '<p style="color:#6b7280;font-size:13px;margin-bottom:12px">Tampil di halaman login desain <b>Pita atas</b> &amp; <b>Kaca</b> serta di menu samping. ' +
+        'Gambar PNG berlatar transparan paling bagus; otomatis diperkecil ke 256 px saat dipilih.</p>' +
+      '<div class="logo-baris"><div class="logo-pra" id="logoPra">' +
+        (cfg.logo_url ? '<img src="' + esc(cfg.logo_url) + '" alt="Logo sekolah">' : '<span>Belum ada logo<br><small>(tampil huruf J)</small></span>') + '</div>' +
+        '<div class="logo-aksi">' +
+          '<input type="file" id="logoFile" accept="image/*" style="display:none" onchange="pilihLogo(event)">' +
+          '<button class="btn btn-sm btn-ghost" onclick="document.getElementById(\'logoFile\').click()">📁 Pilih gambar</button>' +
+          '<button class="btn btn-sm" id="logoSimpanBtn" style="background:#2b8a3e" disabled onclick="simpanLogo()">Simpan logo</button>' +
+          '<button class="btn btn-sm btn-red" id="logoHapusBtn" style="' + (cfg.logo_url ? '' : 'display:none') + '" onclick="hapusLogo()">Hapus logo</button>' +
+        '</div></div>' +
+      '<div id="logoMsg"></div>' +
     '</div>' +
     // ---- Pengumuman ----
     '<div class="card"><h2>Pengumuman Beranda</h2>' +
