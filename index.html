@@ -509,16 +509,138 @@ input#jJam[readonly]{background:#f1f5f9;color:#1e3a5f;font-weight:700}
 .ij-cek{display:flex!important;gap:8px;align-items:flex-start;font-weight:600;margin-top:8px;cursor:pointer}
 .ij-cek input{width:auto!important;margin-top:3px}
 
+/* ===== TATA LETAK: SIDEBAR BERKELOMPOK ===== */
+#app{display:flex;min-height:100vh}
+.sg{width:250px;flex:0 0 250px;background:var(--card);border-right:1px solid var(--garis);display:flex;flex-direction:column;
+  position:sticky;top:0;height:100vh;z-index:45;transition:width .2s,flex-basis .2s}
+.sg-atas{display:flex;align-items:center;justify-content:space-between;padding:16px 14px 14px 18px;border-bottom:1px solid var(--garis)}
+.sg-app{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;color:var(--aksen);white-space:nowrap;overflow:hidden}
+.sg-logo{width:30px;height:30px;border-radius:8px;background:var(--aksen);color:#fff;display:grid;place-items:center;font-size:15px;flex:0 0 auto}
+.sg-x{display:none;background:none;border:0;font-size:18px;color:var(--ink-lembut);cursor:pointer;width:32px;height:32px;border-radius:8px}
+#nav.sg-menu{display:block;position:static;top:auto;z-index:auto;flex:1;overflow-y:auto;overflow-x:hidden;border:0;background:none;padding:6px 0 10px}
+#nav .sg-kepala{width:100%;display:flex;justify-content:space-between;align-items:center;background:none;border:0;padding:14px 18px 6px;
+  font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-lembut);cursor:pointer;font-family:inherit}
+#nav .sg-panah{transition:transform .2s;font-size:12px}
+#nav .sg-grup.lipat .sg-panah{transform:rotate(-90deg)}
+#nav .sg-item{display:flex;align-items:center;gap:12px;width:100%;background:none;border:0;border-left:3px solid transparent;padding:9px 18px;
+  font-size:14px;color:var(--ink);cursor:pointer;text-align:left;font-family:inherit;white-space:nowrap}
+#nav .sg-item:hover{background:var(--aksen-lembut)}
+#nav .sg-item.active{color:var(--aksen);background:var(--aksen-lembut);border-left-color:var(--aksen);font-weight:600}
+#nav .sg-grup.lipat .sg-item{display:none}
+.sg-ik{width:22px;text-align:center;font-size:16px;flex:0 0 auto}
+.sg-bawah{border-top:1px solid var(--garis);padding:12px 14px 12px 18px;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px}
+.sg-user{min-width:0}
+.sg-user b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sg-peran{font-size:11px;color:var(--ink-lembut)}
+#whoPeriode::before{content:" · "}
+.sg-keluar{flex:0 0 auto}
+.sg-kecil-btn{background:none;border:0;border-top:1px solid var(--garis);padding:10px;font-size:12px;color:var(--ink-lembut);cursor:pointer;font-family:inherit}
+.sg-kecil-btn:hover{color:var(--aksen)}
+.sg-tirai{display:none}
+.konten{flex:1;min-width:0;display:flex;flex-direction:column}
+#app header{position:sticky;top:0;z-index:30;background:var(--card);color:var(--ink);border-bottom:1px solid var(--garis);
+  display:flex;align-items:center;justify-content:flex-start;gap:10px;padding:14px 24px}
+#app header h1{font-size:18px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.hd-grup{font-size:12px;color:var(--ink-lembut);background:var(--aksen-lembut);border-radius:20px;padding:2px 10px;white-space:nowrap}
+.hd-grup:empty{display:none}
+.hd-ham{display:none;background:rgba(255,255,255,.15);border:0;color:#fff;font-size:18px;width:36px;height:36px;border-radius:8px;cursor:pointer;flex:0 0 auto}
+#app main{max-width:1200px;width:100%;margin:0 auto;padding:22px 24px;flex:1}
+#app .app-footer{max-width:1200px;width:100%}
+/* layar lebar: mode ciut (hanya ikon) */
+@media (min-width:769px){
+  #app.sg-kecil .sg{width:68px;flex-basis:68px}
+  #app.sg-kecil .sg-teks,#app.sg-kecil #nav .sg-panah{display:none}
+  #app.sg-kecil #nav .sg-kepala{padding:10px 0 2px;justify-content:center;cursor:default}
+  #app.sg-kecil #nav .sg-kepala::before{content:"";display:block;width:24px;border-top:1px solid var(--garis)}
+  #app.sg-kecil #nav .sg-item{justify-content:center;padding:10px 0}
+  #app.sg-kecil #nav .sg-grup.lipat .sg-item{display:flex}
+  #app.sg-kecil .sg-atas{padding:16px 0;justify-content:center}
+  #app.sg-kecil .sg-bawah{justify-content:center;padding:12px 0}
+}
+/* layar sempit (HP): sidebar jadi laci */
+@media (max-width:768px){
+  .sg{position:fixed;left:0;top:0;height:100%;width:78%;max-width:280px;flex-basis:auto;z-index:60;transform:translateX(-100%);
+    transition:transform .25s;box-shadow:none}
+  #app.sg-buka .sg{transform:translateX(0);box-shadow:6px 0 24px rgba(0,0,0,.18)}
+  .sg-x{display:block}.sg-kecil-btn{display:none}
+  .sg-tirai{display:block;position:fixed;inset:0;background:rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .25s;z-index:59}
+  #app.sg-buka .sg-tirai{opacity:1;pointer-events:auto}
+  #app header{background:var(--header-bg, var(--aksen));color:#fff;border:0;padding:12px 14px}
+  #app header h1{color:#fff;font-size:16px}
+  .hd-grup{display:none}
+  .hd-ham{display:block}
+  #app main{padding:14px}
+}
+/* ===== DESAIN LOGIN (klasik / pita / kaca) — diatur admin di Pengaturan ===== */
+.login-hero,.login-logo{display:none}
+.login-logo{width:52px;height:52px;border-radius:14px;place-items:center;font-size:24px;font-weight:700;margin:0 auto 12px;
+  background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);color:#fff}
+/* --- Pita atas + kartu --- */
+#login.login-pita{display:block;place-items:normal;padding:0 0 24px}
+.login-pita .login-hero{display:block;background:linear-gradient(160deg,var(--aksen),var(--aksen-tekan));color:#fff;
+  text-align:center;padding:48px 20px 96px;border-radius:0 0 28px 28px}
+.login-pita .login-hero .login-logo{display:grid}
+.login-hero-judul{font-size:22px;font-weight:700}
+.login-hero-sekolah{opacity:.9;margin-top:4px;font-size:14px}
+.login-pita .loginbox{margin:-64px auto 0;width:calc(100% - 36px);max-width:400px;border:0;border-radius:18px;
+  box-shadow:0 14px 34px rgba(0,0,0,.12);padding:26px 22px}
+.login-pita .loginbox h1{font-size:20px;margin-bottom:4px}
+.login-pita #loginSekolah{display:none!important}
+.login-pita .login-tema-toggle{position:fixed;top:16px;right:16px;background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.4);z-index:5}
+/* --- Kaca di atas gradasi --- */
+#login.login-kaca{background:radial-gradient(circle at 20% 20%,#74c0fc 0,transparent 45%),radial-gradient(circle at 80% 30%,#b197fc 0,transparent 40%),
+  radial-gradient(circle at 50% 90%,#63e6be 0,transparent 45%),linear-gradient(135deg,var(--aksen),#1e3a5f)}
+[data-dark="1"] #login.login-kaca{background:radial-gradient(circle at 20% 20%,rgba(116,192,252,.35) 0,transparent 45%),
+  radial-gradient(circle at 80% 30%,rgba(177,151,252,.3) 0,transparent 40%),radial-gradient(circle at 50% 90%,rgba(99,230,190,.25) 0,transparent 45%),
+  linear-gradient(135deg,#1c2130,#0b1220)}
+.login-kaca .loginbox{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.35);border-radius:20px;color:#fff;
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.login-kaca .login-logo-kartu{display:grid}
+.login-kaca .loginbox h1,.login-kaca #loginSekolah,.login-kaca .login-sub{text-align:center}
+.login-kaca #loginSekolah{color:#fff;opacity:.92}
+.login-kaca .login-sub{color:rgba(255,255,255,.85)}
+.login-kaca label{color:#fff}
+.login-kaca input{background:rgba(255,255,255,.92);border-color:transparent;color:#1a2238}
+.login-kaca .login-pass-row button{color:#6b7280}
+.login-kaca .loginbox .btn{background:#fff;color:var(--aksen)}
+.login-kaca .loginbox .btn:hover{background:#eef1f8}
+.login-kaca .login-footer{color:rgba(255,255,255,.8);border-top-color:rgba(255,255,255,.3)}
+.login-kaca .login-tema-toggle{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.4)}
+/* --- Pratinjau dari Pengaturan (admin) --- */
+#login.login-pratinjau{position:fixed;inset:0;z-index:1000003;overflow:auto;background-color:var(--bg)}
+/* --- Pilihan desain di Pengaturan --- */
+.dl-pilih{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:6px}
+.dl-opsi{display:flex;flex-direction:column;gap:6px;margin:0;cursor:pointer;font-weight:600;font-size:13px;text-align:center}
+.dl-opsi input{display:none}
+.dl-pra{position:relative;display:block;height:118px;border-radius:10px;border:2px solid var(--garis);overflow:hidden;background:var(--bg)}
+.dl-opsi input:checked + .dl-pra{border-color:var(--aksen);box-shadow:0 0 0 3px var(--aksen-lembut)}
+.dl-pra::before{content:"";position:absolute;left:14%;right:14%;top:22%;bottom:10%;background:var(--card);border-radius:8px;border:1px solid var(--garis);z-index:1}
+.dl-pra i{position:absolute;left:0;right:0;top:0;height:0}
+.dl-pra b{position:absolute;left:24%;right:24%;height:7px;border-radius:4px;background:var(--garis);z-index:2}
+.dl-pra b:nth-of-type(1){top:50%}.dl-pra b:nth-of-type(2){top:63%}
+.dl-pra .dl-btn{top:77%;background:var(--aksen)}
+.dl-pra-pita i{height:42%;background:linear-gradient(160deg,var(--aksen),var(--aksen-tekan));border-radius:0 0 12px 12px}
+.dl-pra-pita::before{top:32%;border:0;box-shadow:0 4px 10px rgba(0,0,0,.14)}
+.dl-pra-kaca{background:radial-gradient(circle at 25% 25%,#74c0fc,transparent 50%),radial-gradient(circle at 80% 30%,#b197fc,transparent 45%),
+  linear-gradient(135deg,var(--aksen),#1e3a5f)}
+.dl-pra-kaca::before{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.45)}
+.dl-pra-kaca b{background:rgba(255,255,255,.85)}.dl-pra-kaca .dl-btn{background:#fff}
 </style>
 </head>
 <body>
 
 <!-- ===== LOGIN ===== -->
-<div id="login">
+<div id="login" class="login-klasik">
+  <div class="login-hero">
+    <div class="login-logo">J</div>
+    <div class="login-hero-judul">Jurnal Mengajar</div>
+    <div class="login-hero-sekolah" id="loginSekolahHero"></div>
+  </div>
   <div class="loginbox">
     <button type="button" id="loginTemaToggle" class="login-tema-toggle"
       onclick="toggleTemaLogin()" title="Ganti mode terang/gelap"></button>
-    <h1>Jurnal Mengajar</h1>
+    <div class="login-logo login-logo-kartu">J</div>
+    <h1 id="loginJudul">Jurnal Mengajar</h1>
     <p id="loginSekolah" class="login-sekolah" style="display:none"></p>
     <p class="login-sub">Masuk dengan email dan kata sandi yang diberikan admin.</p>
     <label>Email</label>
@@ -534,31 +656,45 @@ input#jJam[readonly]{background:#f1f5f9;color:#1e3a5f;font-weight:700}
     <div class="login-footer" id="loginFooter"></div>
   </div>
 </div>
+<script>
+/* Terapkan desain login terakhir sebelum halaman tampil (hindari kedip). */
+try {
+  var dl = localStorage.getItem("desainLogin");
+  if (dl === "pita" || dl === "kaca") {
+    var el = document.getElementById("login");
+    el.className = "login-" + dl;
+    if (dl === "pita") document.getElementById("loginJudul").textContent = "Masuk";
+  }
+} catch (e) {}
+</script>
 
 <!-- ===== APP ===== -->
 <div id="app" class="hidden">
-  <header>
-    <h1>Jurnal PBM</h1>
-    <div class="header-kanan">
-      <div class="header-info">
-        <span id="whoNama">-</span>
-        <span class="badge" id="whoRole">-</span>
-        <span class="badge" id="whoPeriode" style="display:none"></span>
-      </div>
-      <button class="btn btn-sm btn-ghost btn-keluar" onclick="keluar()" aria-label="Keluar" title="Keluar">
-        <span class="keluar-teks">Keluar</span>
-        <svg class="keluar-ikon" width="18" height="18" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-          <polyline points="16 17 21 12 16 7"></polyline>
-          <line x1="21" y1="12" x2="9" y2="12"></line>
-        </svg>
-      </button>
+  <aside class="sg" id="sidebar">
+    <div class="sg-atas">
+      <div class="sg-app"><span class="sg-logo">J</span><span class="sg-teks">Jurnal PBM</span></div>
+      <button type="button" class="sg-x" onclick="tutupSidebar()" aria-label="Tutup menu">✕</button>
     </div>
-  </header>
-  <nav id="nav"></nav>
-  <main id="main"><div class="page-kosong">Memuat...</div></main>
-  <div class="app-footer" id="appFooter"></div>
+    <nav id="nav" class="sg-menu"></nav>
+    <div class="sg-bawah">
+      <div class="sg-teks sg-user">
+        <b id="whoNama">-</b>
+        <div class="sg-peran"><span id="whoRole">-</span><span id="whoPeriode" style="display:none"></span></div>
+      </div>
+      <button type="button" class="btn btn-sm btn-ghost sg-keluar" onclick="keluar()" aria-label="Keluar" title="Keluar">⏻<span class="sg-teks"> Keluar</span></button>
+    </div>
+    <button type="button" class="sg-kecil-btn" id="sgKecilBtn" onclick="toggleSidebarKecil()">« Ciutkan menu</button>
+  </aside>
+  <div class="sg-tirai" onclick="tutupSidebar()"></div>
+  <div class="konten">
+    <header>
+      <button type="button" class="hd-ham" onclick="bukaSidebar()" aria-label="Buka menu">☰</button>
+      <h1 id="judulHalaman">Jurnal PBM</h1>
+      <span class="hd-grup" id="grupHalaman"></span>
+    </header>
+    <main id="main"><div class="page-kosong">Memuat...</div></main>
+    <div class="app-footer" id="appFooter"></div>
+  </div>
 </div>
 
 <div id="modalKonfirmasi" class="modal-overlay hidden" style="z-index:1000001">
@@ -818,11 +954,13 @@ window.sembunyikanLoading = () => {
 let _infoApp = null;
 async function ambilInfoApp(paksa){
   if (_infoApp && !paksa) return _infoApp;
-  _infoApp = { versi: "1.0", pembuat: "Administrator Sekolah", nama_sekolah: "" };
+  _infoApp = { versi: "1.0", pembuat: "Administrator Sekolah", nama_sekolah: "", login_desain: "klasik" };
   try {
-    const { data, error } = await sb.from("pengaturan")
-      .select("versi, pembuat, nama_sekolah").eq("id","app").maybeSingle();
-    if (data) _infoApp = { ..._infoApp, ...data };
+    let r = await sb.from("pengaturan")
+      .select("versi, pembuat, nama_sekolah, login_desain").eq("id","app").maybeSingle();
+    if (r.error)   // kolom login_desain belum ada (SQL belum dijalankan) → pakai kolom lama
+      r = await sb.from("pengaturan").select("versi, pembuat, nama_sekolah").eq("id","app").maybeSingle();
+    if (r.data) _infoApp = { ..._infoApp, ...r.data };
   } catch (e) {}
   return _infoApp;
 }
@@ -845,7 +983,57 @@ async function isiFooter(elId){
     if (nama) { sk.textContent = nama; sk.style.display = "block"; }
     else { sk.style.display = "none"; }
   }
+  const hero = $("loginSekolahHero");
+  if (hero) hero.textContent = (info.nama_sekolah || "").trim();
+  terapkanDesainLogin(info.login_desain);
 }
+
+/* ===== DESAIN HALAMAN LOGIN (klasik / pita / kaca) ===== */
+const DESAIN_LOGIN = ["klasik", "pita", "kaca"];
+function pasangKelasLogin(d){
+  if (!DESAIN_LOGIN.includes(d)) d = "klasik";
+  const el = $("login"); if (!el) return d;
+  DESAIN_LOGIN.forEach(x => el.classList.toggle("login-" + x, x === d));
+  const j = $("loginJudul"); if (j) j.textContent = d === "pita" ? "Masuk" : "Jurnal Mengajar";
+  return d;
+}
+function terapkanDesainLogin(d){
+  d = pasangKelasLogin(d);
+  try { localStorage.setItem("desainLogin", d); } catch (e) {}   // diingat agar tidak berkedip saat dibuka lagi
+}
+function desainLoginTerpilih(){
+  const r = document.querySelector('input[name="setLoginDesain"]:checked');
+  return r ? r.value : "klasik";
+}
+window.simpanDesainLogin = async () => {
+  const setMsg = (t, ok) => { $("setLoginMsg").innerHTML =
+    '<div style="padding:10px;border-radius:8px;font-size:13px;margin-top:12px;' +
+    (ok?'background:#ebfbee;color:#2b8a3e':'background:#fff0f0;color:#c92a2a') + '">' + esc(t) + '</div>'; };
+  const v = desainLoginTerpilih();
+  try {
+    const { error } = await sb.from("pengaturan")
+      .update({ login_desain: v, diubah: new Date().toISOString() }).eq("id","app");
+    if (error) throw new Error(error.message);
+    _infoApp = null;
+    terapkanDesainLogin(v);
+    setMsg("Desain login tersimpan. Berlaku untuk semua pengguna.", true);
+  } catch (e) { setMsg("Gagal menyimpan: " + e.message, false); }
+};
+/* Pratinjau: tampilkan halaman login di atas aplikasi; klik di mana saja untuk menutup. */
+window.pratinjauDesainLogin = () => {
+  const el = $("login"); if (!el) return;
+  const asli = DESAIN_LOGIN.find(x => el.classList.contains("login-" + x)) || "klasik";
+  pasangKelasLogin(desainLoginTerpilih());
+  el.classList.remove("hidden"); el.classList.add("login-pratinjau");
+  toast("Pratinjau login — klik di mana saja untuk menutup.", "info");
+  const tutup = (e) => {
+    e.preventDefault(); e.stopPropagation();
+    el.classList.add("hidden"); el.classList.remove("login-pratinjau");
+    pasangKelasLogin(asli);
+    el.removeEventListener("click", tutup, true);
+  };
+  setTimeout(() => el.addEventListener("click", tutup, true), 50);
+};
 // isi footer login segera saat halaman dimuat
 window.addEventListener("DOMContentLoaded", () => isiFooter("loginFooter"));
 
@@ -958,15 +1146,81 @@ function bangunNav(){
     if (!ME.izin_bp) menu = menu.filter(k => k !== "bp");
     if (!ME.izin_pkl) menu = menu.filter(k => k !== "pkl");
   }
-  menu.forEach((key, i) => {
-    const b = document.createElement("button");
-    b.textContent = LABEL[key] || key;
-    b.dataset.key = key;
-    b.onclick = () => buka(key, b);
-    nav.appendChild(b);
-    if (i === 0) buka(key, b);
+  // susun per grup; menu yang tak masuk grup mana pun → "Lainnya"
+  const lipat = navBacaLipat();
+  const sisa = menu.filter(k => !NAV_GRUP.some(g => g[1].includes(k)));
+  NAV_GRUP.concat(sisa.length ? [["Lainnya", sisa]] : []).forEach(([nama, isi]) => {
+    const item = isi.filter(k => menu.includes(k));
+    if (!item.length) return;                                   // grup kosong disembunyikan
+    const blok = document.createElement("div");
+    blok.className = "sg-grup" + (lipat.includes(nama) ? " lipat" : "");
+    blok.dataset.grup = nama;
+    const kepala = document.createElement("button");
+    kepala.type = "button"; kepala.className = "sg-kepala";
+    kepala.innerHTML = '<span class="sg-teks">' + esc(nama) + '</span><span class="sg-panah">▾</span>';
+    kepala.onclick = () => navLipat(blok);
+    blok.appendChild(kepala);
+    item.forEach(key => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "sg-item"; b.dataset.key = key; b.title = LABEL[key] || key;
+      b.innerHTML = '<span class="sg-ik">' + (NAV_IKON[key] || "•") + '</span><span class="sg-teks">' + esc(LABEL[key] || key) + '</span>';
+      b.onclick = () => buka(key, b);
+      blok.appendChild(b);
+    });
+    nav.appendChild(blok);
   });
+  const awal = menu[0] && nav.querySelector('.sg-item[data-key="' + menu[0] + '"]');
+  if (awal) buka(menu[0], awal);
 }
+
+/* ===== NAVIGASI SIDEBAR ===== */
+const NAV_IKON = { beranda:"🏠", isijurnal:"✎", daftarjurnal:"📖", rekapharian:"📊", jadwal:"🗓", roster:"📋",
+  nilai:"💯", walikelas:"👥", bp:"🧭", pkl:"🏭", kelas:"🏫", siswa:"🧑‍🎓", mapel:"📚",
+  pengguna:"👤", izinmenu:"🔑", pengaturan:"⚙️", catatan:"📝", rekapabsensi:"📊" };
+const NAV_GRUP = [
+  ["Harian",      ["beranda", "isijurnal", "daftarjurnal", "rekapharian"]],
+  ["Jadwal",      ["jadwal", "roster"]],
+  ["Siswa",       ["nilai", "walikelas", "bp", "pkl"]],
+  ["Data Master", ["kelas", "siswa", "mapel"]],
+  ["Admin",       ["pengguna", "izinmenu", "pengaturan"]]
+];
+function navBacaLipat(){ try { return JSON.parse(localStorage.getItem("navLipat") || "[]"); } catch (e) { return []; } }
+function navSimpanLipat(){
+  try { localStorage.setItem("navLipat", JSON.stringify([...document.querySelectorAll("#nav .sg-grup.lipat")].map(b => b.dataset.grup))); } catch (e) {}
+}
+/* Lipat/buka grup. Grup berisi menu aktif tidak bisa dilipat; saat mode ciut (ikon) tidak berlaku. */
+function navLipat(blok){
+  if ($("app").classList.contains("sg-kecil") && window.innerWidth > 768) return;
+  if (blok.querySelector(".sg-item.active")) { blok.classList.remove("lipat"); return; }
+  blok.classList.toggle("lipat");
+  navSimpanLipat();
+}
+/* Tandai menu aktif + perbarui judul header (tanpa memuat halaman). */
+function navTandai(key, btn){
+  btn = btn || document.querySelector('#nav .sg-item[data-key="' + key + '"]');
+  document.querySelectorAll("#nav .sg-item").forEach(x => x.classList.remove("active"));
+  if (btn) btn.classList.add("active");
+  const blok = btn ? btn.closest(".sg-grup") : null;
+  if (blok) blok.classList.remove("lipat");
+  if ($("judulHalaman")) $("judulHalaman").textContent = (NAV_IKON[key] ? NAV_IKON[key] + " " : "") + (LABEL[key] || key);
+  if ($("grupHalaman")) $("grupHalaman").textContent = blok ? blok.dataset.grup : "";
+  tutupSidebar();
+}
+window.bukaSidebar = () => $("app").classList.add("sg-buka");
+window.tutupSidebar = () => $("app").classList.remove("sg-buka");
+function navTombolKecil(){
+  const b = $("sgKecilBtn"); if (!b) return;
+  const kecil = $("app").classList.contains("sg-kecil");
+  b.textContent = kecil ? "»" : "« Ciutkan menu";
+  b.title = kecil ? "Lebarkan menu" : "Ciutkan menu (hanya ikon)";
+}
+window.toggleSidebarKecil = () => {
+  const kecil = $("app").classList.toggle("sg-kecil");
+  try { localStorage.setItem("navKecil", kecil ? "1" : ""); } catch (e) {}
+  navTombolKecil();
+};
+(function(){ try { if (localStorage.getItem("navKecil") === "1") $("app").classList.add("sg-kecil"); } catch (e) {} navTombolKecil(); })();
+document.addEventListener("keydown", e => { if (e.key === "Escape") tutupSidebar(); });
 
 /* Cek izin terbaru dari DB; kalau beda dari ME, perbarui ME + bangun ulang nav.
    Dipanggil saat guru/kepsek membuka Beranda. */
@@ -1009,8 +1263,7 @@ async function segarkanIzinMenu(){
 }
 
 function buka(key, btn){
-  document.querySelectorAll("#nav button").forEach(x => x.classList.remove("active"));
-  if (btn) btn.classList.add("active");
+  navTandai(key, btn);
   if (key === "kelas") return muatKelas();
   if (key === "mapel") return muatMapel();
   if (key === "siswa") return muatSiswa();   // <-- baris baru
@@ -1089,7 +1342,7 @@ async function muatBeranda(){
   let html =
     '<div class="card"><h2>Selamat datang, ' + esc(ME.nama || ME.email) + '</h2>' +
     '<p style="color:#6b7280">Anda masuk sebagai <b>' + namaRole(ME.role) + '</b>. ' +
-    'Gunakan tab di atas untuk berpindah menu.</p></div>';
+    'Gunakan menu di samping (tombol ☰ di HP) untuk berpindah halaman.</p></div>';
   $("main").innerHTML = html + '<div id="pengumumanArea"></div><div id="notifJurnal"></div><div id="jadwalHariIni"></div>';
   muatNotifJurnal();   // tidak ditunggu: Beranda tampil lebih dulu, kartu menyusul
 
@@ -1333,6 +1586,19 @@ async function muatPengaturan(){
       '</div>' +
       '<button class="btn" onclick="simpanInfoSekolah()">Simpan Info Sekolah</button>' +
       '<div id="setInfoMsg"></div>' +
+    '</div>' +
+    // ---- Desain Halaman Login ----
+    '<div class="card"><h2>Desain Halaman Login</h2>' +
+      '<p style="color:#6b7280;font-size:13px;margin-bottom:12px">Tampilan halaman masuk untuk semua pengguna. ' +
+        'Warna mengikuti warna aksen masing-masing perangkat.</p>' +
+      '<div class="dl-pilih">' + [["klasik","Klasik"],["pita","Pita atas"],["kaca","Kaca"]].map(([v, l]) =>
+        '<label class="dl-opsi"><input type="radio" name="setLoginDesain" value="' + v + '"' +
+          ((cfg.login_desain || "klasik") === v ? " checked" : "") + '>' +
+          '<span class="dl-pra dl-pra-' + v + '"><i></i><b></b><b></b><b class="dl-btn"></b></span>' + l + '</label>').join("") +
+      '</div>' +
+      '<button class="btn" onclick="simpanDesainLogin()">Simpan Desain Login</button>' +
+      '<button class="btn btn-ghost" style="margin-left:8px" onclick="pratinjauDesainLogin()">Pratinjau</button>' +
+      '<div id="setLoginMsg"></div>' +
     '</div>' +
     // ---- Pengumuman ----
     '<div class="card"><h2>Pengumuman Beranda</h2>' +
@@ -2394,12 +2660,7 @@ window.batalIsiJurnal = () => {
   if (_editJurnalId) {
     // sedang edit → batal, kembali ke Daftar Jurnal
     _editJurnalId = null; _fotoLamaAda = false; _fotoFile = null;
-    const tombolDaftar = Array.from(document.querySelectorAll("#nav button"))
-      .find(b => b.textContent === LABEL.daftarjurnal);
-    if (tombolDaftar) {
-      document.querySelectorAll("#nav button").forEach(x => x.classList.remove("active"));
-      tombolDaftar.classList.add("active");
-    }
+    navTandai("daftarjurnal");
     return muatDaftarJurnal();
   }
   // isi baru → reset form saja
@@ -2775,8 +3036,7 @@ window.simpanJurnal = async () => {
     $("jBtnSimpan").textContent = "Simpan Jurnal";
 
     // Pindah ke halaman Daftar Jurnal setelah simpan
-    const navDaftar = [...document.querySelectorAll("#nav button")]
-      .find(b => b.dataset.key === "daftarjurnal");
+    const navDaftar = document.querySelector('#nav .sg-item[data-key="daftarjurnal"]');
     if (navDaftar) navDaftar.click();
     else buka("daftarjurnal");
 
@@ -6646,12 +6906,7 @@ window.editJurnal = async (id) => {
   if (!j) return toast("Jurnal tak ditemukan.");
 
   // pindah ke tab Isi Jurnal
-  const tombolIsi = Array.from(document.querySelectorAll("#nav button"))
-    .find(b => b.textContent === LABEL.isijurnal);
-  if (tombolIsi) {
-    document.querySelectorAll("#nav button").forEach(x => x.classList.remove("active"));
-    tombolIsi.classList.add("active");
-  }
+  navTandai("isijurnal");
   await muatIsiJurnal();
 
   // masuk mode edit
@@ -9984,7 +10239,7 @@ function njGambarGuru(h){
     '<button class="btn btn-sm" style="margin-top:10px" onclick="njKeIsiJurnal()">✎ Isi jurnal sekarang</button></div>';
 }
 window.njKeIsiJurnal = () => {
-  const b = [...document.querySelectorAll("#nav button")].find(x => x.dataset.key === "isijurnal");
+  const b = document.querySelector('#nav .sg-item[data-key="isijurnal"]');
   if (b) b.click();
 };
 
