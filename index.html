@@ -694,6 +694,12 @@ input#jJam[readonly]{background:#f1f5f9;color:#1e3a5f;font-weight:700}
   color:var(--ink-lembut);padding:8px;background:var(--bg)}
 .logo-pra img{width:100%;height:100%;object-fit:contain}
 .logo-aksi{display:flex;flex-direction:column;gap:6px}.logo-aksi .btn{margin-top:0}.logo-aksi .btn:disabled{opacity:.45;cursor:not-allowed}
+/* ===== KOREKSI WALI KELAS (rekap & akun guru) ===== */
+.kor-ket{font-size:11px;color:#8a5a00;margin-top:2px;font-weight:400}
+.kor-box{background:#fff9db;border:1px solid #ffe066;border-radius:8px;padding:10px 12px;font-size:12.5px;color:#8a5a00;margin-top:12px;line-height:1.55}
+.kor-baris{background:#fff9db;border-left:3px solid #f08c00;border-radius:6px;padding:6px 10px;font-size:12.5px;color:#8a5a00;margin-top:8px}
+[data-dark="1"] .kor-box,[data-dark="1"] .kor-baris{background:#3a2f1a;border-color:#6b5a2a;color:#ffd166}
+[data-dark="1"] .kor-ket{color:#ffd166}
 </style>
 </head>
 <body>
@@ -2980,7 +2986,8 @@ function renderAbsensi(){
       return;
     }
     const perluKet = s.status !== "Hadir";   // keterangan hanya untuk Sakit/Izin/Alpa
-    html += '<tr><td>' + (i+1) + '</td><td>' + esc(s.nama) + '</td>' +
+    html += '<tr><td>' + (i+1) + '</td><td>' + esc(s.nama) +
+      (s.kor ? '<div class="kor-ket"><span class="kh-pena">✎</span> dikoreksi wali kelas: <b>' + esc(KH_LABEL[s.kor] || s.kor) + '</b></div>' : '') + '</td>' +
       opsi.map(o => '<td style="text-align:center"><input type="radio" name="ab' + i + '" value="' + o + '" class="rb-' + KELAS_ABSEN[o] + '"' +
         (s.status===o?' checked':'') + ' onchange="setAbsen(' + i + ',\'' + o + '\')"></td>').join("") + '</tr>' +
       '<tr id="ketRow' + i + '"' + (perluKet ? '' : ' style="display:none"') + '>' +
@@ -5304,28 +5311,34 @@ window.pilihSiswaKartu = async () => {
 /* Agregat kehadiran satu siswa dalam rentang (mandiri, tak bergantung DOM tab lain). */
 async function hitungAbsensiSiswa(siswaId, kelasId, dari, sampai){
   const periode = await ambilPeriodeAktif();
-  let qj = sb.from("jurnal").select("id").eq("kelas_id", kelasId);
+  let qj = sb.from("jurnal").select("id, tanggal").eq("kelas_id", kelasId);
   if (periode.tahun_ajaran) qj = qj.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
   if (dari) qj = qj.gte("tanggal", dari);
   if (sampai) qj = qj.lte("tanggal", sampai);
   const { data: jurnal, error: errJ } = await qj;
   if (errJ) throw new Error(errJ.message);
   const ids = (jurnal || []).map(j => j.id);
+  const tglJurnal = {}; (jurnal || []).forEach(j => tglJurnal[j.id] = j.tanggal);
+  const korPeta = await ambilPetaKoreksi({ siswaId, dari, sampai });   // koreksi wali kelas
 
-  const rek = { hadir:0, sakit:0, izin:0, alpa:0, tercatat:0, persen:null, totalPertemuan: ids.length };
+  const rek = { hadir:0, sakit:0, izin:0, alpa:0, tercatat:0, persen:null, totalPertemuan: ids.length, korJam:0, korHari:0 };
+  const korTgl = new Set();
   if (ids.length) {
     const potong = (arr,n)=>{const o=[];for(let i=0;i<arr.length;i+=n)o.push(arr.slice(i,i+n));return o;};
     for (const grup of potong(ids, 200)) {
       const { data: ab, error: errA } = await sb.from("absensi")
-        .select("status").eq("siswa_id", siswaId).in("jurnal_id", grup);
+        .select("jurnal_id, status").eq("siswa_id", siswaId).in("jurnal_id", grup);
       if (errA) throw new Error(errA.message);
       (ab || []).forEach(a => {
-        const v = String(a.status||"").toLowerCase();
+        const t = tglJurnal[a.jurnal_id], kor = korPeta[siswaId + "|" + t];
+        const v = statusEfektif(a.status, kor);
+        if (kor && v !== String(a.status||"").toLowerCase()) { rek.korJam++; korTgl.add(t); }
         if (v==="hadir") rek.hadir++; else if (v==="sakit") rek.sakit++;
         else if (v==="izin") rek.izin++; else rek.alpa++;
       });
     }
   }
+  rek.korHari = korTgl.size;
   rek.tercatat = rek.hadir + rek.sakit + rek.izin + rek.alpa;
   rek.persen = rek.tercatat>0 ? (rek.hadir/rek.tercatat*100) : null;
   return rek;
@@ -5385,6 +5398,8 @@ window.renderKartuSiswa = async () => {
       '</div>' +
       '<div style="font-size:14px">Dari <b>' + rek.totalPertemuan + '</b> pertemuan, kehadiran tercatat <b>' + rek.tercatat + '</b>. ' +
         'Persentase hadir: <b style="color:' + warnaP + '">' + f(rek.persen) + '</b></div>' +
+      (rek.korHari ? '<div class="kor-box"><span class="kh-pena">✎</span> Sudah termasuk koreksi wali kelas: <b>' + rek.korHari + ' hari</b> (' +
+        rek.korJam + ' jam pelajaran). Rincian di Kehadiran Harian.</div>' : '') +
     '</div>';
 
     // catatan
@@ -5471,6 +5486,7 @@ window.cetakKartuSiswa = async () => {
     '<table><thead><tr><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpa</th><th>Tercatat</th><th>% Hadir</th></tr></thead>' +
       '<tbody><tr><td>' + rek.hadir + '</td><td>' + rek.sakit + '</td><td>' + rek.izin + '</td><td>' + rek.alpa +
       '</td><td>' + rek.tercatat + '</td><td><b>' + f(rek.persen) + '</b></td></tr></tbody></table>' +
+    (rek.korHari ? '<div style="font-size:10px;margin-top:4px">✎ Sudah termasuk koreksi wali kelas (' + rek.korHari + ' hari).</div>' : '') +
     '<h3>Riwayat Catatan</h3>' +
     '<table><thead><tr><th style="width:36px">No</th><th style="width:90px">Tanggal</th><th style="width:90px">Kategori</th><th>Isi</th></tr></thead>' +
       '<tbody>' + barisCatatan + '</tbody></table>' +
@@ -5503,6 +5519,7 @@ function htmlBadanKartu(siswa, rek, catatan, dari, sampai, namaTtd, nipTtd, tglT
     '<table><thead><tr><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpa</th><th>Tercatat</th><th>% Hadir</th></tr></thead>' +
       '<tbody><tr><td>' + rek.hadir + '</td><td>' + rek.sakit + '</td><td>' + rek.izin + '</td><td>' + rek.alpa +
       '</td><td>' + rek.tercatat + '</td><td><b>' + f(rek.persen) + '</b></td></tr></tbody></table>' +
+    (rek.korHari ? '<div style="font-size:10px;margin-top:4px">✎ Sudah termasuk koreksi wali kelas (' + rek.korHari + ' hari).</div>' : '') +
     '<h3>Riwayat Catatan</h3>' +
     '<table><thead><tr><th style="width:36px">No</th><th style="width:90px">Tanggal</th><th style="width:90px">Kategori</th><th>Isi</th></tr></thead>' +
       '<tbody>' + barisCatatan + '</tbody></table>' +
@@ -5548,7 +5565,7 @@ window.cetakSemuaKartu = async () => {
 
     // 2) semua jurnal kelas dalam rentang (sekali ambil)
     const periode = await ambilPeriodeAktif();
-    let qj = sb.from("jurnal").select("id").eq("kelas_id", _ksKelasAktif);
+    let qj = sb.from("jurnal").select("id, tanggal").eq("kelas_id", _ksKelasAktif);
     if (periode.tahun_ajaran) qj = qj.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
     if (dari) qj = qj.gte("tanggal", dari);
     if (sampai) qj = qj.lte("tanggal", sampai);
@@ -5559,16 +5576,20 @@ window.cetakSemuaKartu = async () => {
 
     // 3) semua absensi utk jurnal-jurnal itu (sekali ambil, dipecah 200)
     const absPerSiswa = {};  // siswa_id -> {hadir,sakit,izin,alpa}
-    siswaList.forEach(s => absPerSiswa[s.id] = { hadir:0, sakit:0, izin:0, alpa:0 });
+    siswaList.forEach(s => absPerSiswa[s.id] = { hadir:0, sakit:0, izin:0, alpa:0, korTgl: new Set() });
+    const tglJurnal = {}; (jurnal || []).forEach(j => tglJurnal[j.id] = j.tanggal);
+    const korPeta = await ambilPetaKoreksi({ kelasId: _ksKelasAktif, dari, sampai });   // koreksi wali kelas
     if (jurnalIds.length) {
       const potong = (arr,n)=>{const o=[];for(let i=0;i<arr.length;i+=n)o.push(arr.slice(i,i+n));return o;};
       for (const grup of potong(jurnalIds, 200)) {
         const { data: ab, error: errA } = await sb.from("absensi")
-          .select("siswa_id, status").in("jurnal_id", grup);
+          .select("jurnal_id, siswa_id, status").in("jurnal_id", grup);
         if (errA) throw new Error(errA.message);
         (ab || []).forEach(a => {
           const p = absPerSiswa[a.siswa_id]; if (!p) return;
-          const v = String(a.status||"").toLowerCase();
+          const t = tglJurnal[a.jurnal_id], kor = korPeta[a.siswa_id + "|" + t];
+          const v = statusEfektif(a.status, kor);
+          if (kor && v !== String(a.status||"").toLowerCase()) p.korTgl.add(t);
           if (v==="hadir") p.hadir++; else if (v==="sakit") p.sakit++;
           else if (v==="izin") p.izin++; else p.alpa++;
         });
@@ -5601,7 +5622,7 @@ window.cetakSemuaKartu = async () => {
     const isiSemua = siswaList.map(s => {
       const p = absPerSiswa[s.id];
       const tercatat = p.hadir + p.sakit + p.izin + p.alpa;
-      const rek = { ...p, tercatat, persen: tercatat>0 ? (p.hadir/tercatat*100) : null, totalPertemuan };
+      const rek = { ...p, tercatat, persen: tercatat>0 ? (p.hadir/tercatat*100) : null, totalPertemuan, korHari: p.korTgl.size };
       const siswaObj = { ...s, _namaKelas: namaKelas };
       const kop = (namaSekolah ? '<div class="kop"><div class="nm-sek">' + esc(namaSekolah) + '</div></div>' : '');
       const badan = htmlBadanKartu(siswaObj, rek, catPerSiswa[s.id] || [], dari, sampai, namaTtd, nipTtd, tglTtd);
@@ -5984,6 +6005,30 @@ window.ubahBatasHadir = (v) => {
 };
 
 /* Ambil & agregat absensi kelas aktif dalam rentang tanggal. */
+/* ===== KOREKSI WALI KELAS di rekap per pertemuan (Rekap Absensi, Kartu Siswa) =====
+   Pada tanggal yang dikoreksi di Kehadiran Harian, semua jam pelajaran siswa hari itu dihitung
+   memakai status koreksi. Data absensi guru di database TIDAK diubah. */
+const KOR_KE_STATUS = { H:"hadir", S:"sakit", I:"izin", A:"alpa" };
+/* Peta "siswa_id|tanggal" → koreksi. filter: {kelasId?, siswaId?, dari?, sampai?}. Gagal → {}. */
+async function ambilPetaKoreksi(filter){
+  try {
+    let q = sb.from("absensi_harian").select("siswa_id, tanggal, status, diubah_nama");
+    if (filter.kelasId) q = q.eq("kelas_id", filter.kelasId);
+    if (filter.siswaId) q = q.eq("siswa_id", filter.siswaId);
+    if (filter.dari) q = q.gte("tanggal", filter.dari);
+    if (filter.sampai) q = q.lte("tanggal", filter.sampai);
+    const { data, error } = await q;
+    if (error) throw error;
+    const peta = {};
+    (data || []).forEach(k => peta[k.siswa_id + "|" + k.tanggal] = k);
+    return peta;
+  } catch (e) { console.warn("koreksi wali kelas:", e.message); return {}; }
+}
+/* Status yang dihitung untuk satu baris absensi: koreksi (bila ada) menggantikan status guru. */
+function statusEfektif(statusGuru, kor){
+  return kor ? (KOR_KE_STATUS[kor.status] || "alpa") : String(statusGuru || "").toLowerCase();
+}
+
 async function hitungRekapAbsensi(){
   const dari = $("raDari") ? $("raDari").value : _raRentang.dari;
   const sampai = $("raSampai") ? $("raSampai").value : _raRentang.sampai;
@@ -6000,6 +6045,8 @@ async function hitungRekapAbsensi(){
   if (errJ) throw new Error(errJ.message);
   const jurnalIds = (jurnal || []).map(j => j.id);
   const totalPertemuan = jurnalIds.length;
+  const tglJurnal = {}; (jurnal || []).forEach(j => tglJurnal[j.id] = j.tanggal);
+  const korPeta = await ambilPetaKoreksi({ kelasId: _raKelasAktif, dari, sampai });   // koreksi wali kelas
 
   // 2) siswa kelas ini (agar siswa tanpa catatan absensi tetap tampil)
   const { data: siswa, error: errS } = await sb.from("siswa")
@@ -6011,7 +6058,7 @@ async function hitungRekapAbsensi(){
   const peta = {};
   listSiswa.forEach(s => {
     peta[s.id] = { siswa_id: s.id, nis: s.nis || "", nama: s.nama_siswa,
-      hadir: 0, sakit: 0, izin: 0, alpa: 0 };
+      hadir: 0, sakit: 0, izin: 0, alpa: 0, korJam: 0, korTgl: new Set(), korKe: {} };
   });
 
   // 3) absensi untuk jurnal-jurnal tsb, lalu agregat
@@ -6020,12 +6067,14 @@ async function hitungRekapAbsensi(){
     const potong = (arr, n) => { const out=[]; for(let i=0;i<arr.length;i+=n) out.push(arr.slice(i,i+n)); return out; };
     for (const grup of potong(jurnalIds, 200)) {
       const { data: ab, error: errA } = await sb.from("absensi")
-        .select("siswa_id, status").in("jurnal_id", grup);
+        .select("jurnal_id, siswa_id, status").in("jurnal_id", grup);
       if (errA) throw new Error(errA.message);
       (ab || []).forEach(a => {
         const p = peta[a.siswa_id];
         if (!p) return;   // siswa mungkin pindah kelas; abaikan
-        const v = String(a.status||"").toLowerCase();
+        const t = tglJurnal[a.jurnal_id], kor = korPeta[a.siswa_id + "|" + t];
+        const v = statusEfektif(a.status, kor);
+        if (kor && v !== String(a.status||"").toLowerCase()) { p.korJam++; p.korTgl.add(t); p.korKe[v] = (p.korKe[v] || 0) + 1; }
         if (v === "hadir") p.hadir++;
         else if (v === "sakit") p.sakit++;
         else if (v === "izin") p.izin++;
@@ -6038,7 +6087,7 @@ async function hitungRekapAbsensi(){
     const p = peta[s.id];
     const tercatat = p.hadir + p.sakit + p.izin + p.alpa;
     const persen = tercatat > 0 ? (p.hadir / tercatat) * 100 : null;
-    return { ...p, tercatat, persen };
+    return { ...p, tercatat, persen, korHari: p.korTgl.size };
   });
 
   return { baris, totalPertemuan };
@@ -6060,7 +6109,7 @@ window.detailAbsensiSiswa = async (siswaId) => {
     // ambil jurnal kelas ini + mapel/guru, dalam rentang & periode aktif
     const periode = await ambilPeriodeAktif();
     let qj = sb.from("jurnal")
-      .select("id, mapel_id, guru_id, mapel:mapel_id(nama_mapel), guru:guru_id(nama)")
+      .select("id, tanggal, mapel_id, guru_id, mapel:mapel_id(nama_mapel), guru:guru_id(nama)")
       .eq("kelas_id", _raKelasAktif);
     if (periode.tahun_ajaran) qj = qj.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
     if (dari)   qj = qj.gte("tanggal", dari);
@@ -6073,10 +6122,12 @@ window.detailAbsensiSiswa = async (siswaId) => {
       petaJurnal[j.id] = {
         mapel_id: j.mapel_id || "-",
         nama_mapel: (j.mapel && j.mapel.nama_mapel) || "(tanpa mapel)",
-        guru: (j.guru && j.guru.nama) || "-"
+        guru: (j.guru && j.guru.nama) || "-",
+        tanggal: j.tanggal
       };
     });
     const jurnalIds = Object.keys(petaJurnal);
+    const korPeta = await ambilPetaKoreksi({ siswaId, dari, sampai });   // koreksi wali kelas
 
     // absensi siswa ini pada jurnal-jurnal tsb
     const petaMapel = {};   // mapel_id -> {nama_mapel, guru, hadir,sakit,izin,alpa}
@@ -6090,8 +6141,10 @@ window.detailAbsensiSiswa = async (siswaId) => {
           const j = petaJurnal[a.jurnal_id]; if (!j) return;
           const key = j.mapel_id;
           if (!petaMapel[key]) petaMapel[key] = {
-            nama_mapel:j.nama_mapel, guru:j.guru, hadir:0,sakit:0,izin:0,alpa:0 };
-          const v = String(a.status||"").toLowerCase();
+            nama_mapel:j.nama_mapel, guru:j.guru, hadir:0,sakit:0,izin:0,alpa:0, korKe:{} };
+          const kor = korPeta[siswaId + "|" + j.tanggal];
+          const v = statusEfektif(a.status, kor);
+          if (kor && v !== String(a.status||"").toLowerCase()) petaMapel[key].korKe[v] = (petaMapel[key].korKe[v] || 0) + 1;
           if (v==="hadir") petaMapel[key].hadir++;
           else if (v==="sakit") petaMapel[key].sakit++;
           else if (v==="izin") petaMapel[key].izin++;
@@ -6123,10 +6176,10 @@ window.detailAbsensiSiswa = async (siswaId) => {
       tbl += '<tr>' +
         '<td><b>' + esc(r.nama_mapel) + '</b></td>' +
         '<td style="color:var(--ink-lembut);font-size:13px">' + esc(r.guru) + '</td>' +
-        '<td style="text-align:center">' + r.hadir + '</td>' +
-        '<td style="text-align:center">' + r.sakit + '</td>' +
-        '<td style="text-align:center">' + r.izin + '</td>' +
-        '<td style="text-align:center;font-weight:700;' + (r.alpa>0?'color:var(--merah)':'') + '">' + r.alpa + '</td>' +
+        '<td style="text-align:center">' + r.hadir + supKor(r.korKe, "hadir") + '</td>' +
+        '<td style="text-align:center">' + r.sakit + supKor(r.korKe, "sakit") + '</td>' +
+        '<td style="text-align:center">' + r.izin + supKor(r.korKe, "izin") + '</td>' +
+        '<td style="text-align:center;font-weight:700;' + (r.alpa>0?'color:var(--merah)':'') + '">' + r.alpa + supKor(r.korKe, "alpa") + '</td>' +
         '<td style="text-align:center;font-weight:700;' + (rendah?'color:var(--merah)':'') + '">' + persen + '%</td>' +
       '</tr>';
     });
@@ -6136,12 +6189,19 @@ window.detailAbsensiSiswa = async (siswaId) => {
       '<span class="ra-badge">Total Hadir: ' + totH + '</span>' +
       '<span class="ra-badge ra-badge-alpa">Total Alpa: ' + totA + '</span></div>';
 
-    bukaModalDetailAbsensi(namaSiswa, nisSiswa, namaKelas, ringkas + tbl);
+    const daftarKor = Object.values(korPeta).sort((a,b) => String(a.tanggal).localeCompare(String(b.tanggal)));
+    const boxKor = daftarKor.length ? '<div class="kor-box"><span class="kh-pena">✎</span> = jam yang dihitung dari koreksi wali kelas:<br>' +
+      daftarKor.map(k => esc(khTglPanjang(k.tanggal)) + ' → <b>' + esc(KH_LABEL[k.status] || k.status) + '</b>' +
+        (k.diubah_nama ? ' (oleh ' + esc(k.diubah_nama) + ')' : '')).join("<br>") + '</div>' : '';
+    bukaModalDetailAbsensi(namaSiswa, nisSiswa, namaKelas, ringkas + tbl + boxKor);
   } catch (e) {
     bukaModalDetailAbsensi(namaSiswa, nisSiswa, namaKelas,
       '<div class="empty" style="color:var(--merah)">Gagal memuat: ' + esc(e.message) + '</div>');
   }
 };
+
+/* Tanda ✎ kecil bila sebagian angka berasal dari koreksi wali kelas. */
+function supKor(korKe, k){ return (korKe && korKe[k]) ? '<sup class="kh-pena">✎</sup>' : ''; }
 
 function bukaModalDetailAbsensi(nama, nis, kelas, isiHtml){
   let bg = document.getElementById("raModalDetail");
@@ -6230,11 +6290,12 @@ window.renderRekapAbsensi = async () => {
       const gayaAlpa = perhatian ? "" : ("color:" + (b.alpa>0?"#c92a2a":"inherit") + ";");
       const gayaP = perhatian ? "" : ("color:" + warnaP + ";");
       tabel += '<tr' + cls + '><td>' + (i+1) + '</td><td>' + esc(b.nis||"-") + '</td>' +
-        '<td><a class="ra-nama-link" onclick="detailAbsensiSiswa(\'' + esc(b.siswa_id) + '\')">' + esc(b.nama) + '</a></td>' +
-        '<td style="text-align:center">' + b.hadir + '</td>' +
-        '<td style="text-align:center">' + b.sakit + '</td>' +
-        '<td style="text-align:center">' + b.izin + '</td>' +
-        '<td style="text-align:center;font-weight:700;' + gayaAlpa + '">' + b.alpa + '</td>' +
+        '<td><a class="ra-nama-link" onclick="detailAbsensiSiswa(\'' + esc(b.siswa_id) + '\')">' + esc(b.nama) + '</a>' +
+          (b.korJam ? ' <span class="kh-pena">✎</span><div class="kor-ket">' + b.korJam + ' jam dikoreksi wali kelas (' + b.korHari + ' hari)</div>' : '') + '</td>' +
+        '<td style="text-align:center">' + b.hadir + supKor(b.korKe, "hadir") + '</td>' +
+        '<td style="text-align:center">' + b.sakit + supKor(b.korKe, "sakit") + '</td>' +
+        '<td style="text-align:center">' + b.izin + supKor(b.korKe, "izin") + '</td>' +
+        '<td style="text-align:center;font-weight:700;' + gayaAlpa + '">' + b.alpa + supKor(b.korKe, "alpa") + '</td>' +
         '<td style="text-align:center;font-weight:700;' + gayaP + '">' + f(b.persen) + '</td></tr>';
     });
     tabel += '</table></div>';
@@ -6242,6 +6303,9 @@ window.renderRekapAbsensi = async () => {
     html += '<div class="card"><h2>Rekap Kehadiran — ' + esc(namaKelas) + ' (' + baris.length + ' siswa)</h2>' +
       (totalPertemuan===0 ? '<div class="empty" style="color:#b78100">Belum ada jurnal pada rentang ini. ' +
         'Rekap terisi setelah ada jurnal mengajar.</div>' : tabel) +
+      (baris.some(b => b.korJam) ? '<div class="kor-box"><b><span class="kh-pena">✎</span> Sudah termasuk koreksi wali kelas.</b> ' +
+        'Pada tanggal yang dikoreksi di Kehadiran Harian, semua jam pelajaran siswa hari itu dihitung memakai status koreksi. ' +
+        'Absensi asli di jurnal guru tidak diubah. Klik nama untuk rincian per mapel.</div>' : '') +
       '<p style="color:#6b7280;font-size:12px;margin-top:10px">% Hadir = Hadir ÷ total kehadiran tercatat. ' +
         'Hijau ≥ ' + batasHadir + '%, merah < ' + batasHadir + '%.</p>' +
     '</div>';
@@ -6314,6 +6378,8 @@ window.cetakRekapAbsensi = async () => {
       esc(dari||"-") + ' s/d ' + esc(sampai||"-") + ' &nbsp; <b>Batas Kehadiran:</b> ' + batasHadir + '%</div>' +
     '<table><thead><tr><th>No</th><th>NIS</th><th>Nama</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpa</th><th>% Hadir</th><th>Ket</th></tr></thead><tbody>' +
       rows + '</tbody></table>' +
+    (baris.some(b => b.korJam) ? '<div style="font-size:10px;margin-top:4px">✎ Angka sudah termasuk koreksi wali kelas di Kehadiran Harian. ' +
+      'Siswa terkoreksi: ' + baris.filter(b => b.korJam).map(b => esc(b.nama) + ' (' + b.korHari + ' hari)').join(", ") + '.</div>' : '') +
     blokTtd + '</body></html>');
   w.document.close(); w.focus();
   w.onload = () => { try { w.print(); } catch(e){} };
@@ -6962,6 +7028,7 @@ function gambarHalamanJurnal(){
       '</div>' +
       '<div style="margin-top:6px"><b>Materi:</b> ' + esc(j.materi||"-") + '</div>' +
       '<div style="font-size:13px;color:#6b7280;margin-top:4px">Kehadiran: ' + esc(j.kehadiran||"") + '</div>' +
+      '<div class="kor-wadah" data-jurnal="' + esc(j.id) + '"></div>' +
       (j.verifikasi_oleh ? '<div style="font-size:12px;color:#6b7280;margin-top:4px">Diverifikasi: ' +
         esc(j.verifikasi_oleh) + '</div>' : '') +
       '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
@@ -6976,6 +7043,28 @@ function gambarHalamanJurnal(){
   });
   html += kontrolHalaman(_pgJurnal, totalHal, "gantiHalamanJurnal");
   $("jurnalList").innerHTML = html;
+  tampilkanKoreksiDaftar(potongan.map(j => j.id));   // tidak ditunggu: daftar tampil dulu
+}
+
+/* ===== Keterangan koreksi wali kelas untuk guru (RPC koreksi_jurnal, #S15) =====
+   Hanya nama siswa + status koreksi (tanpa alasan). Satu panggilan per halaman. */
+async function ambilKoreksiJurnal(ids){
+  const hasil = {};
+  if (!ids.length) return hasil;
+  try {
+    const { data, error } = await sb.rpc("koreksi_jurnal", { p_jurnal: ids.map(String) });
+    if (error) throw error;
+    (data || []).forEach(k => (hasil[k.jurnal_id] = hasil[k.jurnal_id] || []).push(k));
+  } catch (e) { console.warn("koreksi_jurnal:", e.message); }
+  return hasil;
+}
+async function tampilkanKoreksiDaftar(ids){
+  const kor = await ambilKoreksiJurnal(ids);
+  document.querySelectorAll("#jurnalList .kor-wadah").forEach(el => {
+    const arr = kor[el.dataset.jurnal]; if (!arr) return;
+    el.innerHTML = '<div class="kor-baris"><span class="kh-pena">✎</span> Dikoreksi wali kelas: ' +
+      arr.map(k => '<b>' + esc(k.siswa_nama || "-") + '</b> (' + esc(k.status_guru) + ' → ' + esc(KH_LABEL[k.status_koreksi] || k.status_koreksi) + ')').join(", ") + '</div>';
+  });
 }
 
 /* Ringkasan jurnal di luar jadwal (muncul bila filter Jadwal = "Hanya di luar jadwal"). */
@@ -7051,8 +7140,10 @@ window.cetakJurnal = async (id) => {
 
   // absensi jurnal ini (hanya yang tidak hadir)
   const { data: absen } = await sb.from("absensi")
-    .select("siswa_nis, siswa_nama, status, keterangan").eq("jurnal_id", id);
+    .select("siswa_id, siswa_nis, siswa_nama, status, keterangan").eq("jurnal_id", id);
   const takHadir = (absen || []).filter(a => a.status.toLowerCase() !== "hadir");
+  const korJ = (await ambilKoreksiJurnal([id]))[String(id)] || [];   // keterangan koreksi wali kelas
+  const korPer = {}; korJ.forEach(k => korPer[k.siswa_id] = k.status_koreksi);
 
   // kepsek (tanda tangan kiri)
   const { data: kepsekRows } = await sb.from("profil")
@@ -7089,8 +7180,12 @@ window.cetakJurnal = async (id) => {
   if (takHadir.length) {
     const baris = takHadir.map((a,i) =>
       '<tr><td>' + (i+1) + '</td><td>' + esc(a.siswa_nis||"-") + '</td><td>' +
-      esc(a.siswa_nama) + '</td><td>' + esc(a.status) + '</td><td>' + esc(a.keterangan||"-") + '</td></tr>').join("");
-    tabelRekap = '<table><tr><th>No</th><th>NIS</th><th>Nama</th><th>Kehadiran</th><th>Keterangan</th></tr>' + baris + '</table>';
+      esc(a.siswa_nama) + '</td><td>' + esc(a.status) + '</td><td>' + esc(a.keterangan||"-") +
+      (korPer[String(a.siswa_id)] ? ' <i style="color:#555">✎ dikoreksi wali kelas: ' + esc(KH_LABEL[korPer[String(a.siswa_id)]] || korPer[String(a.siswa_id)]) + '</i>' : '') +
+      '</td></tr>').join("");
+    tabelRekap = '<table><tr><th>No</th><th>NIS</th><th>Nama</th><th>Kehadiran</th><th>Keterangan</th></tr>' + baris + '</table>' +
+      (korJ.length ? '<div style="font-size:10px;margin-top:4px">✎ = status harian siswa sudah dikoreksi wali kelas. ' +
+        'Absensi di jurnal ini tetap sesuai catatan guru saat mengajar.</div>' : '');
   } else {
     tabelRekap = '<p style="margin-top:10px"><i>Semua siswa hadir.</i></p>';
   }
@@ -7198,6 +7293,12 @@ window.editJurnal = async (id) => {
       const idx = _absenSiswa.findIndex(s => s.siswa_id === a.siswa_id);
       if (idx >= 0 && !_absenSiswa[idx].pkl) { _absenSiswa[idx].status = a.status; _absenSiswa[idx].keterangan = a.keterangan || ""; }
     });
+    renderAbsensi();
+  }
+  // keterangan koreksi wali kelas (hanya informasi; guru tetap bebas mengubah absensinya)
+  const korJ = (await ambilKoreksiJurnal([id]))[String(id)] || [];
+  if (korJ.length) {
+    korJ.forEach(k => { const s = _absenSiswa.find(x => String(x.siswa_id) === k.siswa_id); if (s) s.kor = k.status_koreksi; });
     renderAbsensi();
   }
 
