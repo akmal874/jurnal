@@ -3680,7 +3680,7 @@ let _nKelas = "", _nMapel = "";
 let _nSiswa = [];        // siswa kelas terpilih
 let _nDokumen = [];      // baris nilai untuk kelas+mapel terpilih
 const N_JENIS_LIST = ["Harian", "Tugas", "UH", "Sumatif"];
-const N_TAB_LIST = ["Harian", "Tugas", "UH", "Rata-rata", "Sumatif", "Rapor"];
+const N_TAB_LIST = ["Harian", "Tugas", "UH", "Rerata NH", "Sumatif", "Kehadiran", "Rapor"];   // Kehadiran: #S20 · "Rerata NH" (dulu Rata-rata): #S21
 let _nJenis = "Harian";
 
 async function muatNilai(){
@@ -3810,7 +3810,8 @@ async function muatDataNilai(){
     if (errS) throw new Error(errS.message);
     _nSiswa = siswa || [];
 
-    if (_nJenis === "Rata-rata" || _nJenis === "Rapor") {
+    if (_nJenis === "Kehadiran") { await renderKehadiranNilai(); return; }   // #S20 (otomatis dari absensi)
+    if (_nJenis === "Rerata NH" || _nJenis === "Rapor") {
       // tab hitung: ambil SEMUA nilai (semua jenis) untuk kelas+mapel ini
       const periode = await ambilPeriodeAktif();
       let qn = sb.from("nilai").select("siswa_id, jenis, pertemuan, nilai")
@@ -4002,7 +4003,7 @@ async function renderRataRata(){
     '<th style="text-align:center">Rata Harian</th>' +
     '<th style="text-align:center">Rata Tugas</th>' +
     '<th style="text-align:center">Rata UH</th>' +
-    '<th style="text-align:center">Rata-Rata Akhir</th></tr>';
+    '<th style="text-align:center">Rerata NH</th></tr>';
   baris.forEach((b, i) => {
     const tuntas = b.akhir !== null && b.akhir >= _bobot.kkm;
     const warna = b.akhir === null ? "#6b7280" : (tuntas ? "#2b8a3e" : "#c92a2a");
@@ -4017,8 +4018,8 @@ async function renderRataRata(){
   // form atur bobot (guru/admin saja)
   const formBobot = bolehAtur ?
     '<div class="card"><h2>Atur Bobot & KKM</h2>' +
-      '<p style="color:#6b7280;font-size:13px;margin-bottom:10px">Persentase untuk rata-rata akhir ' +
-        '(idealnya total 100%) dan batas tuntas (KKM).</p>' +
+      '<p style="color:#6b7280;font-size:13px;margin-bottom:10px">Persentase untuk Rerata NH ' +
+        '(total wajib 100%) dan batas tuntas (KKM).</p>' +
       '<div class="row">' +
         '<div><label>Harian (%)</label><input id="bHarian" type="number" min="0" max="100" value="' + _bobot.harian + '" oninput="hitungTotalBobot()"></div>' +
         '<div><label>Tugas (%)</label><input id="bTugas" type="number" min="0" max="100" value="' + _bobot.tugas + '" oninput="hitungTotalBobot()"></div>' +
@@ -4029,7 +4030,7 @@ async function renderRataRata(){
         '<div></div><div></div>' +
       '</div>' +
       '<div id="bobotTotal" style="margin-top:10px;font-weight:600"></div>' +
-      '<button class="btn" onclick="simpanBobot()">Simpan Bobot</button>' +
+      '<button class="btn" id="bBtnSimpan" onclick="simpanBobot()">Simpan Bobot</button>' +
       '<div id="bMsg"></div>' +
     '</div>' : '';
 
@@ -4053,7 +4054,7 @@ async function renderRataRata(){
 
   $("nIsi").innerHTML =
     statKartu + formBobot +
-    '<div class="card"><h2>Rata-Rata Nilai</h2>' + tabel +
+    '<div class="card"><h2>Rerata NH (Nilai Harian, Tugas, UH)</h2>' + tabel +
       '<p style="color:#6b7280;font-size:13px;margin-top:10px">Bobot: Harian ' + _bobot.harian +
       '% · Tugas ' + _bobot.tugas + '% · UH ' + _bobot.uh + '%. KKM = ' + _bobot.kkm +
       '. Hijau = tuntas (≥' + _bobot.kkm + '), merah = belum.</p>' +
@@ -4067,9 +4068,11 @@ window.hitungTotalBobot = () => {
   const total = h+t+u;
   const box = $("bobotTotal");
   if (box) {
-    box.textContent = "Total bobot: " + total + "%" + (total!==100 ? " (idealnya 100%)" : " ✓");
-    box.style.color = total===100 ? "#2b8a3e" : "#b78100";
+    box.textContent = "Total bobot: " + total + "%" + (total!==100 ? " — harus 100%" : " ✓");
+    box.style.color = total===100 ? "#2b8a3e" : "#c92a2a";
   }
+  const btn = $("bBtnSimpan");   // #S21: total wajib 100
+  if (btn) { btn.disabled = total !== 100; btn.style.opacity = total === 100 ? "" : ".5"; }
 };
 
 window.simpanBobot = async () => {
@@ -4083,6 +4086,7 @@ window.simpanBobot = async () => {
     uh: Number($("bUh").value)||0,
     kkm: Math.max(0, Math.min(100, Number($("bKkm").value)||70))
   };
+  if (bobotBaru.harian + bobotBaru.tugas + bobotBaru.uh !== 100) return setMsg("Total bobot Harian + Tugas + UH harus 100%.", false);   // #S21
   try {
     const { error } = await sb.from("bobot")
       .upsert(bobotBaru, { onConflict: "kelas_id,mapel_id,guru_id" });
@@ -4092,26 +4096,140 @@ window.simpanBobot = async () => {
   } catch (e) { setMsg("Gagal menyimpan: " + e.message, false); }
 };
 
-/* ============ TAB RAPOR (gabung Rata-Rata Akhir + Sumatif) ============ */
-let _bobotRapor = { rapor_rata: 50, rapor_sumatif: 50, kkm_rapor: 70 };
+/* ============ #S20 NILAI KEHADIRAN & RAPOR 3 KOMPONEN ============
+   Nilai Kehadiran (per mapel) = % hadir, dihitung persis seperti Rekap Absensi (koreksi wali kelas & PKL ikut),
+   dibulatkan ke bilangan bulat. Mapel tanpa pertemuan tercatat → 0.
+   Rapor = (Rata-Rata × bobot + Sumatif × bobot + Kehadiran × bobot) / 100. KETIGA komponen WAJIB dihitung;
+   komponen kosong = 0 (agar semua siswa dinilai dengan timbangan yang sama). Total bobot wajib 100. */
+const BOBOT_RAPOR_DEF = { rapor_rata: 50, rapor_sumatif: 30, rapor_kehadiran: 20, kkm_rapor: 70 };
+function bacaBobotRapor(bd){
+  if (!bd) return { ...BOBOT_RAPOR_DEF };
+  return { rapor_rata: bd.rapor_rata ?? 50, rapor_sumatif: bd.rapor_sumatif ?? 30,
+           rapor_kehadiran: bd.rapor_kehadiran ?? 20, kkm_rapor: bd.kkm_rapor ?? bd.kkm ?? 70 };
+}
+function hitungNilaiRapor(rata, sum, hadir, b){
+  const tot = (Number(b.rapor_rata)||0) + (Number(b.rapor_sumatif)||0) + (Number(b.rapor_kehadiran)||0) || 100;
+  return ((rata ?? 0) * (Number(b.rapor_rata)||0) + (sum ?? 0) * (Number(b.rapor_sumatif)||0) +
+          (hadir ?? 0) * (Number(b.rapor_kehadiran)||0)) / tot;
+}
+/* Rekap kehadiran per mapel untuk satu kelas pada periode aktif.
+   Hasil: { mapel_id: { siswa_id: { hadir, sakit, izin, alpa, pkl, tercatat, persen, nilai } } } */
+async function hitungKehadiranKelas(kelasId, listSiswa, periode, mapelId){
+  const hasil = {};
+  const baru = () => ({ hadir:0, sakit:0, izin:0, alpa:0, pkl:0 });
+  const ambil = (m, sid) => { const pm = (hasil[m] = hasil[m] || {}); return (pm[sid] = pm[sid] || baru()); };
+  let qj = sb.from("jurnal").select("id, tanggal, mapel_id").eq("kelas_id", kelasId);
+  if (mapelId) qj = qj.eq("mapel_id", mapelId);
+  if (periode.tahun_ajaran) qj = qj.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+  const { data: jurnal, error } = await qj;
+  if (error) throw new Error(error.message);
+  const js = jurnal || [];
+  if (js.length) {
+    const tgl = js.map(j => j.tanggal).sort();
+    const dari = tgl[0], sampai = tgl[tgl.length - 1];
+    const info = {}; js.forEach(j => info[j.id] = j);
+    const ids = listSiswa.map(s => s.id), idSet = new Set(ids.map(String));
+    const [korPeta, pklPeta] = await Promise.all([
+      ambilPetaKoreksi({ kelasId, dari, sampai }), ambilPetaPkl(ids, dari, sampai) ]);
+    listSiswa.forEach(s => {
+      if (!pklPeta[String(s.id)]) return;
+      js.forEach(j => { if (pklPada(pklPeta, s.id, j.tanggal)) ambil(j.mapel_id, s.id).pkl++; });
+    });
+    const jIds = js.map(j => j.id);
+    for (let i = 0; i < jIds.length; i += 200) {
+      const { data: ab, error: e2 } = await sb.from("absensi").select("jurnal_id, siswa_id, status")
+        .in("jurnal_id", jIds.slice(i, i + 200));
+      if (e2) throw new Error(e2.message);
+      (ab || []).forEach(a => {
+        if (!idSet.has(String(a.siswa_id))) return;
+        const j = info[a.jurnal_id]; if (!j) return;
+        if (pklPada(pklPeta, a.siswa_id, j.tanggal)) return;   // sedang PKL: dihitung PKL
+        const v = statusEfektif(a.status, korPeta[a.siswa_id + "|" + j.tanggal]);
+        const p = ambil(j.mapel_id, a.siswa_id);
+        if (v === "hadir") p.hadir++; else if (v === "sakit") p.sakit++; else if (v === "izin") p.izin++; else p.alpa++;
+      });
+    }
+  }
+  const mapelIds = mapelId ? [mapelId] : Object.keys(hasil);
+  mapelIds.forEach(m => listSiswa.forEach(s => {
+    const p = ambil(m, s.id);
+    p.tercatat = p.hadir + p.sakit + p.izin + p.alpa;
+    p.persen = p.tercatat > 0 ? p.hadir / p.tercatat * 100 : null;
+    p.nilai = p.persen === null ? 0 : Math.round(p.persen);   // tanpa pertemuan tercatat → 0
+  }));
+  return hasil;
+}
+function nilaiKehadiran(p){ return p ? p.nilai : 0; }
+
+/* ---- Tab Kehadiran (menu Nilai) — read-only ---- */
+async function renderKehadiranNilai(){
+  $("nIsi").innerHTML = '<div class="card"><div class="page-kosong">Menghitung kehadiran...</div></div>';
+  try {
+    const periode = await ambilPeriodeAktif();
+    const peta = (await hitungKehadiranKelas(_nKelas, _nSiswa, periode, _nMapel))[_nMapel] || {};
+    const baris = _nSiswa.map(s => ({ s, p: peta[s.id] || { hadir:0, sakit:0, izin:0, alpa:0, pkl:0, tercatat:0, persen:null, nilai:0 } }));
+    const adaPkl = baris.some(b => b.p.pkl);
+    const nilaiArr = baris.map(b => b.p.nilai);
+    const f = v => v === null || v === undefined ? "-" : String(v);
+    const rataKelas = nilaiArr.length ? (nilaiArr.reduce((a,b)=>a+b,0) / nilaiArr.length).toFixed(1) : "-";
+    const statKartu =
+      '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">' +
+        '<div style="flex:1;min-width:120px;background:#e7ecfb;border:1px solid #e5e8f0;border-radius:12px;padding:16px;text-align:center">' +
+          '<div style="font-size:12px;color:#3b5bdb">RATA-RATA KELAS</div>' +
+          '<div style="font-size:26px;font-weight:700;color:#3b5bdb">' + rataKelas + '</div></div>' +
+        '<div style="flex:1;min-width:120px;background:#ebfbee;border:1px solid #e5e8f0;border-radius:12px;padding:16px;text-align:center">' +
+          '<div style="font-size:12px;color:#2b8a3e">TERTINGGI</div>' +
+          '<div style="font-size:26px;font-weight:700;color:#2b8a3e">' + (nilaiArr.length ? Math.max(...nilaiArr) : "-") + '</div></div>' +
+        '<div style="flex:1;min-width:120px;background:#fff0f0;border:1px solid #e5e8f0;border-radius:12px;padding:16px;text-align:center">' +
+          '<div style="font-size:12px;color:#c92a2a">TERENDAH</div>' +
+          '<div style="font-size:26px;font-weight:700;color:#c92a2a">' + (nilaiArr.length ? Math.min(...nilaiArr) : "-") + '</div></div>' +
+      '</div>';
+    let tabel = '<div style="overflow-x:auto"><table>' +
+      '<tr><th>No</th><th>Nama</th>' +
+      '<th style="text-align:center">Hadir</th><th style="text-align:center">Sakit</th>' +
+      '<th style="text-align:center">Izin</th><th style="text-align:center">Alpa</th>' +
+      (adaPkl ? '<th style="text-align:center;color:#0b7285">PKL</th>' : '') +
+      '<th style="text-align:center">% Hadir</th><th style="text-align:center">Nilai Kehadiran</th></tr>';
+    baris.forEach((b, i) => {
+      const p = b.p;
+      tabel += '<tr><td>' + (i+1) + '</td><td><b>' + esc(b.s.nama_siswa) + '</b></td>' +
+        '<td style="text-align:center">' + p.hadir + '</td><td style="text-align:center">' + p.sakit + '</td>' +
+        '<td style="text-align:center">' + p.izin + '</td><td style="text-align:center">' + p.alpa + '</td>' +
+        (adaPkl ? '<td style="text-align:center;color:#0b7285">' + p.pkl + '</td>' : '') +
+        '<td style="text-align:center">' + (p.persen === null ? "-" : p.persen.toFixed(1) + "%") + '</td>' +
+        '<td style="text-align:center;font-weight:700;background:#f1f3f5">' + f(p.nilai) + '</td></tr>';
+    });
+    tabel += '</table></div>';
+    $("nIsi").innerHTML = statKartu +
+      '<div class="card"><h2>Nilai Kehadiran</h2>' + tabel +
+        '<p style="color:#6b7280;font-size:13px;margin-top:10px">Nilai Kehadiran = % hadir mapel ini pada semester aktif ' +
+        '(sama dengan Rekap Absensi: koreksi wali kelas &amp; PKL ikut diperhitungkan), dibulatkan. Dihitung otomatis dari jurnal, ' +
+        'tidak bisa diketik. Belum ada pertemuan tercatat = 0.</p>' +
+      '</div>';
+  } catch (e) {
+    $("nIsi").innerHTML = '<div class="card"><div class="page-kosong">Gagal: ' + esc(e.message) + '</div></div>';
+  }
+}
+
+/* ============ TAB RAPOR (gabung Rata-Rata Akhir + Sumatif + Kehadiran) ============ */
+let _bobotRapor = { ...BOBOT_RAPOR_DEF };
 
 async function renderRapor(){
   // muat bobot lengkap (termasuk bobot biasa, karena rapor butuh rata-rata akhir)
   _bobot = { harian: 33, tugas: 33, uh: 34, kkm: 70 };
-  _bobotRapor = { rapor_rata: 50, rapor_sumatif: 50, kkm_rapor: 70 };
+  _bobotRapor = { ...BOBOT_RAPOR_DEF };
   try {
     const { data } = await sb.from("bobot").select("*")
       .eq("kelas_id", _nKelas).eq("mapel_id", _nMapel)
       .eq("guru_id", ME.id).maybeSingle();
     if (data) {
       _bobot = { harian: data.harian, tugas: data.tugas, uh: data.uh, kkm: data.kkm };
-      _bobotRapor = {
-        rapor_rata: data.rapor_rata ?? 50,
-        rapor_sumatif: data.rapor_sumatif ?? 50,
-        kkm_rapor: data.kkm_rapor ?? data.kkm ?? 70
-      };
+      _bobotRapor = bacaBobotRapor(data);
     }
   } catch (e) {}
+  let hadirPeta = {};   // #S20
+  try { hadirPeta = (await hitungKehadiranKelas(_nKelas, _nSiswa, await ambilPeriodeAktif(), _nMapel))[_nMapel] || {}; }
+  catch (e) { console.warn("kehadiran:", e.message); }
 
   function rataJenis(siswaId, jenis){
     const arr = _nDokumen
@@ -4137,11 +4255,9 @@ async function renderRapor(){
   const baris = window._raporBaris = _nSiswa.map(s => {
     const rata = rataRataAkhir(s.id);
     const sum = rataJenis(s.id, "Sumatif");
-    let jml = 0, tb = 0;
-    if (rata !== null) { jml += rata * _bobotRapor.rapor_rata;    tb += _bobotRapor.rapor_rata; }
-    if (sum !== null)  { jml += sum  * _bobotRapor.rapor_sumatif; tb += _bobotRapor.rapor_sumatif; }
-    const rapor = tb > 0 ? jml / tb : null;
-    return { s, rata, sum, rapor };
+    const hadir = nilaiKehadiran(hadirPeta[s.id]);
+    const rapor = hitungNilaiRapor(rata, sum, hadir, _bobotRapor);   // 3 komponen, kosong = 0
+    return { s, rata, sum, hadir, rapor };
   });
 
   const f = v => v === null ? "-" : v.toFixed(1);
@@ -4168,8 +4284,9 @@ async function renderRapor(){
 
   let tabel = '<div style="overflow-x:auto"><table>' +
     '<tr><th>No</th><th>Nama</th>' +
-    '<th style="text-align:center">Rata-Rata</th>' +
+    '<th style="text-align:center">Rerata NH</th>' +
     '<th style="text-align:center">Sumatif</th>' +
+    '<th style="text-align:center">Kehadiran</th>' +
     '<th style="text-align:center">Nilai Rapor</th></tr>';
   baris.forEach((b, i) => {
     const tuntas = b.rapor !== null && b.rapor >= _bobotRapor.kkm_rapor;
@@ -4177,24 +4294,26 @@ async function renderRapor(){
     tabel += '<tr><td>' + (i+1) + '</td><td><b>' + esc(b.s.nama_siswa) + '</b></td>' +
       '<td style="text-align:center">' + f(b.rata) + '</td>' +
       '<td style="text-align:center">' + f(b.sum) + '</td>' +
+      '<td style="text-align:center">' + b.hadir + '</td>' +
       '<td style="text-align:center;font-weight:700;color:' + warna + '">' + f(b.rapor) + '</td></tr>';
   });
   tabel += '</table></div>';
 
   const formBobot = bolehAtur ?
     '<div class="card"><h2>Atur Bobot & KKM Rapor</h2>' +
-      '<p style="color:#6b7280;font-size:13px;margin-bottom:10px">Nilai Rapor = gabungan Rata-Rata ' +
-        '(Harian/Tugas/UH) dan Sumatif. Idealnya total 100%.</p>' +
+      '<p style="color:#6b7280;font-size:13px;margin-bottom:10px">Nilai Rapor = gabungan Rerata NH ' +
+        '(Harian/Tugas/UH), Sumatif, dan Kehadiran. Total bobot wajib 100%.</p>' +
       '<div class="row">' +
-        '<div><label>Bobot Rata-Rata (%)</label><input id="rRata" type="number" min="0" max="100" value="' + _bobotRapor.rapor_rata + '" oninput="hitungTotalRapor()"></div>' +
+        '<div><label>Bobot Rerata NH (%)</label><input id="rRata" type="number" min="0" max="100" value="' + _bobotRapor.rapor_rata + '" oninput="hitungTotalRapor()"></div>' +
         '<div><label>Bobot Sumatif (%)</label><input id="rSum" type="number" min="0" max="100" value="' + _bobotRapor.rapor_sumatif + '" oninput="hitungTotalRapor()"></div>' +
+        '<div><label>Bobot Kehadiran (%)</label><input id="rHadir" type="number" min="0" max="100" value="' + _bobotRapor.rapor_kehadiran + '" oninput="hitungTotalRapor()"></div>' +
       '</div>' +
       '<div class="row">' +
         '<div><label>KKM Rapor</label><input id="rKkm" type="number" min="0" max="100" value="' + _bobotRapor.kkm_rapor + '"></div>' +
         '<div></div>' +
       '</div>' +
       '<div id="raporTotal" style="margin-top:10px;font-weight:600"></div>' +
-      '<button class="btn" onclick="simpanBobotRapor()">Simpan Bobot Rapor</button>' +
+      '<button class="btn" id="rBtnSimpan" onclick="simpanBobotRapor()">Simpan Bobot Rapor</button>' +
       '<div id="rMsg"></div>' +
     '</div>' : '';
 
@@ -4208,22 +4327,25 @@ async function renderRapor(){
           '<button class="btn btn-ghost btn-sm" style="margin-left:6px" onclick="excelRapor()">📊 Excel</button>' +
         '</div>' +
       '</div>' + tabel +
-      '<p style="color:#6b7280;font-size:13px;margin-top:10px">Bobot Rapor: Rata-Rata ' +
-      _bobotRapor.rapor_rata + '% · Sumatif ' + _bobotRapor.rapor_sumatif + '%. KKM Rapor = ' +
-      _bobotRapor.kkm_rapor + '. Kolom "Rata-Rata" diambil dari perhitungan Harian/Tugas/UH berbobot.</p>' +
+      '<p style="color:#6b7280;font-size:13px;margin-top:10px">Bobot Rapor: Rerata NH ' +
+      _bobotRapor.rapor_rata + '% · Sumatif ' + _bobotRapor.rapor_sumatif + '% · Kehadiran ' + _bobotRapor.rapor_kehadiran +
+      '%. KKM Rapor = ' + _bobotRapor.kkm_rapor + '. Kolom "Rerata NH" diambil dari perhitungan Harian/Tugas/UH berbobot; ' +
+      'Kehadiran dari tab Kehadiran. Ketiga komponen selalu dihitung (kosong = 0), jadi nilai rapor final setelah semua komponen terisi.</p>' +
     '</div>';
 
   if (bolehAtur) hitungTotalRapor();
 }
 
 window.hitungTotalRapor = () => {
-  const r = Number($("rRata").value)||0, s = Number($("rSum").value)||0;
-  const total = r+s;
+  const r = Number($("rRata").value)||0, s = Number($("rSum").value)||0, h = Number(($("rHadir")||{}).value)||0;
+  const total = r+s+h;
   const box = $("raporTotal");
   if (box) {
-    box.textContent = "Total bobot rapor: " + total + "%" + (total!==100 ? " (idealnya 100%)" : " ✓");
-    box.style.color = total===100 ? "#2b8a3e" : "#b78100";
+    box.textContent = "Total bobot rapor: " + total + "%" + (total!==100 ? " — harus 100%" : " ✓");
+    box.style.color = total===100 ? "#2b8a3e" : "#c92a2a";
   }
+  const btn = $("rBtnSimpan");   // #S20: total wajib 100
+  if (btn) { btn.disabled = total !== 100; btn.style.opacity = total === 100 ? "" : ".5"; }
 };
 
 window.simpanBobotRapor = async () => {
@@ -4232,7 +4354,9 @@ window.simpanBobotRapor = async () => {
     (ok?'background:#ebfbee;color:#2b8a3e':'background:#fff0f0;color:#c92a2a') + '">' + esc(t) + '</div>'; };
   const rapor_rata = Number($("rRata").value)||0;
   const rapor_sumatif = Number($("rSum").value)||0;
+  const rapor_kehadiran = Number(($("rHadir")||{}).value)||0;
   const kkm_rapor = Math.max(0, Math.min(100, Number($("rKkm").value)||70));
+  if (rapor_rata + rapor_sumatif + rapor_kehadiran !== 100) return setMsg("Total bobot Rerata NH + Sumatif + Kehadiran harus 100%.", false);
   try {
     // upsert: pertahankan bobot biasa yang mungkin sudah ada
     const { data: lama } = await sb.from("bobot").select("*")
@@ -4241,7 +4365,7 @@ window.simpanBobotRapor = async () => {
     const gabung = {
       kelas_id: _nKelas, mapel_id: _nMapel, guru_id: ME.id,
       harian: lama?.harian ?? 33, tugas: lama?.tugas ?? 33, uh: lama?.uh ?? 34, kkm: lama?.kkm ?? 70,
-      rapor_rata, rapor_sumatif, kkm_rapor
+      rapor_rata, rapor_sumatif, rapor_kehadiran, kkm_rapor
     };
     const { error } = await sb.from("bobot").upsert(gabung, { onConflict: "kelas_id,mapel_id,guru_id" });
     if (error) throw new Error(error.message);
@@ -4278,15 +4402,17 @@ async function hitungRekapNilaiLengkap(){
 
   // bobot
   let bobot = { harian:33, tugas:33, uh:34, kkm:70 };
-  let bRapor = { rapor_rata:50, rapor_sumatif:50, kkm_rapor:70 };
+  let bRapor = { ...BOBOT_RAPOR_DEF };
   const { data: bd } = await sb.from("bobot").select("*")
     .eq("kelas_id", _nKelas).eq("mapel_id", _nMapel)
     .eq("guru_id", ME.id).maybeSingle();
   if (bd) {
     bobot = { harian: bd.harian, tugas: bd.tugas, uh: bd.uh, kkm: bd.kkm };
-    bRapor = { rapor_rata: bd.rapor_rata ?? 50, rapor_sumatif: bd.rapor_sumatif ?? 50,
-               kkm_rapor: bd.kkm_rapor ?? bd.kkm ?? 70 };
+    bRapor = bacaBobotRapor(bd);
   }
+  let hadirPeta = {};   // #S20
+  try { hadirPeta = (await hitungKehadiranKelas(_nKelas, listSiswa, periode, _nMapel))[_nMapel] || {}; }
+  catch (e) { console.warn("kehadiran:", e.message); }
 
   const rataJenis = (sid, jenis) => {
     const arr = dok.filter(d => d.siswa_id===sid && d.jenis===jenis && d.nilai!=null).map(d => Number(d.nilai));
@@ -4301,11 +4427,9 @@ async function hitungRekapNilaiLengkap(){
     if (rt!==null){ jml+=rt*bobot.tugas; w+=bobot.tugas; }
     if (ru!==null){ jml+=ru*bobot.uh; w+=bobot.uh; }
     const rataAkhir = w>0 ? jml/w : null;
-    let jr=0,wr=0;
-    if (rataAkhir!==null){ jr+=rataAkhir*bRapor.rapor_rata; wr+=bRapor.rapor_rata; }
-    if (sum!==null){ jr+=sum*bRapor.rapor_sumatif; wr+=bRapor.rapor_sumatif; }
-    const rapor = wr>0 ? jr/wr : null;
-    return { nis:s.nis, nama:s.nama_siswa, rh, rt, ru, rataAkhir, sum, rapor };
+    const hadir = nilaiKehadiran(hadirPeta[s.id]);
+    const rapor = hitungNilaiRapor(rataAkhir, sum, hadir, bRapor);   // #S20: 3 komponen, kosong = 0
+    return { nis:s.nis, nama:s.nama_siswa, rh, rt, ru, rataAkhir, sum, hadir, rapor };
   });
   return { baris, bobot, bRapor };
 }
@@ -4328,7 +4452,7 @@ window.cetakNilai = async () => {
   const rows = baris.map((b,i) =>
     '<tr><td>' + (i+1) + '</td><td>' + esc(b.nis||"-") + '</td><td style="text-align:left">' + esc(b.nama) + '</td>' +
     '<td>' + f(b.rh) + '</td><td>' + f(b.rt) + '</td><td>' + f(b.ru) + '</td>' +
-    '<td>' + f(b.rataAkhir) + '</td><td>' + f(b.sum) + '</td><td><b>' + f(b.rapor) + '</b></td>' +
+    '<td>' + f(b.rataAkhir) + '</td><td>' + f(b.sum) + '</td><td>' + b.hadir + '</td><td><b>' + f(b.rapor) + '</b></td>' +
     '<td>' + (b.rapor===null?"-":(b.rapor>=kkmRapor?"Tuntas":"Belum")) + '</td></tr>').join("");
 
   const blokTtd =
@@ -4359,10 +4483,10 @@ window.cetakNilai = async () => {
     '<h2>Daftar Nilai Siswa</h2>' +
     '<div class="meta"><b>Mapel:</b> ' + esc(namaMapel) + ' &nbsp; <b>Kelas:</b> ' + esc(namaKelas) + '<br>' +
       '<b>Bobot Nilai:</b> Harian ' + bobot.harian + '%, Tugas ' + bobot.tugas + '%, UH ' + bobot.uh + '% &nbsp; ' +
-      '<b>Bobot Rapor:</b> Rata-Rata ' + bRapor.rapor_rata + '%, Sumatif ' + bRapor.rapor_sumatif + '% &nbsp; ' +
+      '<b>Bobot Rapor:</b> Rerata NH ' + bRapor.rapor_rata + '%, Sumatif ' + bRapor.rapor_sumatif + '%, Kehadiran ' + bRapor.rapor_kehadiran + '% &nbsp; ' +
       '<b>KKM Rapor:</b> ' + kkmRapor + '</div>' +
     '<table><thead><tr><th>No</th><th>NIS</th><th>Nama</th><th>Harian</th><th>Tugas</th><th>UH</th>' +
-      '<th>Rata-Rata</th><th>Sumatif</th><th>Rapor</th><th>Ket</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<th>Rerata NH</th><th>Sumatif</th><th>Kehadiran</th><th>Rapor</th><th>Ket</th></tr></thead><tbody>' + rows + '</tbody></table>' +
     blokTtd + '</body></html>');
   w.document.close(); w.focus();
   w.onload = () => { try { w.print(); } catch(e){} };
@@ -4377,11 +4501,11 @@ window.excelNilai = async () => {
   const data = baris.map((b,i) => ({
     "No": i+1, "NIS": b.nis||"", "Nama": b.nama,
     "Rata Harian": b1(b.rh), "Rata Tugas": b1(b.rt), "Rata UH": b1(b.ru),
-    "Rata-Rata Akhir": b1(b.rataAkhir), "Sumatif": b1(b.sum), "Rapor": b1(b.rapor),
+    "Rerata NH": b1(b.rataAkhir), "Sumatif": b1(b.sum), "Kehadiran": b.hadir, "Rapor": b1(b.rapor),
     "Keterangan": b.rapor===null ? "" : (b.rapor>=kkmRapor ? "Tuntas" : "Belum Tuntas")
   }));
   const ws = XLSX.utils.json_to_sheet(data);
-  ws["!cols"] = [{wch:5},{wch:12},{wch:24},{wch:11},{wch:11},{wch:10},{wch:14},{wch:10},{wch:12},{wch:14}];
+  ws["!cols"] = [{wch:5},{wch:12},{wch:24},{wch:11},{wch:11},{wch:10},{wch:14},{wch:10},{wch:11},{wch:12},{wch:14}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Nilai");
   XLSX.writeFile(wb, ("Nilai-" + namaKelas + "-" + namaMapel + ".xlsx").replace(/[^\w\-.]/g,"_"));
@@ -4411,6 +4535,7 @@ window.cetakRapor = async () => {
     rows += '<tr><td>' + (i+1) + '</td><td>' + esc(b.s.nama_siswa) + '</td>' +
       '<td style="text-align:center">' + f(b.rata) + '</td>' +
       '<td style="text-align:center">' + f(b.sum) + '</td>' +
+      '<td style="text-align:center">' + (b.hadir ?? 0) + '</td>' +
       '<td style="text-align:center;font-weight:bold">' + f(b.rapor) + '</td>' +
       '<td style="text-align:center">' + (b.rapor===null?"-":(tuntas?"Tuntas":"Belum")) + '</td></tr>';
   });
@@ -4433,9 +4558,9 @@ window.cetakRapor = async () => {
     (sekolah ? '<h2>' + esc(sekolah) + '</h2>' : '') +
     '<h3>Daftar Nilai Rapor</h3>' +
     '<div class="info"><b>Mapel:</b> ' + esc(namaMapel) + ' &nbsp; <b>Kelas:</b> ' + esc(namaKelas) + '<br>' +
-      '<b>KKM Rapor:</b> ' + kkm + ' &nbsp; <b>Bobot:</b> Rata-Rata ' + _bobotRapor.rapor_rata +
-      '% · Sumatif ' + _bobotRapor.rapor_sumatif + '%</div>' +
-    '<table><thead><tr><th>No</th><th>Nama Siswa</th><th>Rata-Rata</th><th>Sumatif</th><th>Rapor</th><th>Ket.</th></tr></thead><tbody>' +
+      '<b>KKM Rapor:</b> ' + kkm + ' &nbsp; <b>Bobot:</b> Rerata NH ' + _bobotRapor.rapor_rata +
+      '% · Sumatif ' + _bobotRapor.rapor_sumatif + '% · Kehadiran ' + _bobotRapor.rapor_kehadiran + '%</div>' +
+    '<table><thead><tr><th>No</th><th>Nama Siswa</th><th>Rerata NH</th><th>Sumatif</th><th>Kehadiran</th><th>Rapor</th><th>Ket.</th></tr></thead><tbody>' +
       rows + '</tbody></table>' +
     '<table class="ttd"><tr><td>&nbsp;</td>' +
       '<td>' + esc(kota ? kota + ", " : "") + esc(tgl) + '<br>Guru Mata Pelajaran,<div class="nm">' +
@@ -4461,15 +4586,16 @@ window.excelRapor = async () => {
   const data = baris.map((b, i) => ({
     "No": i+1,
     "Nama Siswa": b.s.nama_siswa,
-    "Rata-Rata": r1(b.rata),
+    "Rerata NH": r1(b.rata),
     "Sumatif": r1(b.sum),
+    "Kehadiran": b.hadir ?? 0,
     "Rapor": r1(b.rapor),
     "Keterangan": b.rapor===null ? "" : (b.rapor >= kkm ? "Tuntas" : "Belum")
   }));
 
   const ws = XLSX.utils.json_to_sheet(data, {
-    header: ["No","Nama Siswa","Rata-Rata","Sumatif","Rapor","Keterangan"] });
-  ws["!cols"] = [{wch:5},{wch:28},{wch:12},{wch:10},{wch:10},{wch:12}];
+    header: ["No","Nama Siswa","Rerata NH","Sumatif","Kehadiran","Rapor","Keterangan"] });
+  ws["!cols"] = [{wch:5},{wch:28},{wch:12},{wch:10},{wch:11},{wch:10},{wch:12}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Rapor");
 
@@ -5872,7 +5998,12 @@ const RN_JENIS = [
   { k:"UH",      s:"UH", kls:"rn-gU" },
   { k:"Sumatif", s:"S",  kls:"rn-gS" }
 ];
-let _rnJenis = { Harian:true, Tugas:true, UH:true, Sumatif:true };
+let _rnHadir = null;       // cache kehadiran per mapel kelas aktif (#S20)
+async function rnHadirMapel(kelasId, mapelId, listSiswa, periode){
+  if (kelasId !== _rnKelasAktif) return (await hitungKehadiranKelas(kelasId, listSiswa, periode, mapelId))[mapelId] || {};
+  if (!_rnHadir) _rnHadir = await hitungKehadiranKelas(kelasId, listSiswa, periode);
+  return _rnHadir[mapelId] || {};
+}
 
 async function muatRekapNilai(wadahId){
   const WADAH = wadahId || "wkIsi";
@@ -5908,7 +6039,7 @@ async function muatRekapNilai(wadahId){
     '<div class="card"><h2>Rekap Nilai</h2>' +
       '<div class="rn-seg">' +
         '<button id="rnSegRekap" onclick="gantiModeRekapNilai(\'rekap\')">📊 Rekap Rapor</button>' +
-        '<button id="rnSegDaftar" onclick="gantiModeRekapNilai(\'daftar\')">📋 Daftar Nilai per Mapel</button>' +
+        '<button id="rnSegDaftar" onclick="gantiModeRekapNilai(\'daftar\')">📋 Nilai Akhir per Mapel</button>' +
       '</div>' +
       '<p id="rnDesk" style="color:#6b7280;font-size:13px;margin-bottom:6px"></p>' +
       '<div class="row" style="align-items:flex-end">' +
@@ -5923,7 +6054,7 @@ async function muatRekapNilai(wadahId){
 
 window.gantiKelasRekapNilai = async () => {
   _rnKelasAktif = $("rnKelas").value;
-  _rnMapelAktif = ""; _rnMapelList = []; _rnSiswa = []; _rnGuru = {}; _rnDaftar = null;
+  _rnMapelAktif = ""; _rnMapelList = []; _rnSiswa = []; _rnGuru = {}; _rnDaftar = null; _rnHadir = null;
   await renderRekapNilai();
 };
 window.gantiModeRekapNilai = async (mode) => {
@@ -5939,6 +6070,7 @@ function rnF1(v){ return v===null||v===undefined||isNaN(v) ? "-" : Number(v).toF
 
 /* Siswa aktif, guru pengampu (jadwal; cadangan: pemilik bobot), dan mapel kelas aktif (ada nilai atau ada di jadwal). */
 async function rnSiapkanKelas(periode){
+  _rnHadir = null;   // hitung ulang kehadiran saat data kelas disegarkan (#S20)
   if (!_rnSiswa.length) {
     const { data, error } = await sb.from("siswa")
       .select("id, nis, nama_siswa").eq("kelas_id", _rnKelasAktif).eq("aktif", true).order("nama_siswa");
@@ -5994,15 +6126,17 @@ async function rnSusunDaftar(kelasId, mapelId, listSiswa, periode){
 
   // bobot: ambil apa adanya untuk kelas+mapel (guru mana pun). Bila >1 baris, pakai yang pertama.
   let bobot = { harian:33, tugas:33, uh:34, kkm:70 };
-  let bRapor = { rapor_rata:50, rapor_sumatif:50, kkm_rapor:70 };
+  let bRapor = { ...BOBOT_RAPOR_DEF };
   const { data: bdArr } = await sb.from("bobot").select("*")
     .eq("kelas_id", kelasId).eq("mapel_id", mapelId).limit(1);
   const bd = bdArr && bdArr[0];
   if (bd) {
     bobot = { harian: bd.harian, tugas: bd.tugas, uh: bd.uh, kkm: bd.kkm };
-    bRapor = { rapor_rata: bd.rapor_rata ?? 50, rapor_sumatif: bd.rapor_sumatif ?? 50,
-               kkm_rapor: bd.kkm_rapor ?? bd.kkm ?? 70 };
+    bRapor = bacaBobotRapor(bd);
   }
+  let hadirPeta = {};   // #S20
+  try { hadirPeta = await rnHadirMapel(kelasId, mapelId, listSiswa, periode); }
+  catch (e) { console.warn("kehadiran:", e.message); }
 
   const kolom = {};   // jenis -> [pertemuan terurut]
   RN_JENIS.forEach(j => kolom[j.k] = [...new Set(dok.filter(d => d.jenis === j.k).map(d => d.pertemuan))]
@@ -6016,7 +6150,7 @@ async function rnSusunDaftar(kelasId, mapelId, listSiswa, periode){
     const arr = dok.filter(d => d.siswa_id===sid && d.jenis===jenis && d.nilai!=null).map(d => Number(d.nilai));
     return arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null;
   };
-  const rata = {}, rataAkhir = {}, rapor = {};
+  const rata = {}, rataAkhir = {}, rapor = {}, hadir = {};
   listSiswa.forEach(s => {
     const rh = rataJenis(s.id,"Harian"), rt = rataJenis(s.id,"Tugas"),
           ru = rataJenis(s.id,"UH"), sum = rataJenis(s.id,"Sumatif");
@@ -6027,12 +6161,10 @@ async function rnSusunDaftar(kelasId, mapelId, listSiswa, periode){
     if (ru!==null){ jml+=ru*bobot.uh; w+=bobot.uh; }
     const ra = w>0 ? jml/w : null;
     rataAkhir[s.id] = ra;
-    let jr=0,wr=0;
-    if (ra!==null){ jr+=ra*bRapor.rapor_rata; wr+=bRapor.rapor_rata; }
-    if (sum!==null){ jr+=sum*bRapor.rapor_sumatif; wr+=bRapor.rapor_sumatif; }
-    rapor[s.id] = wr>0 ? jr/wr : null;
+    hadir[s.id] = nilaiKehadiran(hadirPeta[s.id]);
+    rapor[s.id] = hitungNilaiRapor(ra, sum, hadir[s.id], bRapor);   // #S20: 3 komponen, kosong = 0
   });
-  return { mapelId, kolom, nilaiPeta, rata, rataAkhir, rapor, bobot, bRapor, jumlahNilai: dok.length };
+  return { mapelId, kolom, nilaiPeta, rata, rataAkhir, rapor, hadir, bobot, bRapor, jumlahNilai: dok.length };
 }
 
 /* Hitung nilai rapor semua siswa untuk SATU mapel (dipakai Rekap Rapor). */
@@ -6122,7 +6254,7 @@ window.renderRekapNilai = async () => {
 
 /* ---------- DAFTAR NILAI PER MAPEL (#S19) ---------- */
 async function renderDaftarNilai(){
-  $("rnDesk").textContent = "Rincian nilai yang diinput guru mapel (Harian, Tugas, UH, Sumatif). Pilih mapel dan jenis nilai.";
+  $("rnDesk").textContent = "Nilai akhir tiap siswa untuk satu mapel: Rerata NH, Sumatif, Kehadiran, dan Rapor. Pilih mapel.";
   $("rnAksi").innerHTML = "";
   $("rnIsi").innerHTML = '<div class="card"><div class="page-kosong">Memuat daftar nilai...</div></div>';
   try {
@@ -6142,77 +6274,46 @@ async function renderDaftarNilai(){
   }
 }
 function rnLabelMapel(m){ return (m.kode ? m.kode + " — " : "") + (m.nama_mapel || ""); }
-function rnSemuaJenis(){ return RN_JENIS.every(j => _rnJenis[j.k]); }
 function rnGambarDaftar(periode){
   const m = _rnMapelList.find(x => x.id === _rnMapelAktif) || {};
   const d = _rnDaftar;
   const opsi = _rnMapelList.map(x => '<option value="' + esc(x.id) + '"' + (x.id === _rnMapelAktif ? " selected" : "") + '>' +
     esc(rnLabelMapel(x)) + (rnTeksGuru(x.id) ? ' · ' + esc(rnTeksGuru(x.id)) : '') + (x.adaNilai ? '' : ' (belum ada nilai)') + '</option>').join("");
-  const chips = '<span class="rn-chip' + (rnSemuaJenis() ? ' on' : '') + '" onclick="rnPilihJenis(\'*\')">Semua</span>' +
-    RN_JENIS.map(j => '<span class="rn-chip' + (_rnJenis[j.k] ? ' on' : '') + '" onclick="rnPilihJenis(\'' + j.k + '\')">' + j.k + '</span>').join("");
   const info = '<div class="rn-info"><b>' + esc(m.nama_mapel || "-") + '</b>' + (m.kode ? ' (' + esc(m.kode) + ')' : '') +
-    ' · Guru: <b>' + esc(rnTeksGuru(m.id) || "-") + '</b> · KKM <b>' + esc(d.bobot.kkm) + '</b>' +
-    (d.bRapor.kkm_rapor !== d.bobot.kkm ? ' · KKM rapor <b>' + esc(d.bRapor.kkm_rapor) + '</b>' : '') +
-    '<br><span style="color:#6b7280">Bobot rata-rata: Harian ' + esc(d.bobot.harian) + ' · Tugas ' + esc(d.bobot.tugas) + ' · UH ' + esc(d.bobot.uh) +
-    ' · Rapor = Rata-rata ' + esc(d.bRapor.rapor_rata) + ' + Sumatif ' + esc(d.bRapor.rapor_sumatif) +
-    ' · ' + _rnSiswa.length + ' siswa · ' + esc(periode.tahun_ajaran || "-") + ' ' + esc(periode.semester || "") + '</span></div>';
+    ' · Guru: <b>' + esc(rnTeksGuru(m.id) || "-") + '</b> · KKM Rapor <b>' + esc(d.bRapor.kkm_rapor) + '</b>' +
+    '<br><span style="color:#6b7280">Bobot Rapor: Rerata NH ' + esc(d.bRapor.rapor_rata) + ' · Sumatif ' + esc(d.bRapor.rapor_sumatif) +
+    ' · Kehadiran ' + esc(d.bRapor.rapor_kehadiran) + ' · ' + _rnSiswa.length + ' siswa · ' +
+    esc(periode.tahun_ajaran || "-") + ' ' + esc(periode.semester || "") + '</span></div>';
   const aksi = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">' +
     '<button class="btn btn-sm" style="background:#2b8a3e" onclick="cetakDaftarNilai(false)">🖨 Cetak mapel ini</button>' +
     '<button class="btn btn-ghost btn-sm" onclick="cetakDaftarNilai(true)">🖨 Cetak semua mapel</button>' +
     '<button class="btn btn-ghost btn-sm" onclick="excelRekapNilai()">📊 Excel (semua mapel)</button></div>';
-  const isiTabel = d.jumlahNilai
-    ? '<div style="overflow-x:auto">' + rnTabelDaftar(d, false) + '</div>' +
-      '<p style="color:#6b7280;font-size:12px;margin-top:10px">Merah = di bawah KKM. "-" = belum diisi. H/T/UH/S = Harian/Tugas/UH/Sumatif, angka = pertemuan ke-. ' +
-        (rnSemuaJenis() ? 'Rata-rata Akhir = gabungan rata Harian, Tugas, UH sesuai bobot.' : 'Kolom Rata-rata Akhir &amp; Rapor tampil bila semua jenis dipilih.') + '</p>'
-    : '<div class="empty" style="color:#b78100">Guru belum menginput nilai untuk mapel ini.</div>';
   $("rnIsi").innerHTML = '<div class="card">' +
     '<div class="row" style="align-items:flex-end">' +
       '<div style="min-width:220px"><label>Mapel</label><select id="rnMapel" onchange="rnGantiMapel()">' + opsi + '</select></div>' +
-      '<div><label>Jenis nilai</label><div class="rn-chips">' + chips + '</div></div>' +
-    '</div>' + info + aksi + isiTabel + '</div>';
+    '</div>' + info + aksi +
+    (d.jumlahNilai ? '' : '<div class="empty" style="color:#b78100;margin-bottom:8px">Guru belum menginput nilai untuk mapel ini; Rerata NH &amp; Sumatif dihitung 0.</div>') +
+    '<div style="overflow-x:auto">' + rnTabelDaftar(d, false) + '</div>' +
+    '<p style="color:#6b7280;font-size:12px;margin-top:10px">Rerata NH = gabungan rata Harian, Tugas, UH sesuai bobot. ' +
+      'Kehadiran = % hadir mapel (dibulatkan). Rapor menghitung ketiga komponen; kosong = 0. Merah = di bawah KKM rapor.</p>' +
+  '</div>';
 }
 window.rnGantiMapel = async () => { _rnMapelAktif = $("rnMapel").value; await renderDaftarNilai(); };
-window.rnPilihJenis = async (k) => {
-  if (k === "*") RN_JENIS.forEach(j => _rnJenis[j.k] = true);
-  else {
-    _rnJenis[k] = !_rnJenis[k];
-    if (!RN_JENIS.some(j => _rnJenis[j.k])) _rnJenis[k] = true;   // minimal satu jenis
-  }
-  rnGambarDaftar(await ambilPeriodeAktif());
-};
-/* Tabel daftar nilai. semua=true → semua jenis + rata akhir + rapor (dipakai cetak "semua" & Excel). */
-function rnTabelDaftar(d, cetak, semuaPaksa){
-  const pilih = j => semuaPaksa || _rnJenis[j.k];
-  const semua = semuaPaksa || rnSemuaJenis();
+/* Tabel nilai akhir (#S21): Rerata NH · Sumatif · Kehadiran · Rapor · Status. */
+function rnTabelDaftar(d, cetak){
   const kkm = Number(d.bobot.kkm), kkmR = Number(d.bRapor.kkm_rapor);
-  const sel = (v, batas, kls) => '<td class="' + (kls || "") + (v !== null && v !== undefined && !isNaN(v) && v < batas ? ' rn-rendah' : '') + '">' +
-    (kls === "rn-rt" ? rnF1(v) : rnF(v)) + '</td>';
-  let h1 = '<tr><th rowspan="2">No</th><th rowspan="2" style="text-align:left">Nama</th>', h2 = '<tr>';
-  RN_JENIS.forEach(j => {
-    if (!pilih(j)) return;
-    const p = d.kolom[j.k], adaRata = j.k !== "Sumatif" || p.length > 1;
-    const lebar = Math.max(p.length, 1) + (adaRata && p.length ? 1 : 0);
-    h1 += '<th class="' + (cetak ? '' : j.kls) + '" colspan="' + lebar + '">' + j.k + '</th>';
-    if (!p.length) h2 += '<th class="' + (cetak ? '' : j.kls) + '">-</th>';
-    p.forEach(n => h2 += '<th class="' + (cetak ? '' : j.kls) + '">' + j.s + '-' + esc(n) + '</th>');
-    if (adaRata && p.length) h2 += '<th class="' + (cetak ? '' : j.kls) + '">Rata</th>';
-  });
-  if (semua) h1 += '<th rowspan="2">Rata-rata<br>Akhir</th><th rowspan="2">Rapor</th>';
+  const sel = (v, batas, satu) => '<td class="' + (satu ? 'rn-rt' : '') + (v !== null && v !== undefined && !isNaN(v) && v < batas ? ' rn-rendah' : '') + '">' +
+    (satu ? rnF1(v) : rnF(v)) + '</td>';
   let body = "";
   _rnSiswa.forEach((s, i) => {
-    let r = '<tr><td>' + (i+1) + '</td><td class="rn-nama">' + esc(s.nama_siswa) + '</td>';
-    RN_JENIS.forEach(j => {
-      if (!pilih(j)) return;
-      const p = d.kolom[j.k], adaRata = j.k !== "Sumatif" || p.length > 1;
-      const nj = ((d.nilaiPeta[s.id] || {})[j.k]) || {};
-      if (!p.length) r += '<td>-</td>';
-      p.forEach(n => r += sel(nj[n], kkm));
-      if (adaRata && p.length) r += sel(d.rata[s.id][j.k], kkm, "rn-rt");
-    });
-    if (semua) r += sel(d.rataAkhir[s.id], kkm, "rn-rt") + sel(d.rapor[s.id], kkmR, "rn-rt");
-    body += r + '</tr>';
+    const rapor = d.rapor[s.id], tuntas = rapor !== null && rapor !== undefined && rapor >= kkmR;
+    body += '<tr><td>' + (i+1) + '</td><td class="rn-nama">' + esc(s.nama_siswa) + '</td>' +
+      sel(d.rataAkhir[s.id] ?? 0, kkm) + sel(d.rata[s.id].Sumatif ?? 0, kkm) + sel((d.hadir || {})[s.id] ?? 0, kkm) +
+      sel(rapor, kkmR, true) +
+      '<td style="font-weight:700;color:' + (tuntas ? '#2b8a3e' : '#c92a2a') + '">' + (tuntas ? 'Tuntas' : 'Belum') + '</td></tr>';
   });
-  return '<table class="rn-daftar"><thead>' + h1 + '</tr>' + h2 + '</tr></thead><tbody>' + body + '</tbody></table>';
+  return '<table class="rn-daftar"><thead><tr><th>No</th><th style="text-align:left">Nama</th>' +
+    '<th>Rerata NH</th><th>Sumatif</th><th>Kehadiran</th><th>Rapor</th><th>Status</th></tr></thead><tbody>' + body + '</tbody></table>';
 }
 
 /* Data wali kelas & kop untuk cetak. */
@@ -6268,22 +6369,21 @@ function rnBlokTtd(kiri, kanan, tglTtd){
         (x.nip ? '<br><span class="nip-ttd">NIP. ' + esc(x.nip) + '</span>' : '') : '') + '</td>'; }).join("") + '</tr></table>';
 }
 /* Satu halaman daftar nilai (untuk cetak). */
-function rnHalamanDaftar(m, d, periode, dc, semuaPaksa){
+function rnHalamanDaftar(m, d, periode, dc){
   const guru = _rnGuru[m.id] || [];
   const g1 = guru.length === 1 ? guru[0] : null;
-  const jenisTeks = semuaPaksa || rnSemuaJenis() ? "Semua" : RN_JENIS.filter(j => _rnJenis[j.k]).map(j => j.k).join(", ");
   return '<div class="halaman">' +
     (dc.namaSekolah ? '<div class="kop"><div class="nm-sek">' + esc(dc.namaSekolah) + '</div></div>' : '') +
-    '<h2>Daftar Nilai</h2>' +
+    '<h2>Nilai Akhir per Mapel</h2>' +
     '<table class="meta" style="width:auto;margin-top:4px">' +
       '<tr><td>Kelas</td><td>: ' + esc(rnNamaKelas()) + '</td><td>Tahun Ajaran</td><td>: ' + esc(periode.tahun_ajaran || "-") + ' · ' + esc(periode.semester || "") + '</td></tr>' +
-      '<tr><td>Mapel</td><td>: ' + esc(rnLabelMapel(m)) + '</td><td>KKM</td><td>: ' + esc(d.bobot.kkm) +
-        (d.bRapor.kkm_rapor !== d.bobot.kkm ? ' (rapor ' + esc(d.bRapor.kkm_rapor) + ')' : '') + '</td></tr>' +
-      '<tr><td>Guru</td><td>: ' + esc(guru.map(g => g.nama).join(", ") || "-") + '</td><td>Jenis</td><td>: ' + esc(jenisTeks) + '</td></tr>' +
+      '<tr><td>Mapel</td><td>: ' + esc(rnLabelMapel(m)) + '</td><td>KKM Rapor</td><td>: ' + esc(d.bRapor.kkm_rapor) + '</td></tr>' +
+      '<tr><td>Guru</td><td>: ' + esc(guru.map(g => g.nama).join(", ") || "-") + '</td><td></td><td></td></tr>' +
     '</table>' +
-    (d.jumlahNilai ? rnTabelDaftar(d, true, semuaPaksa) : '<p><i>Guru belum menginput nilai untuk mapel ini.</i></p>') +
-    '<div class="catat">H/T/UH/S = Harian/Tugas/UH/Sumatif, angka = pertemuan ke-. Bobot rata-rata: Harian ' + esc(d.bobot.harian) +
-      ' · Tugas ' + esc(d.bobot.tugas) + ' · UH ' + esc(d.bobot.uh) + '. Rapor = Rata-rata ' + esc(d.bRapor.rapor_rata) + ' + Sumatif ' + esc(d.bRapor.rapor_sumatif) + '.</div>' +
+    rnTabelDaftar(d, true) +
+    '<div class="catat">Bobot Rapor: Rerata NH ' + esc(d.bRapor.rapor_rata) + ' · Sumatif ' + esc(d.bRapor.rapor_sumatif) +
+      ' · Kehadiran ' + esc(d.bRapor.rapor_kehadiran) + ' (kosong = 0). Rerata NH = gabungan Harian ' + esc(d.bobot.harian) +
+      ' · Tugas ' + esc(d.bobot.tugas) + ' · UH ' + esc(d.bobot.uh) + '. Kehadiran = % hadir mapel, dibulatkan.</div>' +
     rnBlokTtd(rnKolomTtd("Wali Kelas", dc.namaWali, dc.nipWali),
               rnKolomTtd("Guru Mata Pelajaran", g1 ? g1.nama : "", g1 ? g1.nip : ""), dc.tglTtd) +
   '</div>';
@@ -6294,15 +6394,14 @@ window.cetakDaftarNilai = async (semuaMapel) => {
   try {
     const periode = await ambilPeriodeAktif();
     const dc = await rnDataCetak();
-    let isi = "", kolomMaks = 0;
+    let isi = "";
     const daftar = semuaMapel ? _rnMapelList.filter(m => m.adaNilai) : [_rnMapelList.find(m => m.id === _rnMapelAktif)];
     if (!daftar.length || !daftar[0]) return toast("Belum ada nilai untuk dicetak.");
     for (const m of daftar) {
       const d = (!semuaMapel && _rnDaftar && _rnDaftar.mapelId === m.id) ? _rnDaftar : await rnSusunDaftar(_rnKelasAktif, m.id, _rnSiswa, periode);
-      kolomMaks = Math.max(kolomMaks, RN_JENIS.reduce((t, j) => t + d.kolom[j.k].length + 1, 0));
-      isi += rnHalamanDaftar(m, d, periode, dc, semuaMapel);
+      isi += rnHalamanDaftar(m, d, periode, dc);
     }
-    rnBukaCetak("Daftar Nilai " + rnNamaKelas(), isi, kolomMaks > 10, dc.namaSekolah, dc.tglCetak);
+    rnBukaCetak("Nilai Akhir " + rnNamaKelas(), isi, false, dc.namaSekolah, dc.tglCetak);
   } catch (e) { toast("Gagal menyiapkan cetakan: " + e.message, "gagal"); }
 };
 
@@ -6362,35 +6461,24 @@ window.excelRekapNilai = async () => {
     wsR["!cols"] = [{wch:5},{wch:12},{wch:26}, ...mapelList.map(() => ({wch:14})), {wch:10},{wch:9}];
     XLSX.utils.book_append_sheet(wb, wsR, sheetAman("Rekap"));
 
-    // per mapel
+    // per mapel: nilai akhir (#S21)
     mapelList.forEach(m => {
       const d = hasil[m.id];
-      const head = ["No", "NIS", "Nama"];
-      RN_JENIS.forEach(j => {
-        const p = d.kolom[j.k];
-        p.forEach(n => head.push(j.s + "-" + n));
-        if (p.length && (j.k !== "Sumatif" || p.length > 1)) head.push("Rata " + j.k);
-      });
-      head.push("Rata-rata Akhir", "Rapor");
+      const kkmR = Number(d.bRapor.kkm_rapor);
+      const head = ["No", "NIS", "Nama", "Rerata NH", "Sumatif", "Kehadiran", "Rapor", "Status"];
       const rows = _rnSiswa.map((s, i) => {
-        const r = [i+1, s.nis || "", s.nama_siswa];
-        RN_JENIS.forEach(j => {
-          const p = d.kolom[j.k], nj = ((d.nilaiPeta[s.id] || {})[j.k]) || {};
-          p.forEach(n => r.push(nj[n] === null || nj[n] === undefined ? "" : nj[n]));
-          if (p.length && (j.k !== "Sumatif" || p.length > 1)) r.push(n1(d.rata[s.id][j.k]));
-        });
-        r.push(n1(d.rataAkhir[s.id]), n1(d.rapor[s.id]));
-        return r;
+        const rp = d.rapor[s.id];
+        return [i+1, s.nis || "", s.nama_siswa, n1(d.rataAkhir[s.id] ?? 0), n1(d.rata[s.id].Sumatif ?? 0),
+          (d.hadir || {})[s.id] ?? 0, n1(rp), rp !== null && rp !== undefined && rp >= kkmR ? "Tuntas" : "Belum"];
       });
       const aoa = [
-        ["Daftar Nilai — " + rnLabelMapel(m)],
+        ["Nilai Akhir — " + rnLabelMapel(m)],
         ["Kelas", namaKelas, "", "Tahun Ajaran", (periode.tahun_ajaran || "") + " " + (periode.semester || "")],
-        ["Guru", rnTeksGuru(m.id) || "-", "", "KKM", d.bobot.kkm, "KKM Rapor", d.bRapor.kkm_rapor],
-        ["Bobot", "Harian " + d.bobot.harian + " · Tugas " + d.bobot.tugas + " · UH " + d.bobot.uh +
-          " · Rapor = Rata-rata " + d.bRapor.rapor_rata + " + Sumatif " + d.bRapor.rapor_sumatif],
+        ["Guru", rnTeksGuru(m.id) || "-", "", "KKM Rapor", d.bRapor.kkm_rapor],
+        ["Bobot Rapor", "Rerata NH " + d.bRapor.rapor_rata + " · Sumatif " + d.bRapor.rapor_sumatif + " · Kehadiran " + d.bRapor.rapor_kehadiran + " (kosong = 0)"],
         [], head, ...rows];
       const ws = XLSX.utils.aoa_to_sheet(aoa);
-      ws["!cols"] = [{wch:5},{wch:12},{wch:26}, ...head.slice(3).map(h => ({ wch: Math.max(7, String(h).length + 2) }))];
+      ws["!cols"] = [{wch:5},{wch:12},{wch:26},{wch:11},{wch:10},{wch:11},{wch:10},{wch:10}];
       XLSX.utils.book_append_sheet(wb, ws, sheetAman(m.kode || m.nama_mapel));
     });
     XLSX.writeFile(wb, ("Daftar-Nilai-" + namaKelas + "-" + (periode.tahun_ajaran || "") + "-" + (periode.semester || "") + ".xlsx").replace(/[^\w\-.]/g, "_"));
