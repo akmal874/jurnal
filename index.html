@@ -5624,9 +5624,10 @@ function khTabelSemester(d, cetak){
   const f = v => v === null ? "-" : v.toFixed(1).replace(".", ",") + "%";
   const batas = bacaBatasHadir();
   if (cetak) return '<table class="kh-tabel"><thead><tr><th>No</th><th>NIS</th><th style="text-align:left">Nama Siswa</th>' +
-      '<th>Sakit</th><th>Izin</th><th>Tanpa Keterangan</th><th>% Hadir</th></tr></thead><tbody>' +
+      '<th>Hadir</th><th>Sakit</th><th>Izin</th><th>Tanpa Keterangan</th><th>PKL<small>hari</small></th><th>% Hadir</th></tr></thead><tbody>' +
     d.baris.map((b, i) => '<tr><td>' + (i+1) + '</td><td>' + esc(b.siswa.nis || "-") + '</td><td class="kh-nm">' + esc(b.siswa.nama_siswa) + '</td>' +
-      '<td>' + b.sakit + '</td><td>' + b.izin + '</td><td>' + b.alpa + '</td><td>' + f(b.persen) + '</td></tr>').join("") + '</tbody></table>';
+      '<td>' + b.hadir + '</td><td>' + b.sakit + '</td><td>' + b.izin + '</td><td>' + b.alpa + '</td><td>' + (b.pkl || 0) + '</td>' +
+      '<td>' + f(b.persen) + '</td></tr>').join("") + '</tbody></table>';
   return '<table class="kh-tabel"><thead><tr><th>No</th><th>NIS</th><th style="text-align:left">Nama Siswa</th><th>Hari<small>efektif</small></th>' +
       '<th>Hadir</th><th>Sakit</th><th>Izin</th><th>Tanpa<small>Ket.</small></th><th class="kh-th-pkl">PKL<small>hari</small></th><th>% Hadir</th></tr></thead><tbody>' +
     d.baris.map((b, i) => '<tr class="' + (b.seri ? "kh-seri" : "") + '"><td>' + (i+1) + '</td><td>' + esc(b.siswa.nis || "-") + '</td>' +
