@@ -4883,7 +4883,7 @@ async function tampilkanTabWali(){
    tanpa Hadir → status terbanyak (S/I/A). */
 let _khKelasList = [];
 let _khKelasAktif = "";
-let _khView = "harian";        // "harian" | "bulanan"
+let _khView = "harian";        // "harian" | "bulanan"let _khView = "harian";        // "harian" | "bulanan" | "semester" (#S22)
 let _khTanggal = "";           // yyyy-mm-dd
 let _khBulan = "";             // yyyy-mm
 let _khHarian = null;          // hasil susun harian (untuk cetak & detail)
@@ -4999,6 +4999,7 @@ async function muatKehadiranHarian(wadahId){
         '<div style="display:flex;gap:4px;flex:0 0 auto">' +
           '<button class="btn btn-sm" id="khVHarian" onclick="khGantiView(\'harian\')">Harian</button>' +
           '<button class="btn btn-sm btn-ghost" id="khVBulanan" onclick="khGantiView(\'bulanan\')">Rekap Bulanan</button>' +
+          '<button class="btn btn-sm btn-ghost" id="khVSemester" onclick="khGantiView(\'semester\')">Rekap Semester</button>' +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -5008,10 +5009,12 @@ async function muatKehadiranHarian(wadahId){
 
 window.khGantiKelas = (id) => { _khKelasAktif = id; khGantiView(_khView); };
 window.khGantiView = (v) => {
-  _khView = (v === "bulanan") ? "bulanan" : "harian";
-  const a = $("khVHarian"), b = $("khVBulanan");
+  _khView = (v === "bulanan" || v === "semester") ? v : "harian";
+  const a = $("khVHarian"), b = $("khVBulanan"), c = $("khVSemester");
   if (a) a.className = "btn btn-sm" + (_khView === "harian" ? "" : " btn-ghost");
   if (b) b.className = "btn btn-sm" + (_khView === "bulanan" ? "" : " btn-ghost");
+  if (c) c.className = "btn btn-sm" + (_khView === "semester" ? "" : " btn-ghost");
+  if (_khView === "semester") return khRenderSemester();   // #S22
   return _khView === "bulanan" ? khRenderBulanan() : khRenderHarian();
 };
 
@@ -5534,6 +5537,183 @@ window.khExcelBulanan = () => {
     XLSX.utils.book_append_sheet(wb, wc, "Absen Wali Kelas");
   }
   XLSX.writeFile(wb, ("Kehadiran-Harian-" + d.kelas + "-" + d.bulan + ".xlsx").replace(/[^\w\-.]/g, "_"));
+  toast("Excel diunduh.");
+};
+
+/* ============ #S22 REKAP KEHADIRAN SEMESTER (satuan hari, untuk rapor) ============
+   Mesin sama dengan Rekap Bulanan (khSusunBulanan), rentangnya satu semester.
+   Rentang default: Ganjil = 1 Jul – 31 Des (tahun pertama TA), Genap = 1 Jan – 30 Jun (tahun kedua TA). */
+let _khSem = { dari: "", sampai: "", rinci: false };
+let _khSemester = null;
+async function khSemDefault(){
+  const p = await ambilPeriodeAktif();
+  const m = String(p.tahun_ajaran || "").match(/(\d{4})\D+(\d{4})/);
+  const sekarang = new Date();
+  const y1 = m ? +m[1] : (sekarang.getMonth() >= 6 ? sekarang.getFullYear() : sekarang.getFullYear() - 1);
+  const y2 = m ? +m[2] : y1 + 1;
+  if (String(p.semester).toLowerCase() === "genap") { _khSem.dari = y2 + "-01-01"; _khSem.sampai = y2 + "-06-30"; }
+  else { _khSem.dari = y1 + "-07-01"; _khSem.sampai = y1 + "-12-31"; }
+  _khSem.label = (p.tahun_ajaran || "-") + " · " + (p.semester || "Ganjil");
+}
+function khTglPendek(tgl){ return new Date(tgl + "T00:00:00").toLocaleDateString("id-ID", { day:"numeric", month:"short", year:"numeric" }); }
+async function khRenderSemester(){
+  if (!_khSem.dari || !_khSem.sampai) await khSemDefault();
+  $("khIsi").innerHTML =
+    '<div class="card">' +
+      '<div class="row" style="align-items:flex-end;gap:8px;flex-wrap:wrap;margin-bottom:10px">' +
+        '<div style="flex:0 0 auto"><label>Semester</label><div style="padding:7px 0;font-weight:600">' + esc(_khSem.label || "-") + '</div></div>' +
+        '<div style="flex:0 0 auto"><label>Dari</label><input type="date" id="khSemDari" value="' + esc(_khSem.dari) + '" onchange="khPilihSemester()"></div>' +
+        '<div style="flex:0 0 auto"><label>Sampai</label><input type="date" id="khSemSampai" value="' + esc(_khSem.sampai) + '" onchange="khPilihSemester()"></div>' +
+        '<span style="flex:1"></span>' +
+        '<button class="btn btn-sm" style="background:#2b8a3e;flex:0 0 auto" onclick="khCetakSemester()">🖨 Cetak</button>' +
+        '<button class="btn btn-sm btn-ghost" style="flex:0 0 auto" onclick="khExcelSemester()">📊 Excel</button>' +
+      '</div>' +
+      '<label style="display:inline-flex;align-items:center;gap:6px;font-weight:400;cursor:pointer;margin-bottom:10px">' +
+        '<input type="checkbox" id="khSemRinci"' + (_khSem.rinci ? ' checked' : '') + ' onchange="khSemTogRinci(this.checked)"> Tampilkan rincian per bulan</label>' +
+      '<div id="khSemesterIsi"><div class="page-kosong">Memuat...</div></div>' +
+    '</div>';
+  try {
+    const awal = _khSem.dari, akhir = _khSem.sampai;
+    if (awal > akhir) throw new Error("Tanggal Dari harus sebelum Sampai.");
+    const [siswa, jurnalRes, jadwalRes] = await Promise.all([
+      khAmbilSiswa(),
+      sb.from("jurnal").select("id, tanggal").eq("kelas_id", _khKelasAktif).gte("tanggal", awal).lte("tanggal", akhir),
+      sb.from("jadwal").select("hari, jam_ke").eq("kelas_id", _khKelasAktif),
+      ambilHariLibur()
+    ]);
+    if (jurnalRes.error) throw new Error(jurnalRes.error.message);
+    const jurnal = jurnalRes.data || [];
+    const [absensi, koreksi, pkl] = await Promise.all([
+      jurnal.length ? khAmbilAbsensi(jurnal.map(j => j.id)) : Promise.resolve([]),
+      khAmbilKoreksi(awal, akhir),
+      khAmbilPkl(siswa.map(s => s.id), awal, akhir)
+    ]);
+    const d = khSusunBulanan(jurnal, absensi, siswa, koreksi, pkl);
+    d.dari = awal; d.sampai = akhir; d.kelas = khNamaKelas(); d.label = _khSem.label;
+    const tglAbsenWk = new Set((koreksi || []).filter(k => khSumber(k) === "absen").map(k => k.tanggal));
+    d.tanpaJurnal = khHariTanpaJurnal(awal, akhir, jurnal, jadwalRes.error ? [] : (jadwalRes.data || []))
+      .filter(x => !tglAbsenWk.has(x.tanggal));
+    // rincian per bulan: susun ulang per bulan dari data yang sama (tanpa kueri tambahan)
+    const bulanList = [];
+    for (let t = awal.slice(0, 7); t <= akhir.slice(0, 7); ) {
+      bulanList.push(t);
+      const [y, mm] = t.split("-").map(Number);
+      t = (mm === 12 ? (y + 1) + "-01" : y + "-" + khPad(mm + 1));
+    }
+    d.perBulan = bulanList.map(bl => {
+      const js = jurnal.filter(j => String(j.tanggal).startsWith(bl));
+      const ids = new Set(js.map(j => j.id));
+      const r = khSusunBulanan(js, absensi.filter(a => ids.has(a.jurnal_id)), siswa,
+        (koreksi || []).filter(k => String(k.tanggal).startsWith(bl)), pkl);
+      return { bulan: bl, baris: r.baris };
+    });
+    _khSemester = d;
+    khGambarSemester();
+  } catch (e) {
+    $("khSemesterIsi").innerHTML = '<div class="page-kosong">Gagal memuat: ' + esc(e.message) + '</div>';
+  }
+}
+window.khPilihSemester = () => {
+  const a = $("khSemDari").value, b = $("khSemSampai").value;
+  if (!a || !b) return;
+  _khSem.dari = a; _khSem.sampai = b; khRenderSemester();
+};
+window.khSemTogRinci = (v) => { _khSem.rinci = !!v; if (_khSemester) khGambarSemester(); };
+function khNamaBulanPendek(bl){ return new Date(bl + "-01T00:00:00").toLocaleDateString("id-ID", { month:"short" }); }
+function khTabelSemester(d, cetak){
+  const f = v => v === null ? "-" : v.toFixed(1).replace(".", ",") + "%";
+  const batas = bacaBatasHadir();
+  if (cetak) return '<table class="kh-tabel"><thead><tr><th>No</th><th>NIS</th><th style="text-align:left">Nama Siswa</th>' +
+      '<th>Sakit</th><th>Izin</th><th>Tanpa Keterangan</th><th>% Hadir</th></tr></thead><tbody>' +
+    d.baris.map((b, i) => '<tr><td>' + (i+1) + '</td><td>' + esc(b.siswa.nis || "-") + '</td><td class="kh-nm">' + esc(b.siswa.nama_siswa) + '</td>' +
+      '<td>' + b.sakit + '</td><td>' + b.izin + '</td><td>' + b.alpa + '</td><td>' + f(b.persen) + '</td></tr>').join("") + '</tbody></table>';
+  return '<table class="kh-tabel"><thead><tr><th>No</th><th>NIS</th><th style="text-align:left">Nama Siswa</th><th>Hari<small>efektif</small></th>' +
+      '<th>Hadir</th><th>Sakit</th><th>Izin</th><th>Tanpa<small>Ket.</small></th><th class="kh-th-pkl">PKL<small>hari</small></th><th>% Hadir</th></tr></thead><tbody>' +
+    d.baris.map((b, i) => '<tr class="' + (b.seri ? "kh-seri" : "") + '"><td>' + (i+1) + '</td><td>' + esc(b.siswa.nis || "-") + '</td>' +
+      '<td class="kh-nm"><a class="ra-nama-link" onclick="khDetailSemester(' + i + ')">' + esc(b.siswa.nama_siswa) + '</a>' +
+        (b.pkl ? ' <span title="Ada hari PKL">🔒</span>' : '') + (b.dikoreksi ? ' <span class="kh-pena" title="Ada koreksi wali kelas">✎</span>' : '') + '</td>' +
+      '<td>' + b.efektif + '</td><td>' + b.hadir + '</td><td>' + b.sakit + '</td><td>' + b.izin + '</td><td>' + b.alpa + '</td>' +
+      '<td>' + (b.pkl ? '<b class="kh-pkl-n">' + b.pkl + '</b>' : 0) + '</td>' +
+      '<td' + (b.persen !== null && b.persen < batas ? ' style="color:#c92a2a;font-weight:700"' : '') + '>' + f(b.persen) + '</td></tr>').join("") +
+    '</tbody></table>';
+}
+function khTabelSemesterRinci(d){
+  const B = d.perBulan || [];
+  return '<table class="kh-tabel"><thead><tr><th rowspan="2">No</th><th rowspan="2" style="text-align:left">Nama Siswa</th>' +
+      B.map(x => '<th colspan="3">' + esc(khNamaBulanPendek(x.bulan)) + '</th>').join("") + '<th colspan="3">Total</th></tr><tr>' +
+      B.concat([0]).map(() => '<th>S</th><th>I</th><th>A</th>').join("") + '</tr></thead><tbody>' +
+    d.baris.map((b, i) => '<tr><td>' + (i+1) + '</td><td class="kh-nm">' + esc(b.siswa.nama_siswa) + '</td>' +
+      B.map(x => { const r = x.baris[i] || {}; return '<td>' + (r.sakit || 0) + '</td><td>' + (r.izin || 0) + '</td><td>' + (r.alpa || 0) + '</td>'; }).join("") +
+      '<td><b>' + b.sakit + '</b></td><td><b>' + b.izin + '</b></td><td><b>' + b.alpa + '</b></td></tr>').join("") +
+    '</tbody></table>';
+}
+function khGambarSemester(){
+  const d = _khSemester;
+  if (!d.hariEfektif) { $("khSemesterIsi").innerHTML = khBoxTanpaJurnal(d) + '<div class="empty">Belum ada jurnal maupun absen wali kelas untuk kelas ini pada rentang tanggal ini.</div>'; return; }
+  if (!d.baris.length) { $("khSemesterIsi").innerHTML = '<div class="empty">Belum ada siswa aktif di kelas ini.</div>'; return; }
+  const sisaSeri = d.baris.reduce((t, b) => t + b.seri, 0), siswaSeri = d.baris.filter(b => b.seri).length;
+  $("khSemesterIsi").innerHTML =
+    '<div class="kh-box kh-box-abu" style="margin:0 0 10px"><b>Hari efektif: ' + d.hariEfektif + ' hari</b> (' + esc(khTglPendek(d.dari)) + ' – ' + esc(khTglPendek(d.sampai)) +
+      (d.hariAbsenWk ? ', termasuk 📋 ' + d.hariAbsenWk + ' hari absen wali kelas' : '') + '). Sakit/Izin/Tanpa Keterangan dihitung per hari, siap disalin ke rapor.</div>' +
+    (sisaSeri ? '<div class="kh-box kh-box-seri" style="margin:0 0 10px"><b>⚠ Masih ada ' + sisaSeri + ' hari seri belum dikoreksi (' + siswaSeri + ' siswa).</b> ' +
+      'Selesaikan sebelum angka dipakai untuk rapor: klik nama siswa → klik tanggalnya → koreksi di tampilan Harian.</div>' : '') +
+    khBoxTanpaJurnal(d) +
+    '<div style="overflow-x:auto">' + (_khSem.rinci ? khTabelSemesterRinci(d) : khTabelSemester(d, false)) + '</div>' +
+    '<div class="kh-box kh-box-abu"><b>Cara hitung:</b> sama dengan Rekap Bulanan, rentangnya satu semester. Hari efektif = hari ber-jurnal + hari absen wali kelas. ' +
+    'Hadir sebagian dihitung Hadir; koreksi wali kelas dipakai bila ada; hari PKL dihitung terpisah dan tidak menurunkan % hadir. ' +
+    '🔒 = ada hari PKL, ✎ = ada koreksi wali kelas. Klik nama siswa untuk melihat tanggal-tanggalnya.</div>';
+}
+window.khDetailSemester = (i) => {
+  const d = _khSemester, b = d && d.baris[i]; if (!b) return;
+  const isi = '<div style="margin-bottom:8px">' + esc(khTglPendek(d.dari)) + ' – ' + esc(khTglPendek(d.sampai)) + ' · Hadir ' + b.hadir + ' dari ' + b.tercatat + ' hari tercatat' + (b.pkl ? ' · PKL ' + b.pkl + ' hari' : '') + '</div>' +
+    (b.seri ? '<div class="kh-box kh-box-seri" style="margin:0 0 10px">' + b.seri + ' hari seri belum dikoreksi. Klik tanggalnya untuk membuka tampilan Harian.</div>' : '') +
+    (b.hariTidakPenuh.length
+      ? '<table class="kh-tabel"><thead><tr><th style="text-align:left">Tanggal</th><th>Status Harian</th></tr></thead><tbody>' +
+        b.hariTidakPenuh.map(x => '<tr class="' + (x.seri ? "kh-seri" : "") + '"><td class="kh-nm"><a href="#" onclick="khBukaTanggal(\'' + x.tanggal + '\');return false">' +
+          esc(khTglPanjang(x.tanggal)) + '</a></td><td>' + (x.kor ? '<span class="kh-pena">✎</span> ' : '') + (x.wk ? '<span class="aw-tanda" title="Diabsen wali kelas">📋</span> ' : '') + khBadge(x.status) +
+          (x.seri ? '<span class="kh-seri-tag">⚠ Seri (' + esc(x.seri) + ') — belum dikoreksi</span>' : '') + '</td></tr>').join("") + '</tbody></table>'
+      : (b.tercatat ? '<div class="empty">Hadir penuh setiap hari tercatat. 👍</div>'
+          : '<div class="empty">Tidak ada hari di sekolah pada rentang ini' + (b.pkl ? ' (seluruhnya PKL)' : '') + '.</div>'));
+  bukaModalDetailAbsensi(b.siswa.nama_siswa, b.siswa.nis || "-", d.kelas, isi);
+};
+window.khCetakSemester = async () => {
+  const d = _khSemester;
+  if (!d || !d.hariEfektif || !d.baris.length) return toast("Belum ada data untuk dicetak.");
+  const sisaSeri = d.baris.reduce((t, b) => t + b.seri, 0);
+  await khCetak("Rekap Kehadiran Semester", '<b>Kelas:</b> ' + esc(d.kelas) + ' &nbsp; <b>Tahun Ajaran:</b> ' + esc(d.label || "-") +
+    ' &nbsp; <b>Rentang:</b> ' + esc(khTglPendek(d.dari)) + ' – ' + esc(khTglPendek(d.sampai)) +
+    ' &nbsp; <b>Hari efektif:</b> ' + d.hariEfektif + (d.hariAbsenWk ? ' (termasuk ' + d.hariAbsenWk + ' hari absen wali kelas)' : ''),
+    khTabelSemester(d, true) +
+    (_khSem.rinci ? '<div style="margin-top:12px;font-weight:bold">Rincian per bulan (S = Sakit, I = Izin, A = Tanpa Keterangan)</div>' + khTabelSemesterRinci(d) : '') +
+    '<div class="catatan">Satuan hari. Hadir sebagian dihitung hadir. Hari PKL tidak dihitung tidak hadir. Status yang dikoreksi wali kelas memakai hasil koreksi.' +
+      (sisaSeri ? '<br><b>Catatan: masih ada ' + sisaSeri + ' hari seri belum dikoreksi wali kelas.</b>' : '') + khCatatanAbsenWk(d) + '</div>',
+    _khSem.rinci && (d.perBulan || []).length > 4 ? "landscape" : "portrait");
+};
+window.khExcelSemester = () => {
+  const d = _khSemester;
+  if (!d || !d.baris.length) return toast("Belum ada data untuk diekspor.");
+  if (typeof XLSX === "undefined") return toast("Library Excel belum termuat.");
+  const data = d.baris.map((b, i) => ({ "No": i+1, "NIS": b.siswa.nis || "", "Nama": b.siswa.nama_siswa, "Hari Efektif": b.efektif,
+    "Hadir": b.hadir, "Sakit": b.sakit, "Izin": b.izin, "Tanpa Keterangan": b.alpa, "PKL (hari)": b.pkl, "Hadir Sebagian": b.sebagian,
+    "Dikoreksi Wali": b.dikoreksi, "% Hadir": b.persen === null ? "" : Number(b.persen.toFixed(1)) }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  ws["!cols"] = [{wch:5},{wch:12},{wch:26},{wch:12},{wch:7},{wch:7},{wch:7},{wch:16},{wch:10},{wch:14},{wch:14},{wch:9}];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Semester");
+  const B = d.perBulan || [];
+  if (B.length) {
+    const head = ["No", "NIS", "Nama"];
+    B.forEach(x => { const n = khNamaBulanPendek(x.bulan); head.push(n + " S", n + " I", n + " A"); });
+    head.push("Total S", "Total I", "Total A");
+    const rows = d.baris.map((b, i) => {
+      const r = [i+1, b.siswa.nis || "", b.siswa.nama_siswa];
+      B.forEach(x => { const q = x.baris[i] || {}; r.push(q.sakit || 0, q.izin || 0, q.alpa || 0); });
+      r.push(b.sakit, b.izin, b.alpa); return r;
+    });
+    const wr = XLSX.utils.aoa_to_sheet([head, ...rows]);
+    wr["!cols"] = [{wch:5},{wch:12},{wch:26}, ...head.slice(3).map(() => ({wch:8}))];
+    XLSX.utils.book_append_sheet(wb, wr, "Per Bulan");
+  }
+  XLSX.writeFile(wb, ("Kehadiran-Semester-" + d.kelas + "-" + d.dari + "_" + d.sampai + ".xlsx").replace(/[^\w\-.]/g, "_"));
   toast("Excel diunduh.");
 };
 
