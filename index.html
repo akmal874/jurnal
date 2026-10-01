@@ -1597,13 +1597,17 @@ function kontrolHalaman(halaman, totalHal, namaFungsi){
 let _periodeAktif = null;
 async function ambilPeriodeAktif(paksa){
   if (_periodeAktif && !paksa) return _periodeAktif;
-  _periodeAktif = { tahun_ajaran: "", semester: "Ganjil" };
+  _periodeAktif = { tahun_ajaran: "", semester: "Ganjil", semester_mulai: "", semester_selesai: "" };
   try {
-    const { data } = await sb.from("pengaturan")
-      .select("tahun_ajaran, semester").eq("id","app").maybeSingle();
+    let { data, error } = await sb.from("pengaturan")
+      .select("tahun_ajaran, semester, semester_mulai, semester_selesai").eq("id","app").maybeSingle();
+    if (error) ({ data } = await sb.from("pengaturan")   // kolom tanggal semester (#S23) belum ada
+      .select("tahun_ajaran, semester").eq("id","app").maybeSingle());
     if (data) _periodeAktif = {
       tahun_ajaran: data.tahun_ajaran || "",
-      semester: data.semester || "Ganjil"
+      semester: data.semester || "Ganjil",
+      semester_mulai: data.semester_mulai || "",
+      semester_selesai: data.semester_selesai || ""
     };
   } catch (e) {}
   return _periodeAktif;
@@ -1735,6 +1739,12 @@ async function muatPengaturan(){
           '<option value="Genap"' + ((cfg.semester)==="Genap"?" selected":"") + '>Genap</option>' +
         '</select></div>' +
       '</div>' +
+      '<div class="row">' +   // #S23: tanggal semester sesuai kalender akademik
+        '<div><label>Mulai Semester</label><input type="date" id="setSemMulai" value="' + esc(cfg.semester_mulai || "") + '"></div>' +
+        '<div><label>Akhir Semester</label><input type="date" id="setSemSelesai" value="' + esc(cfg.semester_selesai || "") + '"></div>' +
+      '</div>' +
+      '<p style="color:#6b7280;font-size:12px;margin:-4px 0 10px">Sesuai kalender akademik. Dipakai sebagai rentang Rekap Semester; ' +
+        'hari di luar rentang ini tidak dianggap hari KBM (tidak ditagih jurnal). Perbarui setiap ganti semester. Kosongkan bila belum ditetapkan.</p>' +
       '<button class="btn" onclick="simpanPeriode()">Simpan Periode Aktif</button>' +
       '<div id="setPeriodeMsg"></div>' +
     '</div>' +
@@ -2024,11 +2034,17 @@ window.simpanPeriode = async () => {
     (ok?'background:#ebfbee;color:#2b8a3e':'background:#fff0f0;color:#c92a2a') + '">' + esc(t) + '</div>'; };
   const tahun_ajaran = $("setTA").value;
   const semester = $("setSemester").value;
+  const semester_mulai = ($("setSemMulai") || {}).value || "";      // #S23
+  const semester_selesai = ($("setSemSelesai") || {}).value || "";
+  if (!!semester_mulai !== !!semester_selesai) return setMsg("Isi kedua tanggal semester, atau kosongkan keduanya.", false);
+  if (semester_mulai && semester_mulai >= semester_selesai) return setMsg("Tanggal mulai semester harus sebelum tanggal akhir.", false);
   try {
     const { error } = await sb.from("pengaturan")
-      .update({ tahun_ajaran, semester, diubah: new Date().toISOString() }).eq("id","app");
+      .update({ tahun_ajaran, semester, semester_mulai: semester_mulai || null, semester_selesai: semester_selesai || null,
+                diubah: new Date().toISOString() }).eq("id","app");
     if (error) throw new Error(error.message);
-    _periodeAktif = { tahun_ajaran, semester };   // segarkan cache
+    _periodeAktif = { tahun_ajaran, semester, semester_mulai, semester_selesai };   // segarkan cache
+    if (typeof _khSem !== "undefined") { _khSem.dari = ""; _khSem.sampai = ""; }    // Rekap Semester ikut rentang baru
     // perbarui badge header
     const b = $("whoPeriode");
     if (b) { b.style.display = "inline-block"; b.textContent = tahun_ajaran + " · " + semester; }
@@ -4883,7 +4899,7 @@ async function tampilkanTabWali(){
    tanpa Hadir → status terbanyak (S/I/A). */
 let _khKelasList = [];
 let _khKelasAktif = "";
-let _khView = "harian";        // "harian" | "bulanan"let _khView = "harian";        // "harian" | "bulanan" | "semester" (#S22)
+let _khView = "harian";        // "harian" | "bulanan" | "semester" (#S22)
 let _khTanggal = "";           // yyyy-mm-dd
 let _khBulan = "";             // yyyy-mm
 let _khHarian = null;          // hasil susun harian (untuk cetak & detail)
@@ -5185,7 +5201,7 @@ function khRingkasHtml(d){
 function khGambarHarian(){
   const d = _khHarian;
   if (d.libur && !d.adaJurnal) {
-    $("khHarianIsi").innerHTML = '<div class="kh-box kh-box-abu" style="margin:0"><b>🏖 Hari libur:</b> ' + esc(d.libur.keterangan) +
+    $("khHarianIsi").innerHTML = '<div class="kh-box kh-box-abu" style="margin:0"><b>' + (d.libur.luarSemester ? '📅 Tanggal ini' : '🏖 Hari libur:') + '</b> ' + esc(d.libur.keterangan) +
       '. Tidak ada KBM; tanggal ini tidak dihitung.</div>';
     return;
   }
@@ -5542,11 +5558,13 @@ window.khExcelBulanan = () => {
 
 /* ============ #S22 REKAP KEHADIRAN SEMESTER (satuan hari, untuk rapor) ============
    Mesin sama dengan Rekap Bulanan (khSusunBulanan), rentangnya satu semester.
-   Rentang default: Ganjil = 1 Jul – 31 Des (tahun pertama TA), Genap = 1 Jan – 30 Jun (tahun kedua TA). */
+   Rentang default: tanggal semester di Pengaturan (#S23); bila kosong → Ganjil 1 Jul – 31 Des, Genap 1 Jan – 30 Jun. */
 let _khSem = { dari: "", sampai: "", rinci: false };
 let _khSemester = null;
 async function khSemDefault(){
   const p = await ambilPeriodeAktif();
+  _khSem.label = (p.tahun_ajaran || "-") + " · " + (p.semester || "Ganjil");
+  if (p.semester_mulai && p.semester_selesai) { _khSem.dari = p.semester_mulai; _khSem.sampai = p.semester_selesai; return; }   // #S23
   const m = String(p.tahun_ajaran || "").match(/(\d{4})\D+(\d{4})/);
   const sekarang = new Date();
   const y1 = m ? +m[1] : (sekarang.getMonth() >= 6 ? sekarang.getFullYear() : sekarang.getFullYear() - 1);
@@ -11268,6 +11286,7 @@ let _liburCache = null;
 let _editLiburId = null;
 
 async function ambilHariLibur(paksa){
+  if (!_periodeAktif) await ambilPeriodeAktif();   // #S23: rentang semester untuk cariLibur
   if (_liburCache && !paksa) return _liburCache;
   try {
     const { data, error } = await sb.from("hari_libur")
@@ -11277,7 +11296,16 @@ async function ambilHariLibur(paksa){
   } catch (e) { console.warn("hari_libur:", e.message); _liburCache = _liburCache || []; }
   return _liburCache;
 }
-function cariLibur(tgl){ return (_liburCache || []).find(l => tgl >= l.tanggal_mulai && tgl <= l.tanggal_selesai) || null; }
+function cariLibur(tgl){
+  const l = (_liburCache || []).find(l => tgl >= l.tanggal_mulai && tgl <= l.tanggal_selesai);
+  if (l) return l;
+  // #S23: tanggal di luar semester aktif bukan hari KBM (tidak ditagih jurnal, tidak dihitung hari bolong)
+  const p = _periodeAktif;
+  if (p && p.semester_mulai && p.semester_selesai && (tgl < p.semester_mulai || tgl > p.semester_selesai))
+    return { tanggal_mulai: tgl, tanggal_selesai: tgl, luarSemester: true,
+      keterangan: "di luar semester aktif (" + khTglPendek(p.semester_mulai) + " – " + khTglPendek(p.semester_selesai) + ")" };
+  return null;
+}
 
 async function renderHariLibur(){
   const el = $("hlList"); if (!el) return;
@@ -11428,7 +11456,7 @@ async function njGambarAdmin(){
       (_njMode === "ini" ? ' · pukul ' + khPad(_njSekarang.getHours()) + '.' + khPad(_njSekarang.getMinutes()) + ' WITA' : '') + '</div>';
   let isi, adaBelum = false;
   if (h.akhirPekan) isi = '<div class="empty">Akhir pekan — tidak ada jadwal.</div>';
-  else if (h.libur) isi = '<div class="empty">🏖 Hari libur: ' + esc(h.libur.keterangan) + '.</div>';
+  else if (h.libur) isi = '<div class="empty">' + (h.libur.luarSemester ? '📅 Tanggal ini ' : '🏖 Hari libur: ') + esc(h.libur.keterangan) + '.</div>';
   else if (!h.slot.length) isi = '<div class="empty">Belum ada jadwal di roster untuk hari ini.</div>';
   else {
     const n = { isi:0, belum:0, nanti:0 }; h.slot.forEach(s => n[s.status]++);
