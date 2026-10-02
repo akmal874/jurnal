@@ -1597,20 +1597,39 @@ function kontrolHalaman(halaman, totalHal, namaFungsi){
 let _periodeAktif = null;
 async function ambilPeriodeAktif(paksa){
   if (_periodeAktif && !paksa) return _periodeAktif;
-  _periodeAktif = { tahun_ajaran: "", semester: "Ganjil", semester_mulai: "", semester_selesai: "" };
+  // #S24: hasil hanya di-cache bila BERHASIL dibaca. Dulu kegagalan sesaat (jaringan) ikut di-cache sebagai
+  // periode kosong sepanjang sesi, sehingga jurnal/nilai tersimpan dengan tahun_ajaran "".
+  const kosong = { tahun_ajaran: "", semester: "Ganjil", semester_mulai: "", semester_selesai: "" };
   try {
     let { data, error } = await sb.from("pengaturan")
       .select("tahun_ajaran, semester, semester_mulai, semester_selesai").eq("id","app").maybeSingle();
-    if (error) ({ data } = await sb.from("pengaturan")   // kolom tanggal semester (#S23) belum ada
+    if (error) ({ data, error } = await sb.from("pengaturan")   // kolom tanggal semester (#S23) belum ada
       .select("tahun_ajaran, semester").eq("id","app").maybeSingle());
-    if (data) _periodeAktif = {
+    if (error) throw error;
+    _periodeAktif = data ? {
       tahun_ajaran: data.tahun_ajaran || "",
       semester: data.semester || "Ganjil",
       semester_mulai: data.semester_mulai || "",
       semester_selesai: data.semester_selesai || ""
-    };
-  } catch (e) {}
-  return _periodeAktif;
+    } : { ...kosong };
+    return _periodeAktif;
+  } catch (e) {
+    console.warn("periode aktif:", e && e.message);
+    return _periodeAktif || { ...kosong };   // jangan cache kegagalan; panggilan berikutnya mencoba lagi
+  }
+}
+/* #S24: dipakai sebelum MENYIMPAN data bertanda periode (jurnal, nilai, catatan, BP).
+   Membaca ulang bila kosong; bila tetap kosong → batalkan simpan dengan pesan jelas (null). */
+async function pastikanPeriode(){
+  let p = await ambilPeriodeAktif();
+  if (!p.tahun_ajaran) p = await ambilPeriodeAktif(true);
+  if (!p.tahun_ajaran) {
+    await peringatan("Periode Belum Terbaca",
+      "Tahun Ajaran aktif belum terbaca, jadi data belum disimpan.\n\n" +
+      "Periksa koneksi lalu coba lagi. Bila tetap muncul, minta admin mengisi Tahun Ajaran di Pengaturan.");
+    return null;
+  }
+  return p;
 }
 
 /* Kota + tanggal hari ini untuk baris tanda tangan: "Kota, dd/mm/yyyy" */
@@ -3339,7 +3358,7 @@ window.simpanJurnal = async () => {
 
   const { data: kelasRow } = await sb.from("kelas").select("nama_kelas").eq("id", kelasId).single();
   const { data: mapelRow } = await sb.from("mapel").select("nama_mapel").eq("id", mapelId).single();
-  const periode = await ambilPeriodeAktif();
+  const periode = await pastikanPeriode(); if (!periode) return;   // #S24
   const btn = $("jBtnSimpan");
   btn.disabled = true; btn.textContent = "Menyimpan...";
   tampilkanLoading("Menyimpan data jurnal...", "Tahap 1 dari 3");
@@ -3921,7 +3940,7 @@ window.tambahPertemuanNilai = async () => {
   const pertemuanSet = [...new Set(_nDokumen.map(d => d.pertemuan))];
   const nomorBaru = pertemuanSet.length ? Math.max(...pertemuanSet) + 1 : 1;
   // buat baris nilai kosong untuk tiap siswa (nilai null dulu)
-  const periode = await ambilPeriodeAktif();
+  const periode = await pastikanPeriode(); if (!periode) return;   // #S24
   const barisBaru = _nSiswa.map(s => ({
     kelas_id: _nKelas, mapel_id: _nMapel, siswa_id: s.id,
     jenis: _nJenis, pertemuan: nomorBaru, nilai: null,
@@ -4781,7 +4800,7 @@ window.simpanCatatan = async () => {
       setMsg("Catatan diperbarui.", true);
       batalEditCatatan();
     } else {
-      const periode = await ambilPeriodeAktif();
+      const periode = await pastikanPeriode(); if (!periode) return;   // #S24
       const { error } = await sb.from("catatan").insert({
         kelas_id: _catKelasAktif, siswa_id: siswaId, siswa_nama: siswaNama,
         tanggal, kategori, isi, penulis_id: ME.id, penulis_nama: ME.nama || ME.email,
@@ -10215,7 +10234,7 @@ window.bpSimpanKasus = async () => {
   if (!tanggal) return toast("Tanggal belum diisi.");
   if (!deskripsi) return toast("Deskripsi belum diisi.");
 
-  const periode = await ambilPeriodeAktif();
+  const periode = await pastikanPeriode(); if (!periode) return;   // #S24
   const jn = jenis_id ? _bpJenis.find(j => j.id === jenis_id) : null;
   const baris = {
     siswa_id, tipe:"kasus", tanggal, jenis_id,
@@ -10346,7 +10365,7 @@ window.bpTambahPoin = async () => {
   if (!jenis_id) return toast("Pilih jenis dulu.");
   const jn = _bpJenis.find(j => j.id === jenis_id);
   if (!jn) return toast("Jenis tidak valid.");
-  const periode = await ambilPeriodeAktif();
+  const periode = await pastikanPeriode(); if (!periode) return;   // #S24
 
   tampilkanLoading("Menambah poin...");
   try {
@@ -10492,7 +10511,7 @@ window.bpSimpanKonseling = async () => {
   if (!siswa_id) return toast("Pilih siswa dulu.");
   if (!waktu) return toast("Tanggal & jam belum diisi.");
   if (dok && !/^https?:\/\//.test(dok)) return toast("Link dokumentasi harus diawali http.");
-  const periode = await ambilPeriodeAktif();
+  const periode = await pastikanPeriode(); if (!periode) return;   // #S24
 
   tampilkanLoading("Menyimpan konseling...");
   try {
