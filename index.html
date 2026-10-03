@@ -2,6 +2,7 @@
 <html lang="id">
 <head>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jurnal PBM (Supabase)</title>
@@ -18,6 +19,14 @@
     --garis:#2b3242; --aksen-lembut:#2b3242; --input-bg:#232838;
     --ghost-bg:#2b3242; --toggle-bg:#232838; --modal-p:#c7ccd6;
     --header-bg:#1c2130; --login-error-bg:#3a2530;
+  }
+  /* Turunan warna aksen otomatis (browser lama tetap pakai nilai di atas) */
+  :root { --aksen-gelap: var(--aksen-tekan); }
+  @supports (color: color-mix(in srgb, red 50%, blue)) {
+    :root { --aksen-lembut: color-mix(in srgb, var(--aksen) 9%, #fff);
+      --aksen-gelap: color-mix(in srgb, var(--aksen) 62%, #000); }
+    [data-dark="1"] { --aksen-lembut: color-mix(in srgb, var(--aksen) 20%, #1c2130);
+      --aksen-gelap: color-mix(in srgb, var(--aksen) 45%, #000); }
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -71,7 +80,7 @@
   .bp-minus { background:#c92a2a22; color:var(--merah); }
   .bp-plus  { background:#2b8a3e22; color:#2b8a3e; }
   .bp-kasus { background:#b7810022; color:#b78100; }
-  .bp-kons  { background:#3b5bdb22; color:var(--aksen); }
+  .bp-kons  { background:#3b5bdb22; background:color-mix(in srgb, var(--aksen) 13%, transparent); color:var(--aksen); }
   .bp-btn-aksi { background:none; border:1px solid var(--aksen); color:var(--aksen);
     border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer; margin-right:4px; white-space:nowrap; }
   .bp-btn-aksi:hover { background:var(--aksen); color:#fff; }
@@ -452,7 +461,7 @@
 .kh-form{margin-top:14px;padding-top:12px;border-top:1px solid var(--garis)}
 .kh-pil{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .kh-pil-btn{border:2px solid #e9ecef;background:#fff;border-radius:8px;padding:8px 4px;font-weight:700;font-size:13px;cursor:pointer}
-.kh-pil-btn.dipilih{border-color:var(--aksen);background:#eef3ff;color:var(--aksen)}
+.kh-pil-btn.dipilih{border-color:var(--aksen);background:var(--aksen-lembut);color:var(--aksen)}
 #khAlasan{width:100%;border:1px solid var(--garis);border-radius:8px;padding:8px;font-size:13px;font-family:inherit}
 .kh-info{background:#e7f5ff;color:#1864ab;border-radius:8px;padding:8px 10px;font-size:12px;margin-top:10px}
 /* ===== KEHADIRAN HARIAN — tanda seri ===== */
@@ -495,7 +504,7 @@ tr.ab-pkl td{background:#e3fafc;color:#0b7285}
 .ij-slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
 .ij-slot{border:2px solid #dbe0ea;background:#fff;border-radius:10px;padding:8px 10px;cursor:pointer;text-align:left;font-family:inherit;color:inherit}
 .ij-slot:hover{border-color:var(--aksen)}
-.ij-slot.pilih{border-color:var(--aksen);background:#eef3ff}
+.ij-slot.pilih{border-color:var(--aksen);background:var(--aksen-lembut)}
 .ij-slot.sudah{opacity:.55;cursor:not-allowed;background:#f1f3f5}
 .ij-slot b{display:block;font-size:14px;color:#1e3a5f}
 .ij-slot span{display:block;font-size:12px;color:#495057}
@@ -673,6 +682,33 @@ input#jJam[readonly]{background:#f1f5f9;color:#1e3a5f;font-weight:700}
     font-size:13px;white-space:normal;background:var(--bg);gap:6px}
   #app.tata-bottom #nav .sg-item.active{background:var(--aksen);color:#fff;border-color:var(--aksen)}
 }
+/* ===== GAYA SIDEBAR BERWARNA (Pengaturan → Gaya Sidebar; tidak berlaku di desain Klasik) ===== */
+[data-sidebar="warna"] #app:not(.tata-klasik) .sg{background:linear-gradient(180deg,var(--aksen),var(--aksen-gelap));border-right:0;color:#fff}
+[data-sidebar="warna"] #app:not(.tata-klasik) :is(.sg-atas,.sg-bawah,.sg-kecil-btn){border-color:rgba(255,255,255,.15)}
+[data-sidebar="warna"] #app:not(.tata-klasik) .sg-app{color:#fff}
+[data-sidebar="warna"] #app:not(.tata-klasik) .sg-logo:not(.ada-logo){background:rgba(255,255,255,.2)}
+[data-sidebar="warna"] #app:not(.tata-klasik) :is(#nav .sg-kepala,.sg-peran,.sg-x,.sg-kecil-btn){color:rgba(255,255,255,.65)}
+[data-sidebar="warna"] #app:not(.tata-klasik) .sg-kecil-btn:hover{color:#fff}
+[data-sidebar="warna"] #app:not(.tata-klasik) #nav .sg-item{color:rgba(255,255,255,.88);border-left:0;border-radius:8px;margin:2px 10px;width:calc(100% - 20px);padding:9px 12px}
+[data-sidebar="warna"] #app:not(.tata-klasik) #nav .sg-item:hover{background:rgba(255,255,255,.12);color:#fff}
+[data-sidebar="warna"] #app:not(.tata-klasik) #nav .sg-item.active{background:#fff;color:var(--aksen)}
+[data-sidebar="warna"] #app:not(.tata-klasik) .sg-keluar{background:rgba(255,255,255,.15);color:#fff}
+[data-sidebar="warna"] #app:not(.tata-klasik).sg-kecil #nav .sg-kepala::before{border-top-color:rgba(255,255,255,.25)}
+@media (max-width:768px){
+  [data-sidebar="warna"] #app.tata-bottom #nav .sg-item{margin:0;width:auto;padding:10px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2)}
+}
+/* Kartu pilihan Gaya Sidebar */
+.sgw-grid{display:flex;gap:12px;flex-wrap:wrap}
+.sgw{background:var(--card);border:2px solid var(--garis);border-radius:10px;padding:10px;cursor:pointer;width:170px;text-align:left;font-family:inherit;color:var(--ink)}
+.sgw.aktif{border-color:var(--aksen)}
+.sgw-mini{display:flex;height:64px;border-radius:6px;overflow:hidden;border:1px solid var(--garis);margin-bottom:8px;background:var(--bg)}
+.sgw-mini>span{width:38%;padding:6px;display:flex;flex-direction:column;gap:4px}
+.sgw-mini b{display:block;height:6px;border-radius:3px}
+.sgw-terang>span{background:var(--card);border-right:1px solid var(--garis)}
+.sgw-terang b{background:var(--garis)} .sgw-terang b:first-child{background:var(--aksen)}
+.sgw-warna>span{background:linear-gradient(180deg,var(--aksen),var(--aksen-gelap))}
+.sgw-warna b{background:rgba(255,255,255,.35)} .sgw-warna b:first-child{background:#fff}
+.sgw strong{display:block;font-size:14px} .sgw small{color:var(--ink-lembut);font-size:12px}
 /* ===== Pengaturan: pilihan desain halaman ===== */
 .dl-pra-tk i{left:0;right:0;top:0;height:18%;background:var(--aksen)}
 .dl-pra-tk::before{top:30%;bottom:auto;height:34%}
@@ -955,6 +991,20 @@ function tandaiAksenAktif(){
   document.querySelectorAll("#aksenPilih .swatch").forEach(b => {
     b.classList.toggle("aktif", b.getAttribute("data-aksen") === aktif);
   });
+}
+
+/* ===== Gaya Sidebar (Terang / Berwarna) — tersimpan per perangkat ===== */
+function bacaGayaSidebar(){ try { return localStorage.getItem("sidebarGaya") || "terang"; } catch(e){ return "terang"; } }
+function terapkanGayaSidebar(){ document.documentElement.setAttribute("data-sidebar", bacaGayaSidebar()); }
+terapkanGayaSidebar();
+window.pilihGayaSidebar = (g) => {
+  try { localStorage.setItem("sidebarGaya", g); } catch(e){}
+  terapkanGayaSidebar();
+  tandaiGayaSidebarAktif();
+};
+function tandaiGayaSidebarAktif(){
+  const g = bacaGayaSidebar();
+  document.querySelectorAll("#gayaSidebarPilih .sgw").forEach(b => b.classList.toggle("aktif", b.dataset.gaya === g));
 }
 
 function perbaruiIkonTemaLogin(){
@@ -1306,7 +1356,7 @@ function bangunNav(){
     item.forEach(key => {
       const b = document.createElement("button");
       b.type = "button"; b.className = "sg-item"; b.dataset.key = key; b.title = LABEL[key] || key;
-      b.innerHTML = '<span class="sg-ik">' + (NAV_IKON[key] || "•") + '</span><span class="sg-teks">' + esc(LABEL[key] || key) + '</span>';
+      b.innerHTML = '<span class="sg-ik">' + ikonNav(key) + '</span><span class="sg-teks">' + esc(LABEL[key] || key) + '</span>';
       b.onclick = () => buka(key, b);
       blok.appendChild(b);
     });
@@ -1318,9 +1368,12 @@ function bangunNav(){
 }
 
 /* ===== NAVIGASI SIDEBAR ===== */
-const NAV_IKON = { beranda:"🏠", isijurnal:"✎", daftarjurnal:"📖", rekapharian:"📊", jadwal:"📅", roster:"📋",
-  nilai:"💯", walikelas:"👥", bp:"💬", pkl:"🏭", kelas:"🏫", siswa:"🎓", mapel:"📚",
-  pengguna:"👤", izinmenu:"🔑", pengaturan:"⚙️", catatan:"📝", rekapabsensi:"📊" };
+/* Ikon menu: Bootstrap Icons (https://icons.getbootstrap.com) */
+const NAV_IKON = { beranda:"house-door", isijurnal:"pencil-square", daftarjurnal:"journal-text", rekapharian:"bar-chart-line",
+  jadwal:"calendar3", roster:"table", nilai:"clipboard-check", walikelas:"people", bp:"chat-heart", pkl:"briefcase",
+  kelas:"door-open", siswa:"mortarboard", mapel:"book", pengguna:"person-badge", izinmenu:"key", pengaturan:"gear",
+  catatan:"pencil", rekapabsensi:"clipboard-data" };
+const ikonNav = (k) => '<i class="bi bi-' + (NAV_IKON[k] || "dot") + '" aria-hidden="true"></i>';
 const NAV_GRUP = [
   ["Harian",      ["beranda", "isijurnal", "daftarjurnal", "rekapharian"]],
   ["Jadwal",      ["jadwal", "roster"]],
@@ -1346,7 +1399,7 @@ function navTandai(key, btn){
   if (btn) btn.classList.add("active");
   const blok = btn ? btn.closest(".sg-grup") : null;
   if (blok) blok.classList.remove("lipat");
-  if ($("judulHalaman")) $("judulHalaman").textContent = (NAV_IKON[key] ? NAV_IKON[key] + " " : "") + (LABEL[key] || key);
+  if ($("judulHalaman")) $("judulHalaman").innerHTML = (NAV_IKON[key] ? ikonNav(key) + " " : "") + esc(LABEL[key] || key);
   if ($("grupHalaman")) $("grupHalaman").textContent = blok ? blok.dataset.grup : "";
   // bar bawah: tandai menu yang sama; bila bukan menu utama, tandai tombol "Menu"
   const bb = document.querySelectorAll("#bbNav button");
@@ -1380,13 +1433,13 @@ function bangunBarBawah(){
     const k = it.dataset.key;
     const b = document.createElement("button");
     b.type = "button"; b.dataset.key = k;
-    b.innerHTML = '<span class="sg-ik">' + (NAV_IKON[k] || "•") + '</span>' + esc(LABEL[k] || k);
+    b.innerHTML = '<span class="sg-ik">' + ikonNav(k) + '</span>' + esc(LABEL[k] || k);
     b.onclick = () => buka(k, document.querySelector('#nav .sg-item[data-key="' + k + '"]'));
     bar.appendChild(b);
   });
   const m = document.createElement("button");
   m.type = "button"; m.dataset.key = "__menu";
-  m.innerHTML = '<span class="sg-ik">☰</span>Menu';
+  m.innerHTML = '<span class="sg-ik"><i class="bi bi-grid" aria-hidden="true"></i></span>Menu';
   m.onclick = () => bukaSidebar();
   bar.appendChild(m);
 }
@@ -1981,9 +2034,23 @@ async function muatPengaturan(){
         '<button type="button" class="swatch" data-aksen="jingga" style="background:#e8590c" onclick="pilihAksen(\'jingga\')" title="Jingga"></button>' +
         '<button type="button" class="swatch" data-aksen="teal"   style="background:#0c8599" onclick="pilihAksen(\'teal\')" title="Teal"></button>' +
       '</div>' +
+    '</div>' +
+    // ---- Gaya sidebar ----
+    '<div class="card"><h2>Gaya Sidebar</h2>' +
+      '<p style="color:var(--ink-lembut);font-size:13px;margin-bottom:12px">Berwarna memakai gradasi warna aksen. ' +
+        'Tidak berlaku untuk desain halaman Klasik. Tersimpan di perangkat ini.</p>' +
+      '<div id="gayaSidebarPilih" class="sgw-grid">' +
+        '<button type="button" class="sgw" data-gaya="terang" onclick="pilihGayaSidebar(\'terang\')">' +
+          '<span class="sgw-mini sgw-terang"><span><b></b><b></b><b></b><b></b></span></span>' +
+          '<strong>Terang</strong><small>Latar putih</small></button>' +
+        '<button type="button" class="sgw" data-gaya="warna" onclick="pilihGayaSidebar(\'warna\')">' +
+          '<span class="sgw-mini sgw-warna"><span><b></b><b></b><b></b><b></b></span></span>' +
+          '<strong>Berwarna</strong><small>Gradasi warna aksen</small></button>' +
+      '</div>' +
     '</div>';
     tandaiTemaAktif();
     tandaiAksenAktif();
+    tandaiGayaSidebarAktif();
     _editLiburId = null;
     renderHariLibur();
 }
