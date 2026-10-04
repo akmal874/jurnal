@@ -3059,7 +3059,7 @@ window.gantiGuruAsli = () => {
   } else {
     // Tidak menggantikan: pakai jadwal SAYA di kelas ini.
     // Fallback (nol) → mapel yang saya ampu.
-    const idJadwal = mapelJadwal(ME.id);
+    const idJadwal = mapelJadwal(ijGuruId());   // #S25b: saat edit = pemilik jurnal
     if (idJadwal.size) {
       daftar = semua.filter(m => idJadwal.has(m.id));
     } else {
@@ -3548,6 +3548,7 @@ window.simpanJurnal = async () => {
    wajib konfirmasi dan jurnal ditandai luar_jadwal = true. */
 let _ijMode = "jadwal";        // "jadwal" | "manual"
 let _ijSlot = null;            // slot jadwal terpilih
+let _ijEditAsal = null;        // #S25b: data asal jurnal yang sedang diedit
 let _ijJurnalHari = [];        // jurnal pada tanggal terpilih (cek "sudah diisi" & dobel)
 
 function ijTglLokal(d){        // yyyy-mm-dd waktu lokal (WITA), bukan UTC
@@ -3560,7 +3561,9 @@ function ijMapel(id){ return (window._mapelSemuaIsi || []).find(m => m.id === id
 /* Guru pemilik jadwal: guru yang digantikan (bila dipilih) atau diri sendiri. */
 function ijGuruId(){
   const g = $("jGuruAsli") ? $("jGuruAsli").value : "";
-  return g ? ((window._guruNamaKeId || {})[g] || null) : ME.id;
+  // #S25b: saat edit, pemilik = guru penulis jurnal (bukan akun yang login, mis. admin)
+  const pemilik = (_editJurnalId && _ijEditAsal) ? _ijEditAsal.guru_id : ME.id;
+  return g ? ((window._guruNamaKeId || {})[g] || null) : pemilik;
 }
 function ijWaktu(hari, r){
   const bel = rsJamBel(hari), a = bel[r[0]-1], b = bel[r[1]-1];
@@ -3676,9 +3679,22 @@ window.ijModeJadwal = () => { _ijMode = "jadwal"; _ijSlot = null; ijKosongkanPil
 
 /* Mode edit jurnal lama: isian dibiarkan, masuk mode manual. */
 function ijModeEdit(j){
+  _ijEditAsal = j;   // #S25b
   _ijMode = "manual"; _ijSlot = null;
   ijGambar();
   const k = $("ijKonf"); if (k && j.luar_jadwal) k.checked = true;
+}
+
+/* #S25b: true bila saat edit tanggal, jam, kelas & guru digantikan tidak diubah. */
+function ijEditTetap(){
+  const a = _ijEditAsal;
+  if (!_editJurnalId || !a) return false;
+  const jam = ($("jJam").value || "").replace(/\s+/g, "");
+  const g = $("jGuruAsli") ? $("jGuruAsli").value : (a.guru_asli || "");
+  return $("jTgl").value === String(a.tanggal || "") &&
+    jam === String(a.jam_ke || "").replace(/\s+/g, "") &&
+    $("jKelas").value === String(a.kelas_id || "") &&
+    g === String(a.guru_asli || "");
 }
 
 /* Hasil pemeriksaan isian manual. */
@@ -3690,12 +3706,13 @@ function ijPeriksaManual(){
   const r = rsRentang(v);
   if (!r) { hasil.salah = "Format salah. Pakai angka (mis. 5) atau rentang (mis. 3-4)."; return hasil; }
   const bel = hari ? rsJamBel(hari) : [];
-  if (bel.length && r[1] > bel.length) { hasil.salah = "Jam bel hari ini hanya sampai jam " + bel.length + "."; return hasil; }
+  if (bel.length && r[1] > bel.length) { hasil.salah = "Jam bel hari itu hanya sampai jam " + bel.length + "."; return hasil; }
   hasil.r = r;
   if (kelasId) {
     const cocok = ijSlotHari().some(s => s.kelas_id === kelasId && s.r[0] <= r[1] && r[0] <= s.r[1]);
     hasil.luar = !cocok;
     hasil.dobel = ijJurnalBentrok(kelasId, r) || null;
+    if (ijEditTetap()) hasil.luar = !!_ijEditAsal.luar_jadwal;   // #S25b: jadwal tak diubah → status asal dipertahankan    
   }
   return hasil;
 }
@@ -3709,7 +3726,8 @@ window.ijCekManual = () => {
     : '<span style="color:#2b8a3e">✓ Format benar' + (ijWaktu(ijHariKe($("jTgl").value), h.r) ? ' · ' + esc(ijWaktu(ijHariKe($("jTgl").value), h.r)) : '') + '</span>';
   let w = "";
   if (h.r && h.luar) {
-    w += '<div class="ij-warn">⚠ <b>Tidak sesuai roster.</b> Jadwal hari ini tidak memuat ' + esc(ijNamaKelas($("jKelas").value)) +
+    const tglW = $("jTgl").value ? new Date($("jTgl").value + "T00:00:00").toLocaleDateString("id-ID", { weekday:"long", day:"numeric", month:"short" }) : "hari itu";   // #S25b
+    w += '<div class="ij-warn">⚠ <b>Tidak sesuai roster.</b> Jadwal pada ' + esc(tglW) + ' tidak memuat ' + esc(ijNamaKelas($("jKelas").value)) +   // #S25b
       ' jam ' + esc(h.v) + '. Jurnal akan ditandai <b>"Di luar jadwal"</b> agar terlihat admin/wakasek kurikulum.' +
       '<label class="ij-cek"><input type="checkbox" id="ijKonf"' + (konfLama ? " checked" : "") + '> ' +
       'Saya mengajar di luar jadwal (tukar jam / jam tambahan / perubahan roster)</label></div>';
@@ -8245,6 +8263,7 @@ window.editJurnal = async (id) => {
 
   // masuk mode edit
   _editJurnalId = id;
+  _ijEditAsal = j;   // #S25b: diset sebelum gantiGuruAsli() agar filter mapel memakai pemilik jurnal  
   _fotoLamaAda = !!j.ada_foto;
 
   // isi form
@@ -8268,6 +8287,7 @@ window.editJurnal = async (id) => {
   $("jMateri").value = j.materi || "";
   $("jCatatan").value = j.catatan || "";
   ijModeEdit(j);   // jurnal lama diedit lewat mode manual
+  await ijSegarkan();   // #S25b: muat jurnal pada TANGGAL jurnal (cek dobel), bukan tanggal hari ini  
 
   // muat absensi kelas, lalu terapkan status tersimpan
   await muatAbsensi();
