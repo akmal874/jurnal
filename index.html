@@ -421,9 +421,9 @@
 .rs-kamus-grp{margin:12px 0 4px;font-weight:700;font-size:13px;color:#1e3a5f;border-left:4px solid #1e3a5f;padding-left:8px}
 /* Popup */
 .rs-pop-ov{position:fixed;inset:0;background:rgba(0,0,0,.35);align-items:center;justify-content:center;z-index:9999;padding:16px}
-.rs-pop{background:#fff;border-radius:12px;padding:18px 20px;min-width:260px;max-width:420px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+.rs-pop{background:var(--card);border-radius:12px;padding:18px 20px;min-width:260px;max-width:420px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.25)}
 .rs-pop h3{margin:0 0 10px;color:#1e3a5f;font-size:16px}
-.rs-pop-baris{display:flex;justify-content:space-between;gap:16px;padding:6px 0;border-bottom:1px solid #f1f3f5;font-size:14px}
+.rs-pop-baris{display:flex;justify-content:space-between;gap:16px;padding:6px 0;border-bottom:1px solid var(--garis);font-size:14px}
 .rs-pop-baris b{color:#3b5bdb;text-align:right}
 /* ===== KEHADIRAN HARIAN (Wali Kelas) ===== */
 .kh-tabel{border-collapse:collapse;width:100%;font-size:12.5px}
@@ -460,7 +460,7 @@
 .kh-riwayat{background:#fff9db;border:1px solid #ffe066;border-radius:8px;padding:8px 10px;font-size:12px;color:#8a5a00;margin-bottom:10px}
 .kh-form{margin-top:14px;padding-top:12px;border-top:1px solid var(--garis)}
 .kh-pil{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-.kh-pil-btn{border:2px solid #e9ecef;background:#fff;border-radius:8px;padding:8px 4px;font-weight:700;font-size:13px;cursor:pointer}
+.kh-pil-btn{border:2px solid var(--garis);background:var(--card);color:var(--ink);border-radius:8px;padding:8px 4px;font-weight:700;font-size:13px;cursor:pointer}
 .kh-pil-btn.dipilih{border-color:var(--aksen);background:var(--aksen-lembut);color:var(--aksen)}
 #khAlasan{width:100%;border:1px solid var(--garis);border-radius:8px;padding:8px;font-size:13px;font-family:inherit}
 .kh-info{background:#e7f5ff;color:#1864ab;border-radius:8px;padding:8px 10px;font-size:12px;margin-top:10px}
@@ -498,11 +498,11 @@ tr.ab-pkl td{background:#e3fafc;color:#0b7285}
 [data-dark="1"] .nj-kartu-guru{background:#3a2f1a;border-color:#6b5a2a}
 [data-dark="1"] .nj-judul-guru{color:#ffd166}
 /* ===== ISI JURNAL: PILIH DARI JADWAL ===== */
-.ij-kotak{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin:4px 0 14px}
+.ij-kotak{background:var(--bg);border:1px solid var(--garis);border-radius:10px;padding:12px;margin:4px 0 14px}
 .ij-judul{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:13px;font-weight:700;color:#1e3a5f;margin-bottom:8px}
 .ij-judul .ra-nama-link{font-size:13px}
 .ij-slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
-.ij-slot{border:2px solid #dbe0ea;background:#fff;border-radius:10px;padding:8px 10px;cursor:pointer;text-align:left;font-family:inherit;color:inherit}
+.ij-slot{border:2px solid var(--garis);background:var(--card);border-radius:10px;padding:8px 10px;cursor:pointer;text-align:left;font-family:inherit;color:inherit}
 .ij-slot:hover{border-color:var(--aksen)}
 .ij-slot.pilih{border-color:var(--aksen);background:var(--aksen-lembut)}
 .ij-slot.sudah{opacity:.55;cursor:not-allowed;background:#f1f3f5}
@@ -513,7 +513,7 @@ tr.ab-pkl td{background:#e3fafc;color:#0b7285}
 .ij-tag{display:inline-block;font-size:11px;font-weight:700;border-radius:99px;padding:1px 8px;margin-left:4px}
 .ij-tag-jadwal{background:#e7f5ff;color:#1864ab}
 .ij-tag-manual,.ij-tag-luar{background:#fff3bf;color:#8a5a00}
-input#jJam[readonly]{background:#f1f5f9;color:#1e3a5f;font-weight:700}
+input#jJam[readonly]{background:var(--toggle-bg);color:var(--ink);font-weight:700}
 .ij-warn{background:#fff8e6;border:1px solid #ffe08a;color:#8a5a00;border-radius:8px;padding:10px 12px;font-size:13px;margin-top:10px}
 .ij-cek{display:flex!important;gap:8px;align-items:flex-start;font-weight:600;margin-top:8px;cursor:pointer}
 .ij-cek input{width:auto!important;margin-top:3px}
@@ -930,7 +930,7 @@ try {
 <script type="module">
 /* JS masuk di sini — Bagian 2 & 3 di bawah */
 import { createClient }
-  from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+  from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/+esm";
 
 const SUPABASE_URL = "https://iqnwlhtzmbxiyqkdtgiv.supabase.co";      // GANTI
 const SUPABASE_ANON_KEY = "sb_publishable_DKvTSdu6coSOcaAK1b6gRA_CkswsPPE";             // GANTI
@@ -4762,7 +4762,7 @@ async function muatCatatan(wadahId){
           '<h2 id="cJudulForm" style="font-size:15px">Tambah Catatan</h2>' +
           '<div class="row">' +
             '<div><label>Siswa</label><select id="cSiswa"><option value="">Memuat...</option></select></div>' +
-            '<div><label>Tanggal</label><input id="cTgl" type="date" value="' + new Date().toISOString().slice(0,10) + '"></div>' +
+            '<div><label>Tanggal</label><input id="cTgl" type="date" value="' + ijTglLokal(new Date()) + '"></div>' +
           '</div>' +
           '<div class="row">' +
             '<div><label>Kategori</label><select id="cKategori">' + opsiKat + '</select></div>' +
@@ -5858,8 +5858,8 @@ async function muatKartuSiswa(wadahId){
 
   // rentang default: awal bulan s/d hari ini
   const kini = new Date();
-  const awalBulan = new Date(kini.getFullYear(), kini.getMonth(), 1).toISOString().slice(0,10);
-  const hariIni = kini.toISOString().slice(0,10);
+  const awalBulan = ijTglLokal(new Date(kini.getFullYear(), kini.getMonth(), 1));
+  const hariIni = ijTglLokal(kini);
   if (!_ksRentang.dari) _ksRentang = { dari: awalBulan, sampai: hariIni };
 
   const opsiKelas = _ksKelasList.map(k =>
@@ -6817,8 +6817,8 @@ async function muatRekapAbsensi(wadahId){
 
   // default rentang: awal bulan ini s/d hari ini
   const kini = new Date();
-  const awalBulan = new Date(kini.getFullYear(), kini.getMonth(), 1).toISOString().slice(0,10);
-  const hariIni = kini.toISOString().slice(0,10);
+  const awalBulan = ijTglLokal(new Date(kini.getFullYear(), kini.getMonth(), 1));
+  const hariIni = ijTglLokal(kini);
   if (!_raRentang.dari) _raRentang = { dari: awalBulan, sampai: hariIni };
 
   const opsiKelas = _raKelasList.map(k =>
@@ -7333,7 +7333,7 @@ async function muatRekapHarian(){
       'Menu ini untuk admin, kepala sekolah, pengawas, atau guru yang diberi izin.</div></div>';
     return;
   }
-  const hariIni = new Date().toISOString().slice(0,10);
+  const hariIni = ijTglLokal(new Date());
   try { _rekapKelasSemua = await ambilSemua("kelas", "nama_kelas"); } catch(e){ _rekapKelasSemua = []; }
 
   $("main").innerHTML =
@@ -7354,7 +7354,7 @@ async function muatRekapHarian(){
 }
 
 window.renderRekapHarian = async () => {
-  const tgl = $("rkTgl") ? $("rkTgl").value : new Date().toISOString().slice(0,10);
+  const tgl = $("rkTgl") ? $("rkTgl").value : ijTglLokal(new Date());
   $("rkIsi").innerHTML = '<div class="card"><div class="page-kosong">Memuat...</div></div>';
   try {
     const periode = await ambilPeriodeAktif();
@@ -7370,8 +7370,9 @@ window.renderRekapHarian = async () => {
     // absensi semua jurnal hari itu → tempel ke tiap jurnal (untuk kolom Ketidakhadiran)
     if (list.length) {
       const ids = list.map(j => j.id);
-      const { data: ab } = await sb.from("absensi")
+      const { data: ab, error: errAb } = await sb.from("absensi")
         .select("jurnal_id, siswa_nama, status").in("jurnal_id", ids);
+      if (errAb) throw new Error(errAb.message);   // #S25
       const perJurnal = {};
       (ab || []).forEach(a => { (perJurnal[a.jurnal_id] = perJurnal[a.jurnal_id] || []).push(a); });
       list.forEach(j => { j._absen = perJurnal[j.id] || []; });
@@ -7500,7 +7501,7 @@ window.renderKepatuhanKelas = async () => {
   if (!area) return;
   if (!kelasId) { area.innerHTML = '<div class="empty">Pilih kelas untuk melihat kepatuhan.</div>'; return; }
 
-  const tgl = $("rkTgl") ? $("rkTgl").value : new Date().toISOString().slice(0,10);
+  const tgl = $("rkTgl") ? $("rkTgl").value : ijTglLokal(new Date());
   // tentukan hari (1=Senin..5=Jumat) dari tanggal
   const dow = new Date(tgl + "T00:00:00").getDay();   // 0=Min..6=Sab
   const hari = { 1:1, 2:2, 3:3, 4:4, 5:5 }[dow] || null;
@@ -7579,7 +7580,7 @@ window.renderKepatuhanKelas = async () => {
 };
 
 window.cetakRekapHarian = async () => {
-  const tgl = $("rkTgl") ? $("rkTgl").value : new Date().toISOString().slice(0,10);
+  const tgl = $("rkTgl") ? $("rkTgl").value : ijTglLokal(new Date());
   const list = _rekapDataHari;
   const tglIndo = new Date(tgl+"T00:00:00").toLocaleDateString("id-ID",
     { weekday:"long", day:"numeric", month:"long", year:"numeric" });
@@ -7695,7 +7696,7 @@ window.cetakRekapHarian = async () => {
 };
 
 window.excelRekapHarian = () => {
-  const tgl = $("rkTgl") ? $("rkTgl").value : new Date().toISOString().slice(0,10);
+  const tgl = $("rkTgl") ? $("rkTgl").value : ijTglLokal(new Date());
   const list = _rekapDataHari;
   if (!list.length) return toast("Tidak ada jurnal pada tanggal ini.");
   const data = list.map((j,idx) => {
@@ -8115,8 +8116,9 @@ window.cetakJurnal = async (id) => {
   toast("Menyiapkan cetakan...");
 
   // absensi jurnal ini (hanya yang tidak hadir)
-  const { data: absen } = await sb.from("absensi")
+  const { data: absen, error: errAbsen } = await sb.from("absensi")
     .select("siswa_id, siswa_nis, siswa_nama, status, keterangan").eq("jurnal_id", id);
+  if (errAbsen) return toast("Absensi gagal dimuat: " + errAbsen.message, "gagal");   // #S25
   const takHadir = (absen || []).filter(a => a.status.toLowerCase() !== "hadir");
   const pklJ = (await ambilPklJurnal([j]))[String(id)] || [];       // tercatat PKL (#S16)
   const pklPer = {}; pklJ.forEach(p => pklPer[p.siswa_id] = p);
@@ -8269,8 +8271,12 @@ window.editJurnal = async (id) => {
 
   // muat absensi kelas, lalu terapkan status tersimpan
   await muatAbsensi();
-  const { data: absenLama } = await sb.from("absensi")
+  const { data: absenLama, error: errAbLama } = await sb.from("absensi")
     .select("siswa_id, status, keterangan").eq("jurnal_id", id);
+  if (errAbLama) {   // #S25: jangan lanjut edit, agar status S/I/A tidak tertimpa "Hadir"
+    toast("Absensi lama gagal dimuat: " + errAbLama.message + ". Edit dibatalkan, coba lagi.", "gagal");
+    return window.batalIsiJurnal();
+  }
   if (absenLama && absenLama.length) {
     absenLama.forEach(a => {
       const idx = _absenSiswa.findIndex(s => s.siswa_id === a.siswa_id);
@@ -8309,7 +8315,6 @@ async function muatPengguna(){
   // muat daftar mapel untuk checkbox "mapel diampu"
   let mapelList = [];
   try { mapelList = await ambilSemua("mapel", "nama_mapel"); } catch(e) {}
-  window._mapelUntukPengguna = mapelList;
 
   $("main").innerHTML =
     '<div class="card"><h2>Tambah Pengguna</h2>' +
@@ -8546,7 +8551,8 @@ window.simpanEditPengguna = async () => {
 
     // perbarui mapel diampu (hanya bila guru): hapus lama, insert centangan baru
     if (role === "guru") {
-      await sb.from("guru_mapel").delete().eq("guru_id", _editUserId);
+      const { error: errHapusM } = await sb.from("guru_mapel").delete().eq("guru_id", _editUserId);
+      if (errHapusM) throw new Error("Profil tersimpan, mapel lama gagal dihapus: " + errHapusM.message);   // #S25
       const mapelIds = Array.from(document.querySelectorAll(".uMapelCek:checked"))
         .map(cb => ({ guru_id: _editUserId, mapel_id: cb.value }));
       if (mapelIds.length) {
@@ -8555,7 +8561,8 @@ window.simpanEditPengguna = async () => {
       }
     } else {
       // bukan guru lagi → bersihkan mapel
-      await sb.from("guru_mapel").delete().eq("guru_id", _editUserId);
+      const { error: errHapusM } = await sb.from("guru_mapel").delete().eq("guru_id", _editUserId);
+      if (errHapusM) throw new Error("Profil tersimpan, mapel lama gagal dihapus: " + errHapusM.message);   // #S25
     }
 
     setMsg('Data "' + nama + '" diperbarui.', true);
@@ -10232,7 +10239,7 @@ async function bpRenderKasus(){
     '<div class="bp-catatan">Catat kejadian/pelanggaran per siswa beserta tindak lanjutnya.</div>' +
     '<div class="row" style="margin-bottom:12px">' +
       '<div><label>Siswa</label><select id="bpkSiswa">' + bpOpsiSiswa() + '</select></div>' +
-      '<div><label>Tanggal</label><input type="date" id="bpkTgl" value="' + new Date().toISOString().slice(0,10) + '"></div>' +
+      '<div><label>Tanggal</label><input type="date" id="bpkTgl" value="' + ijTglLokal(new Date()) + '"></div>' +
       '<div><label>Jenis (opsional)</label><select id="bpkJenis">' + bpOpsiJenis("pelanggaran", "", true) + '</select></div>' +
     '</div>' +
     '<div class="row" style="margin-bottom:12px">' +
@@ -10350,7 +10357,7 @@ window.bpEditKasus = (id) => {
 window.bpBatalEditKasus = () => {
   _bpEditKasusId = null;
   $("bpkSiswa").value = "";
-  $("bpkTgl").value = new Date().toISOString().slice(0,10);
+  $("bpkTgl").value = ijTglLokal(new Date());
   $("bpkJenis").value = "";
   $("bpkDesk").value = "";
   $("bpkTindak").value = "";
@@ -10366,7 +10373,7 @@ async function bpRenderPoin(){
     '<div class="bp-catatan">Tambah poin pelanggaran (minus) atau penghargaan (plus). Bobot diambil otomatis dari jenis.</div>' +
     '<div class="row" style="margin-bottom:12px;align-items:flex-end">' +
       '<div><label>Siswa</label><select id="bppSiswa">' + bpOpsiSiswa() + '</select></div>' +
-      '<div><label>Tanggal</label><input type="date" id="bppTgl" value="' + new Date().toISOString().slice(0,10) + '"></div>' +
+      '<div><label>Tanggal</label><input type="date" id="bppTgl" value="' + ijTglLokal(new Date()) + '"></div>' +
       '<div><label>Jenis (poin otomatis)</label><select id="bppJenis">' + bpOpsiJenis("", "", true) + '</select></div>' +
       '<div style="flex:0 0 auto"><button class="btn" onclick="bpTambahPoin()">Tambah poin</button></div>' +
     '</div>' +
@@ -10955,10 +10962,6 @@ function pkPesanError(e){
   if (e && e.code === "23P01") return "Periode bertumpuk dengan penempatan lain milik siswa yang sama.";
   if (e && e.code === "23514") return "Tanggal kembali harus sama atau setelah tanggal berangkat.";
   return (e && e.message) || String(e);
-}
-function pkMsg(teks, ok){
-  return '<div style="padding:10px;border-radius:8px;font-size:13px;margin-top:10px;' +
-    (ok ? 'background:#ebfbee;color:#2b8a3e' : 'background:#fff0f0;color:#c92a2a') + '">' + esc(teks) + '</div>';
 }
 
 async function muatPKL(){
