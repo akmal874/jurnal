@@ -1266,7 +1266,17 @@ function pesanLogin(teks){
 $("lPass").addEventListener("keydown", e => { if (e.key === "Enter") masuk(); });
 $("lEmail").addEventListener("keydown", e => { if (e.key === "Enter") $("lPass").focus(); });
 
-sb.auth.onAuthStateChange(async (event, session) => {
+/* #S26: callback onAuthStateChange tidak boleh menunggu (await) panggilan Supabase lain —
+   bisa macet (deadlock). Prosesnya dijalankan sesudahnya, berurutan (antrean) agar dua event
+   yang datang berdekatan tidak memproses login dua kali. */
+let _antreanSesi = Promise.resolve();
+sb.auth.onAuthStateChange((event, session) => {
+  setTimeout(() => {
+    _antreanSesi = _antreanSesi.then(() => prosesSesi(event, session))
+      .catch(e => console.warn("Proses sesi:", e && e.message));
+  }, 0);
+});
+async function prosesSesi(event, session){
   // Abaikan refresh token saat tab kembali fokus: jangan bangun ulang nav
   // (mencegah menu ter-reset ke Beranda). Hanya proses login/logout nyata.
   if (event === "TOKEN_REFRESHED" && ME) return;
@@ -1309,7 +1319,7 @@ sb.auth.onAuthStateChange(async (event, session) => {
   bangunNav();
   muatTataLetak();   // desain halaman pilihan admin (cache perangkat sudah dipakai lebih dulu)
   isiFooter("appFooter");
-});
+}
 
 /* ===== NAVIGASI ===== */
 // Menu per role. Untuk sekarang baru "kelas"; kita tambah modul lain nanti.
@@ -1393,7 +1403,14 @@ function navLipat(blok){
   navSimpanLipat();
 }
 /* Tandai menu aktif + perbarui judul header (tanpa memuat halaman). */
+/* #S26: menu yang sedang aktif. Pemuat menu menulis ke layar lewat mainUntuk(kunci):
+   bila pengguna sudah pindah menu, tulisan menu lama diarahkan ke elemen kosong (diabaikan). */
+let _menuAktif = "";
+function mainUntuk(kunci){
+  return _menuAktif === kunci ? $("main") : document.createElement("div");
+}
 function navTandai(key, btn){
+  _menuAktif = key;   // #S26
   btn = btn || document.querySelector('#nav .sg-item[data-key="' + key + '"]');
   document.querySelectorAll("#nav .sg-item").forEach(x => x.classList.remove("active"));
   if (btn) btn.classList.add("active");
@@ -1627,11 +1644,30 @@ function buka(key, btn){
 
 /* ===== HELPER DATA (dipakai semua modul) ===== */
 async function ambilSemua(tabel, urutkanKolom){
-  let q = sb.from(tabel).select("*");
-  if (urutkanKolom) q = q.order(urutkanKolom, { ascending: true });
-  const { data, error } = await q;
-  if (error) throw new Error(error.message);
-  return data || [];
+  return ambilSemuaBaris(() => {   // #S26: tanpa batas 1000 baris
+    let q = sb.from(tabel).select("*");
+    if (urutkanKolom) q = q.order(urutkanKolom, { ascending: true });
+    return q.order("id");
+  });
+}
+
+/* #S26: Supabase membatasi 1000 baris per permintaan (Max rows). Helper ini mengambil SEMUA
+   baris, 1000 per halaman. buatQuery = fungsi yang MEMBUAT query baru (sudah difilter), diakhiri
+   urutan kolom unik (mis. .order("id")) agar antar-halaman tidak dobel/terlewat. */
+async function ambilSemuaBaris(buatQuery, ukuran = 1000){
+  const hasil = [];
+  for (let dari = 0; ; dari += ukuran) {
+    const { data, error } = await buatQuery().range(dari, dari + ukuran - 1);
+    if (error) throw new Error(error.message);
+    const isi = data || [];
+    hasil.push(...isi);
+    if (isi.length < ukuran) break;
+  }
+  return hasil;
+}
+/* Bentuk {data, error} — untuk dipakai di dalam Promise.all yang sudah ada. */
+function semuaRes(buatQuery){
+  return ambilSemuaBaris(buatQuery).then(data => ({ data, error: null }), e => ({ data: null, error: e }));
 }
 
 /* Bangun HTML kontrol pagination. namaFungsi = fungsi ganti halaman (window.*). */
@@ -1707,7 +1743,7 @@ async function muatBeranda(){
     '<div class="card"><h2>Selamat datang, ' + esc(ME.nama || ME.email) + '</h2>' +
     '<p style="color:#6b7280">Anda masuk sebagai <b>' + namaRole(ME.role) + '</b>. ' +
     'Gunakan menu untuk berpindah halaman.</p></div>';
-  $("main").innerHTML = html + '<div id="pengumumanArea"></div><div id="notifJurnal"></div><div id="jadwalHariIni"></div>';
+  mainUntuk("beranda").innerHTML = html + '<div id="pengumumanArea"></div><div id="notifJurnal"></div><div id="jadwalHariIni"></div>';
   muatNotifJurnal();   // tidak ditunggu: Beranda tampil lebih dulu, kartu menyusul
 
   // ambil pengumuman (kalau ada)
@@ -1785,11 +1821,11 @@ async function muatJadwalHariIni(){
 /* ============ MODUL PENGATURAN (admin) ============ */
 async function muatPengaturan(){
   if (ME.role !== "admin") {
-    $("main").innerHTML = '<div class="card"><div class="page-kosong">' +
+    mainUntuk("pengaturan").innerHTML = '<div class="card"><div class="page-kosong">' +
       'Hanya admin yang bisa mengubah pengaturan.</div></div>';
     return;
   }
-  $("main").innerHTML = '<div class="card"><div class="page-kosong">Memuat...</div></div>';
+  mainUntuk("pengaturan").innerHTML = '<div class="card"><div class="page-kosong">Memuat...</div></div>';
 
   // cfg sekarang memuat kolom periode juga
   let cfg = { nama_sekolah:"", kota:"", pengumuman:"", pengumuman_judul:"", tahun_ajaran:"", semester:"Ganjil",
@@ -1799,7 +1835,7 @@ async function muatPengaturan(){
     if (data) cfg = { ...cfg, ...data };
   } catch (e) {}
 
-  $("main").innerHTML =
+  mainUntuk("pengaturan").innerHTML =
     // ---- Periode aktif (kartu pertama) ----
     '<div class="card"><h2>Tahun Ajaran & Semester Aktif</h2>' +
       '<p style="color:#6b7280;font-size:13px;margin-bottom:10px">Periode ini akan ditandai pada ' +
@@ -2223,7 +2259,7 @@ async function muatKelas(){
     } catch (e) {}
   }
 
-  $("main").innerHTML =
+  mainUntuk("kelas").innerHTML =
     (bolehEdit ?
       '<div class="card"><h2 id="kJudulForm">Tambah Kelas</h2><div class="row">' +
         '<div><label>Nama Kelas</label><input id="kNama" placeholder="mis. X IPA 1"></div>' +
@@ -2414,7 +2450,7 @@ async function muatMapel(){
   const bolehEdit = (ME.role === "admin");
   _editMapelId = null;
 
-  $("main").innerHTML =
+  mainUntuk("mapel").innerHTML =
     (bolehEdit ?
       '<div class="card"><h2 id="mJudulForm">Tambah Mata Pelajaran</h2><div class="row">' +
         '<div><label>Nama Mapel</label><input id="mNama" placeholder="Contoh: Matematika"></div>' +
@@ -2602,7 +2638,7 @@ async function muatSiswa(){
   try {
     _kelasUntukSiswa = await ambilSemua("kelas", "nama_kelas");
   } catch (e) {
-    $("main").innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat kelas: ' +
+    mainUntuk("siswa").innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat kelas: ' +
       esc(e.message) + '</div></div>'; return;
   }
 
@@ -2611,7 +2647,7 @@ async function muatSiswa(){
   // untuk filter, tambah opsi "semua"
   const opsiFilter = '<option value="">Semua Kelas</option>' + opsiKelas;
 
-  $("main").innerHTML =
+  mainUntuk("siswa").innerHTML =
     (bolehEdit ?
       '<div class="card"><h2 id="sJudulForm">Tambah Siswa</h2>' +
         (_kelasUntukSiswa.length ? '' :
@@ -2661,12 +2697,10 @@ async function muatSiswa(){
 
 // Ambil siswa + nama kelasnya (via relasi kelas_id -> kelas.nama_kelas)
 async function ambilSiswaLengkap(){
-  const { data, error } = await sb
+  return ambilSemuaBaris(() => sb   // #S26
     .from("siswa")
     .select("id, nis, nama_siswa, kelas_id, jenis_kelamin, aktif, kelas:kelas_id(nama_kelas)")
-    .order("nama_siswa", { ascending: true });
-  if (error) throw new Error(error.message);
-  return data || [];
+    .order("nama_siswa", { ascending: true }).order("id"));
 }
 
 // Filter di sisi klien (dari data yang sudah dimuat)
@@ -2894,7 +2928,7 @@ let _fotoLamaAda = false;   // apakah jurnal yang diedit sudah punya foto
 
 async function muatIsiJurnal(){
   if (ME.role !== "guru" && ME.role !== "admin") {
-    $("main").innerHTML = '<div class="card"><div class="page-kosong">' +
+    mainUntuk("isijurnal").innerHTML = '<div class="card"><div class="page-kosong">' +
       'Menu ini untuk guru. Buka Daftar Jurnal.</div></div>';
     return;
   }
@@ -2906,7 +2940,7 @@ async function muatIsiJurnal(){
     kelasList = await ambilSemua("kelas", "nama_kelas");
     mapelList = await ambilSemua("mapel", "nama_mapel");
   } catch (e) {
-    $("main").innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat kelas/mapel: ' +
+    mainUntuk("isijurnal").innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat kelas/mapel: ' +
       esc(e.message) + '</div></div>'; return;
   }
 
@@ -2986,7 +3020,7 @@ async function muatIsiJurnal(){
       esc(g.nama || g.email) + '</option>').join("");
   const hariIni = ijTglLokal(new Date());   // tanggal WITA, bukan UTC
 
-  $("main").innerHTML =
+  mainUntuk("isijurnal").innerHTML =
     '<div class="card"><h2 id="jJudulForm">Isi Jurnal Mengajar</h2>' +
       '<div class="row">' +
         '<div><label>Tanggal</label><input id="jTgl" type="date" value="' + hariIni + '" onchange="ijSegarkan()"></div>' +
@@ -3617,12 +3651,12 @@ function ijKosongkanPilihan(){
 function ijGambar(){
   const area = $("ijSlotArea"); if (!area) return;
   const manual = _ijMode === "manual";
-  const edit = !!_editJurnalId;   // #S25b: sedang mengedit jurnal lama
   // kunci/buka field
   if ($("jJam")) { $("jJam").readOnly = !manual; $("jJam").placeholder = manual ? "mis. 5 atau 3-4" : "Pilih dari jadwal di atas"; }
   if ($("jKelas")) $("jKelas").disabled = !manual;
   if ($("jMapel")) $("jMapel").disabled = !manual;
-  if ($("ijAsal")) $("ijAsal").innerHTML = manual ? '<span class="ij-tag ij-tag-manual">' + (edit ? 'edit' : 'manual') + '</span>'   // #S25b
+  const edit = !!_editJurnalId;   // #S25b: sedang mengedit jurnal lama
+  if ($("ijAsal")) $("ijAsal").innerHTML = manual ? '<span class="ij-tag ij-tag-manual">' + (edit ? 'edit' : 'manual') + '</span>'
     : (_ijSlot ? '<span class="ij-tag ij-tag-jadwal">dari jadwal</span>' : '');
 
   if (manual) {
@@ -3718,7 +3752,7 @@ function ijPeriksaManual(){
     const cocok = ijSlotHari().some(s => s.kelas_id === kelasId && s.r[0] <= r[1] && r[0] <= s.r[1]);
     hasil.luar = !cocok;
     hasil.dobel = ijJurnalBentrok(kelasId, r) || null;
-    if (ijEditTetap()) hasil.luar = !!_ijEditAsal.luar_jadwal;   // #S25b: jadwal tak diubah → status asal dipertahankan    
+    if (ijEditTetap()) hasil.luar = !!_ijEditAsal.luar_jadwal;   // #S25b: jadwal tak diubah → status asal dipertahankan
   }
   return hasil;
 }
@@ -3732,8 +3766,8 @@ window.ijCekManual = () => {
     : '<span style="color:#2b8a3e">✓ Format benar' + (ijWaktu(ijHariKe($("jTgl").value), h.r) ? ' · ' + esc(ijWaktu(ijHariKe($("jTgl").value), h.r)) : '') + '</span>';
   let w = "";
   if (h.r && h.luar) {
-    const tglW = $("jTgl").value ? new Date($("jTgl").value + "T00:00:00").toLocaleDateString("id-ID", { weekday:"long", day:"numeric", month:"short" }) : "hari itu";   // #S25b
-    w += '<div class="ij-warn">⚠ <b>Tidak sesuai roster.</b> Jadwal pada ' + esc(tglW) + ' tidak memuat ' + esc(ijNamaKelas($("jKelas").value)) +   // #S25b
+    const tglW = $("jTgl").value ? new Date($("jTgl").value + "T00:00:00").toLocaleDateString("id-ID", { weekday:"long", day:"numeric", month:"short" }) : "hari itu";
+    w += '<div class="ij-warn">⚠ <b>Tidak sesuai roster.</b> Jadwal pada ' + esc(tglW) + ' tidak memuat ' + esc(ijNamaKelas($("jKelas").value)) +
       ' jam ' + esc(h.v) + '. Jurnal akan ditandai <b>"Di luar jadwal"</b> agar terlihat admin/wakasek kurikulum.' +
       '<label class="ij-cek"><input type="checkbox" id="ijKonf"' + (konfLama ? " checked" : "") + '> ' +
       'Saya mengajar di luar jadwal (tukar jam / jam tambahan / perubahan roster)</label></div>';
@@ -3778,7 +3812,7 @@ async function muatDaftarJurnal(){
   const dariAwal = isPengawas ? hariIni : "";
   const sampaiAwal = isPengawas ? hariIni : "";
 
-  $("main").innerHTML =
+  mainUntuk("daftarjurnal").innerHTML =
     '<div class="card"><h2>Daftar Jurnal</h2>' +
       '<div class="row" style="align-items:flex-end;margin-bottom:12px">' +
         // Filter Status disembunyikan untuk pengawas
@@ -3815,7 +3849,7 @@ async function muatNilai(){
     kelasList = await ambilSemua("kelas", "nama_kelas");
     mapelList = await ambilSemua("mapel", "nama_mapel");
   } catch (e) {
-    $("main").innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat: ' +
+    mainUntuk("nilai").innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat: ' +
       esc(e.message) + '</div></div>'; return;
   }
 
@@ -3865,7 +3899,7 @@ async function muatNilai(){
     (j===_nJenis ? 'background:var(--aksen);color:#fff' : 'background:var(--aksen-lembut);color:var(--ink)') + '" ' +
     'onclick="gantiJenisNilai(\'' + j + '\')">' + j + '</button>').join("");
 
-  $("main").innerHTML =
+  mainUntuk("nilai").innerHTML =
     '<div class="card"><h2>Nilai</h2>' +
       '<div class="row" style="align-items:flex-end">' +
         '<div><label>Kelas</label><select id="nKelas" onchange="gantiKelasNilai()">' + opsiKelas + '</select></div>' +
@@ -3940,22 +3974,24 @@ async function muatDataNilai(){
     if (_nJenis === "Rerata NH" || _nJenis === "Rapor") {
       // tab hitung: ambil SEMUA nilai (semua jenis) untuk kelas+mapel ini
       const periode = await ambilPeriodeAktif();
-      let qn = sb.from("nilai").select("siswa_id, jenis, pertemuan, nilai")
-        .eq("kelas_id", _nKelas).eq("mapel_id", _nMapel);
-      if (periode.tahun_ajaran) qn = qn.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
-      const { data: nilai, error: errN } = await qn;
-      if (errN) throw new Error(errN.message);
+      const nilai = await ambilSemuaBaris(() => {   // #S26
+        let qn = sb.from("nilai").select("siswa_id, jenis, pertemuan, nilai")
+          .eq("kelas_id", _nKelas).eq("mapel_id", _nMapel);
+        if (periode.tahun_ajaran) qn = qn.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+        return qn.order("id");
+      });
       _nDokumen = nilai || [];
       if (_nJenis === "Rapor") await renderRapor();
       else await renderRataRata();
     } else {
       // tab input: nilai satu jenis saja
       const periode = await ambilPeriodeAktif();
-      let qn = sb.from("nilai").select("id, siswa_id, jenis, pertemuan, nilai")
-        .eq("kelas_id", _nKelas).eq("mapel_id", _nMapel).eq("jenis", _nJenis);
-      if (periode.tahun_ajaran) qn = qn.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
-      const { data: nilai, error: errN } = await qn;
-      if (errN) throw new Error(errN.message);
+      const nilai = await ambilSemuaBaris(() => {   // #S26
+        let qn = sb.from("nilai").select("id, siswa_id, jenis, pertemuan, nilai")
+          .eq("kelas_id", _nKelas).eq("mapel_id", _nMapel).eq("jenis", _nJenis);
+        if (periode.tahun_ajaran) qn = qn.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+        return qn.order("id");
+      });
       _nDokumen = nilai || [];
       renderNilai();
     }
@@ -4244,11 +4280,12 @@ async function hitungKehadiranKelas(kelasId, listSiswa, periode, mapelId){
   const hasil = {};
   const baru = () => ({ hadir:0, sakit:0, izin:0, alpa:0, pkl:0 });
   const ambil = (m, sid) => { const pm = (hasil[m] = hasil[m] || {}); return (pm[sid] = pm[sid] || baru()); };
-  let qj = sb.from("jurnal").select("id, tanggal, mapel_id").eq("kelas_id", kelasId);
-  if (mapelId) qj = qj.eq("mapel_id", mapelId);
-  if (periode.tahun_ajaran) qj = qj.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
-  const { data: jurnal, error } = await qj;
-  if (error) throw new Error(error.message);
+  const jurnal = await ambilSemuaBaris(() => {   // #S26
+    let qj = sb.from("jurnal").select("id, tanggal, mapel_id").eq("kelas_id", kelasId);
+    if (mapelId) qj = qj.eq("mapel_id", mapelId);
+    if (periode.tahun_ajaran) qj = qj.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+    return qj.order("id");
+  });
   const js = jurnal || [];
   if (js.length) {
     const tgl = js.map(j => j.tanggal).sort();
@@ -4263,9 +4300,8 @@ async function hitungKehadiranKelas(kelasId, listSiswa, periode, mapelId){
     });
     const jIds = js.map(j => j.id);
     for (let i = 0; i < jIds.length; i += 200) {
-      const { data: ab, error: e2 } = await sb.from("absensi").select("jurnal_id, siswa_id, status")
-        .in("jurnal_id", jIds.slice(i, i + 200));
-      if (e2) throw new Error(e2.message);
+      const ab = await ambilSemuaBaris(() => sb.from("absensi").select("jurnal_id, siswa_id, status")   // #S26
+        .in("jurnal_id", jIds.slice(i, i + 200)).order("id"));
       (ab || []).forEach(a => {
         if (!idSet.has(String(a.siswa_id))) return;
         const j = info[a.jurnal_id]; if (!j) return;
@@ -4515,10 +4551,12 @@ async function namaKelasMapelAktif(){
 /* Hitung rekap lengkap semua jenis untuk kelas+mapel aktif (untuk cetak/excel Nilai) */
 async function hitungRekapNilaiLengkap(){
   const periode = await ambilPeriodeAktif();
-  let qn = sb.from("nilai").select("siswa_id, jenis, pertemuan, nilai")
-    .eq("kelas_id", _nKelas).eq("mapel_id", _nMapel);
-  if (periode.tahun_ajaran) qn = qn.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
-  const { data: nilai } = await qn;
+  const nilai = await ambilSemuaBaris(() => {   // #S26
+    let qn = sb.from("nilai").select("siswa_id, jenis, pertemuan, nilai")
+      .eq("kelas_id", _nKelas).eq("mapel_id", _nMapel);
+    if (periode.tahun_ajaran) qn = qn.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+    return qn.order("id");
+  });
   const dok = nilai || [];
 
   // siswa kelas
@@ -4563,7 +4601,9 @@ async function hitungRekapNilaiLengkap(){
 window.cetakNilai = async () => {
   if (!_nKelas || !_nMapel) return toast("Pilih kelas & mapel dulu.");
   toast("Menyiapkan cetakan...");
-  const { baris, bobot, bRapor } = await hitungRekapNilaiLengkap();
+  let rekapN;
+  try { rekapN = await hitungRekapNilaiLengkap(); } catch (e) { return toast("Gagal memuat nilai: " + e.message, "gagal"); }   // #S26
+  const { baris, bobot, bRapor } = rekapN;
   const { namaKelas, namaMapel } = await namaKelasMapelAktif();
   const kkmRapor = bRapor.kkm_rapor;
   const f = v => v===null||v===undefined ? "-" : Number(v).toFixed(1);
@@ -4588,7 +4628,7 @@ window.cetakNilai = async () => {
       '<tr><td class="kolom-kiri"></td><td class="kolom-kanan"><span class="nama-ttd">' + esc(namaGuru) + '</span>' +
         (nipGuru ? '<br><span class="nip-ttd">NIP. ' + esc(nipGuru) + '</span>' : '') + '</td></tr></table>';
 
-  const w = window.open("", "_blank");
+  const w = ambilJendelaCetak();   // #S26
   if (!w) return toast("Popup diblokir.");
   w.document.write(
     '<html><head><title>Nilai ' + esc(namaMapel) + ' - ' + esc(namaKelas) + '</title>' +
@@ -4620,7 +4660,9 @@ window.cetakNilai = async () => {
 
 window.excelNilai = async () => {
   if (!_nKelas || !_nMapel) return toast("Pilih kelas & mapel dulu.");
-  const { baris, bRapor } = await hitungRekapNilaiLengkap();
+  let rekapN;
+  try { rekapN = await hitungRekapNilaiLengkap(); } catch (e) { return toast("Gagal memuat nilai: " + e.message, "gagal"); }   // #S26
+  const { baris, bRapor } = rekapN;
   const { namaKelas, namaMapel } = await namaKelasMapelAktif();
   const kkmRapor = bRapor.kkm_rapor;
   const b1 = v => v===null||v===undefined ? "" : Number(v).toFixed(1);
@@ -4693,7 +4735,7 @@ window.cetakRapor = async () => {
       '(............................)</div></td></tr></table>' +
     '</body></html>';
 
-  const w = window.open("", "_blank");
+  const w = ambilJendelaCetak();   // #S26
   if (!w) return toast("Popup diblokir. Izinkan popup untuk mencetak.");
   w.document.write(html); w.document.close(); w.focus();
   w.onload = () => { try { w.print(); } catch(e){} };
@@ -4976,7 +5018,7 @@ async function muatWaliKelas(){
     (tabWaliTampil("kartu")   ? '<button id="wkTabKartu" class="' + (_wkTab==="kartu"?"aktif":"") + '" onclick="gantiTabWali(\'kartu\')">Kartu Siswa</button>' : '') +
     (tabWaliTampil("nilai")   ? '<button id="wkTabNilai" class="' + (_wkTab==="nilai"?"aktif":"") + '" onclick="gantiTabWali(\'nilai\')">Rekap Nilai</button>' : '');
 
-  $("main").innerHTML =
+  mainUntuk("walikelas").innerHTML =
     '<div class="card" style="padding-bottom:0">' +
       '<h2 style="margin-bottom:12px">Wali Kelas</h2>' +
       '<div class="subtab-wk">' + tombol + '</div>' +
@@ -5154,10 +5196,9 @@ async function khAmbilSiswa(){
 async function khAmbilAbsensi(jurnalIds){
   const hasil = [];
   for (let i = 0; i < jurnalIds.length; i += 200) {
-    const { data, error } = await sb.from("absensi").select("jurnal_id, siswa_id, status, keterangan")
-      .in("jurnal_id", jurnalIds.slice(i, i + 200));
-    if (error) throw new Error(error.message);
-    hasil.push(...(data || []));
+    const data = await ambilSemuaBaris(() => sb.from("absensi").select("jurnal_id, siswa_id, status, keterangan")   // #S26
+      .in("jurnal_id", jurnalIds.slice(i, i + 200)).order("id"));
+    hasil.push(...data);
   }
   return hasil;
 }
@@ -5498,7 +5539,7 @@ async function khRenderBulanan(){
     const awal = _khBulan + "-01", akhir = _khBulan + "-" + khPad(new Date(th, bl, 0).getDate());
     const [siswa, jurnalRes, jadwalRes] = await Promise.all([
       khAmbilSiswa(),
-      sb.from("jurnal").select("id, tanggal").eq("kelas_id", _khKelasAktif).gte("tanggal", awal).lte("tanggal", akhir),
+      semuaRes(() => sb.from("jurnal").select("id, tanggal").eq("kelas_id", _khKelasAktif).gte("tanggal", awal).lte("tanggal", akhir).order("id")),   // #S26
       sb.from("jadwal").select("hari, jam_ke").eq("kelas_id", _khKelasAktif),
       ambilHariLibur()
     ]);
@@ -5591,7 +5632,7 @@ async function khCetak(judul, meta, isi, orientasi){
   const namaSekolah = (info.nama_sekolah || "").trim();
   const tglCetak = new Date().toLocaleDateString("id-ID", { day:"numeric", month:"long", year:"numeric" });
   const ttd = await khTtdWali();
-  const w = window.open("", "_blank");
+  const w = ambilJendelaCetak();   // #S26
   if (!w) return toast("Popup diblokir. Izinkan popup untuk mencetak.");
   w.document.write('<html><head><title>' + esc(judul) + '</title><style>' +
     '@page{size:A4 ' + orientasi + ';margin:12mm}body{font-family:Arial,sans-serif;color:#000;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
@@ -5705,7 +5746,7 @@ async function khRenderSemester(){
     if (awal > akhir) throw new Error("Tanggal Dari harus sebelum Sampai.");
     const [siswa, jurnalRes, jadwalRes] = await Promise.all([
       khAmbilSiswa(),
-      sb.from("jurnal").select("id, tanggal").eq("kelas_id", _khKelasAktif).gte("tanggal", awal).lte("tanggal", akhir),
+      semuaRes(() => sb.from("jurnal").select("id, tanggal").eq("kelas_id", _khKelasAktif).gte("tanggal", awal).lte("tanggal", akhir).order("id")),   // #S26
       sb.from("jadwal").select("hari, jam_ke").eq("kelas_id", _khKelasAktif),
       ambilHariLibur()
     ]);
@@ -5944,12 +5985,13 @@ window.pilihSiswaKartu = async () => {
 /* Agregat kehadiran satu siswa dalam rentang (mandiri, tak bergantung DOM tab lain). */
 async function hitungAbsensiSiswa(siswaId, kelasId, dari, sampai){
   const periode = await ambilPeriodeAktif();
-  let qj = sb.from("jurnal").select("id, tanggal").eq("kelas_id", kelasId);
-  if (periode.tahun_ajaran) qj = qj.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
-  if (dari) qj = qj.gte("tanggal", dari);
-  if (sampai) qj = qj.lte("tanggal", sampai);
-  const { data: jurnal, error: errJ } = await qj;
-  if (errJ) throw new Error(errJ.message);
+  const jurnal = await ambilSemuaBaris(() => {   // #S26
+    let qj = sb.from("jurnal").select("id, tanggal").eq("kelas_id", kelasId);
+    if (periode.tahun_ajaran) qj = qj.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+    if (dari) qj = qj.gte("tanggal", dari);
+    if (sampai) qj = qj.lte("tanggal", sampai);
+    return qj.order("id");
+  });
   const ids = (jurnal || []).map(j => j.id);
   const tglJurnal = {}; (jurnal || []).forEach(j => tglJurnal[j.id] = j.tanggal);
   const korPeta = await ambilPetaKoreksi({ siswaId, dari, sampai });   // koreksi wali kelas
@@ -6096,7 +6138,7 @@ window.cetakKartuSiswa = async () => {
       '<tr><td class="kolom-kiri"></td><td class="kolom-kanan"><span class="nama-ttd">' + esc(namaTtd) + '</span>' +
         (nipTtd ? '<br><span class="nip-ttd">NIP. ' + esc(nipTtd) + '</span>' : '') + '</td></tr></table>';
 
-  const w = window.open("", "_blank");
+  const w = ambilJendelaCetak();   // #S26
   if (!w) return toast("Popup diblokir.");
   w.document.write(
     '<html><head><title>Kartu Siswa ' + esc(siswa.nama_siswa) + '</title>' +
@@ -6210,12 +6252,13 @@ window.cetakSemuaKartu = async () => {
 
     // 2) semua jurnal kelas dalam rentang (sekali ambil)
     const periode = await ambilPeriodeAktif();
-    let qj = sb.from("jurnal").select("id, tanggal").eq("kelas_id", _ksKelasAktif);
-    if (periode.tahun_ajaran) qj = qj.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
-    if (dari) qj = qj.gte("tanggal", dari);
-    if (sampai) qj = qj.lte("tanggal", sampai);
-    const { data: jurnal, error: errJ } = await qj;
-    if (errJ) throw new Error(errJ.message);
+    const jurnal = await ambilSemuaBaris(() => {   // #S26
+      let qj = sb.from("jurnal").select("id, tanggal").eq("kelas_id", _ksKelasAktif);
+      if (periode.tahun_ajaran) qj = qj.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+      if (dari) qj = qj.gte("tanggal", dari);
+      if (sampai) qj = qj.lte("tanggal", sampai);
+      return qj.order("id");
+    });
     const jurnalIds = (jurnal || []).map(j => j.id);
     const totalPertemuan = jurnalIds.length;
 
@@ -6230,9 +6273,8 @@ window.cetakSemuaKartu = async () => {
     if (jurnalIds.length) {
       const potong = (arr,n)=>{const o=[];for(let i=0;i<arr.length;i+=n)o.push(arr.slice(i,i+n));return o;};
       for (const grup of potong(jurnalIds, 200)) {
-        const { data: ab, error: errA } = await sb.from("absensi")
-          .select("jurnal_id, siswa_id, status").in("jurnal_id", grup);
-        if (errA) throw new Error(errA.message);
+        const ab = await ambilSemuaBaris(() => sb.from("absensi")   // #S26
+          .select("jurnal_id, siswa_id, status").in("jurnal_id", grup).order("id"));
         (ab || []).forEach(a => {
           const p = absPerSiswa[a.siswa_id]; if (!p) return;
           const t = tglJurnal[a.jurnal_id], kor = korPeta[a.siswa_id + "|" + t];
@@ -6278,7 +6320,7 @@ window.cetakSemuaKartu = async () => {
       return '<div class="kartu-hal">' + kop + badan + '</div>';
     }).join("");
 
-    const w = window.open("", "_blank");
+    const w = ambilJendelaCetak();   // #S26
     if (!w) return toast("Popup diblokir.");
     w.document.write(bungkusCetakKartu("Kartu Siswa " + namaKelas, namaSekolah, tglCetak, isiSemua));
     w.document.close(); w.focus();
@@ -6387,10 +6429,13 @@ async function rnSiapkanKelas(periode){
     _rnSiswa = data || [];
   }
   const mapelNilai = new Set(), mapelJadwal = new Set();
-  let qn = sb.from("nilai").select("mapel_id").eq("kelas_id", _rnKelasAktif);
-  if (periode.tahun_ajaran) qn = qn.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+  const buatQn = () => {   // #S26: tanpa batas 1000 baris
+    let qn = sb.from("nilai").select("mapel_id").eq("kelas_id", _rnKelasAktif);
+    if (periode.tahun_ajaran) qn = qn.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+    return qn.order("id");
+  };
   const [nilaiRes, jadwalRes, bobotRes] = await Promise.all([
-    qn,
+    semuaRes(buatQn),
     sb.from("jadwal").select("mapel_id, guru_id").eq("kelas_id", _rnKelasAktif),
     sb.from("bobot").select("mapel_id, guru_id").eq("kelas_id", _rnKelasAktif)
   ]);
@@ -6427,10 +6472,12 @@ async function rnSiapkanKelas(periode){
 /* Susun daftar nilai SATU mapel: kolom per jenis/pertemuan, rata per jenis, rata akhir & rapor.
    Rumus rapor identik dengan menu Nilai (renderRapor). */
 async function rnSusunDaftar(kelasId, mapelId, listSiswa, periode){
-  let qn = sb.from("nilai").select("siswa_id, jenis, pertemuan, nilai")
-    .eq("kelas_id", kelasId).eq("mapel_id", mapelId);
-  if (periode.tahun_ajaran) qn = qn.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
-  const { data: nilai } = await qn;
+  const nilai = await ambilSemuaBaris(() => {   // #S26
+    let qn = sb.from("nilai").select("siswa_id, jenis, pertemuan, nilai")
+      .eq("kelas_id", kelasId).eq("mapel_id", mapelId);
+    if (periode.tahun_ajaran) qn = qn.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+    return qn.order("id");
+  });
   const dok = nilai || [];
 
   // bobot: ambil apa adanya untuk kelas+mapel (guru mana pun). Bila >1 baris, pakai yang pertama.
@@ -6657,7 +6704,7 @@ function rnGayaCetak(landscape){
     '</style>';
 }
 function rnBukaCetak(judul, isi, landscape, namaSekolah, tglCetak){
-  const w = window.open("", "_blank");
+  const w = ambilJendelaCetak();   // #S26
   if (!w) { toast("Popup diblokir."); return; }
   w.document.write('<html><head><title>' + esc(judul) + '</title>' + rnGayaCetak(landscape) + '</head><body>' +
     '<div class="kaki-cetak">' + (namaSekolah ? esc(namaSekolah) + ' &middot; ' : '') + 'Dicetak ' + esc(tglCetak) + '</div>' + isi + '</body></html>');
@@ -6950,13 +6997,14 @@ async function hitungRekapAbsensi(){
 
   // 1) jurnal kelas ini dalam rentang (untuk dapat daftar jurnal_id + jumlah pertemuan)
   const periode = await ambilPeriodeAktif();
-  let qj = sb.from("jurnal").select("id, tanggal")
-    .eq("kelas_id", _raKelasAktif);
-  if (periode.tahun_ajaran) qj = qj.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
-  if (dari) qj = qj.gte("tanggal", dari);
-  if (sampai) qj = qj.lte("tanggal", sampai);
-  const { data: jurnal, error: errJ } = await qj;
-  if (errJ) throw new Error(errJ.message);
+  const jurnal = await ambilSemuaBaris(() => {   // #S26
+    let qj = sb.from("jurnal").select("id, tanggal")
+      .eq("kelas_id", _raKelasAktif);
+    if (periode.tahun_ajaran) qj = qj.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+    if (dari) qj = qj.gte("tanggal", dari);
+    if (sampai) qj = qj.lte("tanggal", sampai);
+    return qj.order("id");
+  });
   const jurnalIds = (jurnal || []).map(j => j.id);
   const totalPertemuan = jurnalIds.length;
   const tglJurnal = {}; (jurnal || []).forEach(j => tglJurnal[j.id] = j.tanggal);
@@ -6985,9 +7033,8 @@ async function hitungRekapAbsensi(){
     // batasi ukuran query .in() bila jurnal sangat banyak (pecah per 200)
     const potong = (arr, n) => { const out=[]; for(let i=0;i<arr.length;i+=n) out.push(arr.slice(i,i+n)); return out; };
     for (const grup of potong(jurnalIds, 200)) {
-      const { data: ab, error: errA } = await sb.from("absensi")
-        .select("jurnal_id, siswa_id, status").in("jurnal_id", grup);
-      if (errA) throw new Error(errA.message);
+      const ab = await ambilSemuaBaris(() => sb.from("absensi")   // #S26
+        .select("jurnal_id, siswa_id, status").in("jurnal_id", grup).order("id"));
       (ab || []).forEach(a => {
         const p = peta[a.siswa_id];
         if (!p) return;   // siswa mungkin pindah kelas; abaikan
@@ -7028,14 +7075,15 @@ window.detailAbsensiSiswa = async (siswaId) => {
   try {
     // ambil jurnal kelas ini + mapel/guru, dalam rentang & periode aktif
     const periode = await ambilPeriodeAktif();
-    let qj = sb.from("jurnal")
-      .select("id, tanggal, mapel_id, guru_id, mapel:mapel_id(nama_mapel), guru:guru_id(nama)")
-      .eq("kelas_id", _raKelasAktif);
-    if (periode.tahun_ajaran) qj = qj.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
-    if (dari)   qj = qj.gte("tanggal", dari);
-    if (sampai) qj = qj.lte("tanggal", sampai);
-    const { data: jurnal, error: errJ } = await qj;
-    if (errJ) throw new Error(errJ.message);
+    const jurnal = await ambilSemuaBaris(() => {   // #S26
+      let qj = sb.from("jurnal")
+        .select("id, tanggal, mapel_id, guru_id, mapel:mapel_id(nama_mapel), guru:guru_id(nama)")
+        .eq("kelas_id", _raKelasAktif);
+      if (periode.tahun_ajaran) qj = qj.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+      if (dari)   qj = qj.gte("tanggal", dari);
+      if (sampai) qj = qj.lte("tanggal", sampai);
+      return qj.order("id");
+    });
 
     const petaJurnal = {};
     (jurnal || []).forEach(j => {
@@ -7293,7 +7341,7 @@ window.cetakRekapAbsensi = async () => {
       '<tr><td class="kolom-kiri"></td><td class="kolom-kanan"><span class="nama-ttd">' + esc(namaTtd) + '</span>' +
         (nipTtd ? '<br><span class="nip-ttd">NIP. ' + esc(nipTtd) + '</span>' : '') + '</td></tr></table>';
 
-  const w = window.open("", "_blank");
+  const w = ambilJendelaCetak();   // #S26
   if (!w) return toast("Popup diblokir.");
   w.document.write(
     '<html><head><title>Rekap Absensi ' + esc(namaKelas) + '</title>' +
@@ -7353,14 +7401,14 @@ async function muatRekapHarian(){
   const bolehRekap = (ME.role === "admin" || ME.role === "kepsek" || ME.role === "pengawas" ||
     (ME.role === "guru" && ME.izin_rekapharian));
   if (!bolehRekap) {
-    $("main").innerHTML = '<div class="card"><div class="page-kosong">' +
+    mainUntuk("rekapharian").innerHTML = '<div class="card"><div class="page-kosong">' +
       'Menu ini untuk admin, kepala sekolah, pengawas, atau guru yang diberi izin.</div></div>';
     return;
   }
   const hariIni = ijTglLokal(new Date());
   try { _rekapKelasSemua = await ambilSemua("kelas", "nama_kelas"); } catch(e){ _rekapKelasSemua = []; }
 
-  $("main").innerHTML =
+  mainUntuk("rekapharian").innerHTML =
     '<div class="card"><h2>Rekap Jurnal Harian</h2>' +
       '<p style="color:#6b7280;font-size:13px;margin-bottom:6px">Ringkasan mengajar per tanggal: ' +
         'jumlah jurnal, kelas yang belum mengisi, dan rekap kehadiran.</p>' +
@@ -7394,9 +7442,8 @@ window.renderRekapHarian = async () => {
     // absensi semua jurnal hari itu → tempel ke tiap jurnal (untuk kolom Ketidakhadiran)
     if (list.length) {
       const ids = list.map(j => j.id);
-      const { data: ab, error: errAb } = await sb.from("absensi")
-        .select("jurnal_id, siswa_nama, status").in("jurnal_id", ids);
-      if (errAb) throw new Error(errAb.message);   // #S25
+      const ab = await ambilSemuaBaris(() => sb.from("absensi")   // #S26 (sebelumnya terpotong 1000 baris)
+        .select("jurnal_id, siswa_nama, status").in("jurnal_id", ids).order("id"));
       const perJurnal = {};
       (ab || []).forEach(a => { (perJurnal[a.jurnal_id] = perJurnal[a.jurnal_id] || []).push(a); });
       list.forEach(j => { j._absen = perJurnal[j.id] || []; });
@@ -7673,7 +7720,7 @@ window.cetakRekapHarian = async () => {
       '</td><td>' + esc(j.catatan||"-") + '</td>' + selFoto + '</tr>';
   }).join("") : '<tr><td colspan="' + (sertakanFoto?9:8) + '" style="text-align:center">Belum ada jurnal.</td></tr>';
 
-  const w = window.open("", "_blank");
+  const w = ambilJendelaCetak();   // #S26
   if (!w) return toast("Popup diblokir.");
   w.document.write(
     '<html><head><title>Rekap Harian ' + esc(tgl) + '</title>' +
@@ -7787,16 +7834,16 @@ let _izinAkunAktif = null;   // id akun yang panelnya sedang dibuka
 
 async function muatIzinMenu(){
   if (ME.role !== "admin") {
-    $("main").innerHTML = '<div class="card"><div class="page-kosong">Hanya admin.</div></div>';
+    mainUntuk("izinmenu").innerHTML = '<div class="card"><div class="page-kosong">Hanya admin.</div></div>';
     return;
   }
-  $("main").innerHTML = '<div class="card"><div class="page-kosong">Memuat...</div></div>';
+  mainUntuk("izinmenu").innerHTML = '<div class="card"><div class="page-kosong">Memuat...</div></div>';
   try {
     const semua = await ambilSemua("profil");
     _izinCache = semua.filter(u => u.role !== "admin")
       .sort((a,b) => String(a.nama||"").localeCompare(String(b.nama||"")));
   } catch (e) {
-    $("main").innerHTML = '<div class="card"><div class="page-kosong">Gagal: ' + esc(e.message) + '</div></div>'; return;
+    mainUntuk("izinmenu").innerHTML = '<div class="card"><div class="page-kosong">Gagal: ' + esc(e.message) + '</div></div>'; return;
   }
 
   let html = '<div class="card"><h2>Izin Menu per Akun</h2>' +
@@ -7805,7 +7852,7 @@ async function muatIzinMenu(){
 
   if (!_izinCache.length) {
     html += '<div class="empty">Belum ada pengguna guru/kepsek/pengawas.</div></div>';
-    $("main").innerHTML = html; return;
+    mainUntuk("izinmenu").innerHTML = html; return;
   }
 
   // daftar akun (klik untuk buka panel)
@@ -7821,7 +7868,7 @@ async function muatIzinMenu(){
   }).join("") + '</div>';
 
   html += '<div id="izinMsg" style="margin-top:10px"></div></div>';
-  $("main").innerHTML = html;
+  mainUntuk("izinmenu").innerHTML = html;
 }
 
 /* Buka panel izin untuk satu akun (modal sederhana). */
@@ -7911,20 +7958,19 @@ window.renderDaftarJurnal = async function(){
     const fJadwal = $("fJadwal") ? $("fJadwal").value : "";
 
     const periode = await ambilPeriodeAktif();
-    let q = sb.from("jurnal").select("*");
-    if (periode.tahun_ajaran) {
-      q = q.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
-    }
-    if (fStatus) q = q.eq("status", fStatus);
-    if (fKelas) q = q.eq("kelas_id", fKelas);
-    if (fDari) q = q.gte("tanggal", fDari);
-    if (fSampai) q = q.lte("tanggal", fSampai);
-    if (fJadwal === "luar") q = q.eq("luar_jadwal", true);
-    if (fJadwal === "sesuai") q = q.eq("luar_jadwal", false);
-    q = q.order("dibuat", { ascending: false });
-
-    const { data, error } = await q;
-    if (error) throw new Error(error.message);
+    const data = await ambilSemuaBaris(() => {   // #S26: semua jurnal (sebelumnya hanya 1000 terbaru)
+      let q = sb.from("jurnal").select("*");
+      if (periode.tahun_ajaran) {
+        q = q.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+      }
+      if (fStatus) q = q.eq("status", fStatus);
+      if (fKelas) q = q.eq("kelas_id", fKelas);
+      if (fDari) q = q.gte("tanggal", fDari);
+      if (fSampai) q = q.lte("tanggal", fSampai);
+      if (fJadwal === "luar") q = q.eq("luar_jadwal", true);
+      if (fJadwal === "sesuai") q = q.eq("luar_jadwal", false);
+      return q.order("dibuat", { ascending: false }).order("id");
+    });
     _jurnalCache = data || [];
     _pgJurnal = 1;   // reset ke halaman 1 tiap query/filter baru
     gambarHalamanJurnal();
@@ -8130,7 +8176,9 @@ window.lihatFoto = async (id) => {
   const { data, error } = await sb.storage.from("dokumentasi")
     .createSignedUrl(id + ".jpg", 60);
   if (error || !data) return toast("Foto tak ditemukan.");
-  window.open(data.signedUrl, "_blank");
+  const w = ambilJendelaCetak();   // #S26: jendela sudah dibuka saat tombol ditekan
+  if (!w) return toast("Popup diblokir. Izinkan popup untuk melihat foto.");
+  w.location.href = data.signedUrl;
 };
 
 /* ---- Cetak jurnal (buka jendela cetak, bisa Save as PDF) ---- */
@@ -8243,7 +8291,7 @@ window.cetakJurnal = async (id) => {
     tabelRekap + fotoHtml + blokTtd +
     '</body></html>';
 
-  const w = window.open("", "_blank");
+  const w = ambilJendelaCetak();   // #S26
   if (!w) return toast("Popup diblokir. Izinkan popup untuk mencetak.");
   w.document.write(html); w.document.close(); w.focus();
   w.onload = () => {
@@ -8269,7 +8317,7 @@ window.editJurnal = async (id) => {
 
   // masuk mode edit
   _editJurnalId = id;
-  _ijEditAsal = j;   // #S25b: diset sebelum gantiGuruAsli() agar filter mapel memakai pemilik jurnal  
+  _ijEditAsal = j;   // #S25b: diset sebelum gantiGuruAsli() agar filter mapel memakai pemilik jurnal
   _fotoLamaAda = !!j.ada_foto;
 
   // isi form
@@ -8293,7 +8341,7 @@ window.editJurnal = async (id) => {
   $("jMateri").value = j.materi || "";
   $("jCatatan").value = j.catatan || "";
   ijModeEdit(j);   // jurnal lama diedit lewat mode manual
-  await ijSegarkan();   // #S25b: muat jurnal pada TANGGAL jurnal (cek dobel), bukan tanggal hari ini  
+  await ijSegarkan();   // #S25b: muat jurnal pada TANGGAL jurnal (cek dobel), bukan tanggal hari ini
 
   // muat absensi kelas, lalu terapkan status tersimpan
   await muatAbsensi();
@@ -8333,7 +8381,7 @@ window.editJurnal = async (id) => {
 
 async function muatPengguna(){
   if (ME.role !== "admin") {
-    $("main").innerHTML = '<div class="card"><div class="page-kosong">' +
+    mainUntuk("pengguna").innerHTML = '<div class="card"><div class="page-kosong">' +
       'Hanya admin yang bisa mengelola pengguna.</div></div>';
     return;
   }
@@ -8342,7 +8390,7 @@ async function muatPengguna(){
   let mapelList = [];
   try { mapelList = await ambilSemua("mapel", "nama_mapel"); } catch(e) {}
 
-  $("main").innerHTML =
+  mainUntuk("pengguna").innerHTML =
     '<div class="card"><h2>Tambah Pengguna</h2>' +
       '<p style="color:#6b7280;font-size:13px;margin-bottom:6px">Buat akun untuk guru atau kepala sekolah. ' +
         'Mereka masuk dengan email &amp; kata sandi yang kamu tetapkan.</p>' +
@@ -8713,12 +8761,12 @@ async function muatJadwal(){
       .sort((a,b) => String(a.nama||"").localeCompare(String(b.nama||"")));
     await rsMuatWaktu();   // jam bel untuk waktu otomatis
   } catch (e) {
-    $("main").innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat data: ' +
+    mainUntuk("jadwal").innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat data: ' +
       esc(e.message) + '</div></div>'; return;
   }
 
   if (!_jdKelasList.length) {
-    $("main").innerHTML = '<div class="card"><h2>Jadwal</h2>' +
+    mainUntuk("jadwal").innerHTML = '<div class="card"><h2>Jadwal</h2>' +
       '<div class="empty">Belum ada kelas. Tambah kelas dulu.</div></div>';
     return;
   }
@@ -8738,7 +8786,7 @@ async function muatJadwal(){
   const opsiHari = HARI.slice(1).map((h,i) =>
     '<option value="' + (i+1) + '">' + h + '</option>').join("");
 
-  $("main").innerHTML =
+  mainUntuk("jadwal").innerHTML =
     '<div class="card"><h2>Jadwal Pelajaran</h2>' +
       '<div class="row" style="align-items:flex-end">' +
         '<div><label>Kelas</label><select id="jdKelas" onchange="gantiKelasJadwal()">' +
@@ -9091,7 +9139,7 @@ async function muatRoster(){
     _rsMapelList = await ambilSemua("mapel", "nama_mapel");
     _rsGuruList  = await ambilSemua("profil");
   } catch (e) {
-    $("main").innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat data: ' +
+    mainUntuk("roster").innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat data: ' +
       esc(e.message) + '</div></div>'; return;
   }
   _rsKelasById = {}; _rsKelasList.forEach(k => _rsKelasById[k.id] = k);
@@ -9100,7 +9148,7 @@ async function muatRoster(){
   await rsMuatWaktu();
 
   const tb = (key, label) => '<button class="btn btn-sm btn-ghost" id="rsTab_' + key + '" onclick="rsGantiTab(\'' + key + '\')">' + label + '</button>';
-  $("main").innerHTML =
+  mainUntuk("roster").innerHTML =
     '<div class="card"><h2>Roster Pelajaran</h2>' +
       '<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">' +
         tb("lihat", "Lihat per Hari") + tb("minggu", "1 Minggu") + tb("guru", "Per Guru") + tb("kamus", "Kamus Kode") +
@@ -9365,7 +9413,7 @@ async function rsBukaCetak(judul, subjudul, isi, orientasi, o){
     ? '<div class="judul-polos">' + esc(judul) + '</div>'
     : '<div class="kop">' + (namaSekolah ? '<div class="nm">' + esc(namaSekolah) + '</div>' : '') +
         '<div class="sub"><b>' + esc(judul) + '</b>' + (subjudul ? '<br>' + esc(subjudul) : '') + '</div></div>';
-  const w = window.open("", "_blank");
+  const w = ambilJendelaCetak();   // #S26
   if (!w) return toast("Popup diblokir. Izinkan popup untuk mencetak.");
   w.document.write('<html><head><title>' + esc(judul) + '</title><style>@page{size:' + W + 'mm ' + H + 'mm;margin:' + M + 'mm}' +
     RS_CSS_CETAK + '#rsIsiCetak{width:' + (W - 2*M) + 'mm}</style></head><body>' +
@@ -10196,15 +10244,15 @@ const bpKelasSiswa = id => {
 
 async function muatBP(){
   if (!(ME.role === "admin" || ME.izin_bp)) {
-    $("main").innerHTML = '<div class="card"><div class="page-kosong">Menu ini khusus Guru BP & Admin.</div></div>';
+    mainUntuk("bp").innerHTML = '<div class="card"><div class="page-kosong">Menu ini khusus Guru BP & Admin.</div></div>';
     return;
   }
-  $("main").innerHTML = '<div class="card"><div class="page-kosong">Memuat...</div></div>';
+  mainUntuk("bp").innerHTML = '<div class="card"><div class="page-kosong">Memuat...</div></div>';
 
   // muat master: siswa aktif + kelas + jenis, sekali di awal
   try {
     const [sw, kl, jn] = await Promise.all([
-      sb.from("siswa").select("id, nis, nama_siswa, kelas_id").eq("aktif", true).order("nama_siswa"),
+      semuaRes(() => sb.from("siswa").select("id, nis, nama_siswa, kelas_id").eq("aktif", true).order("nama_siswa").order("id")),   // #S26
       sb.from("kelas").select("id, nama_kelas").order("nama_kelas"),
       sb.from("bp_jenis").select("*").order("kategori").order("nama")
     ]);
@@ -10214,11 +10262,11 @@ async function muatBP(){
     _bpSiswa = (sw.data || []).map(s => ({ ...s, nama_kelas: petaKelas[s.kelas_id] || "" }));
     _bpJenis = jn.data || [];
   } catch (e) {
-    $("main").innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat: ' + esc(e.message) + '</div></div>';
+    mainUntuk("bp").innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat: ' + esc(e.message) + '</div></div>';
     return;
   }
 
-  $("main").innerHTML =
+  mainUntuk("bp").innerHTML =
     '<div class="card"><h2>Bimbingan &amp; Konseling (BP)</h2>' +
       '<p style="color:var(--ink-lembut);font-size:13px;margin:-6px 0 14px">Kelola kasus, poin, konseling, dan rekap siswa.</p>' +
       '<div class="subtab-wk" id="bpSubtab">' +
@@ -10283,11 +10331,11 @@ async function bpRenderKasus(){
 async function bpMuatKasus(){
   try {
     const periode = await ambilPeriodeAktif();
-    let q = sb.from("bp_catatan").select("*").eq("tipe","kasus");
-    if (periode.tahun_ajaran) q = q.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
-    q = q.order("tanggal", { ascending:false }).order("dibuat", { ascending:false });
-    const { data, error } = await q;
-    if (error) throw new Error(error.message);
+    const data = await ambilSemuaBaris(() => {   // #S26
+      let q = sb.from("bp_catatan").select("*").eq("tipe","kasus");
+      if (periode.tahun_ajaran) q = q.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+      return q.order("tanggal", { ascending:false }).order("dibuat", { ascending:false }).order("id");
+    });
     _bpData.kasus = data || [];
     _bpPg.kasus = 1;
     bpGambarKasus();
@@ -10411,10 +10459,11 @@ async function bpRenderPoin(){
 async function bpMuatPoin(){
   try {
     const periode = await ambilPeriodeAktif();
-    let q = sb.from("bp_catatan").select("siswa_id, poin, jenis_id, tipe");
-    if (periode.tahun_ajaran) q = q.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
-    const { data, error } = await q;
-    if (error) throw new Error(error.message);
+    const data = await ambilSemuaBaris(() => {   // #S26
+      let q = sb.from("bp_catatan").select("siswa_id, poin, jenis_id, tipe");
+      if (periode.tahun_ajaran) q = q.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+      return q.order("id");
+    });
 
     // agregasi poin per siswa (dari semua baris berpoin: kasus & poin)
     const agg = {};
@@ -10556,11 +10605,11 @@ async function bpRenderKonseling(){
 async function bpMuatKonseling(){
   try {
     const periode = await ambilPeriodeAktif();
-    let q = sb.from("bp_catatan").select("*").eq("tipe","konseling");
-    if (periode.tahun_ajaran) q = q.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
-    q = q.order("waktu", { ascending:false });
-    const { data, error } = await q;
-    if (error) throw new Error(error.message);
+    const data = await ambilSemuaBaris(() => {   // #S26
+      let q = sb.from("bp_catatan").select("*").eq("tipe","konseling");
+      if (periode.tahun_ajaran) q = q.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+      return q.order("waktu", { ascending:false }).order("id");
+    });
     _bpData.konseling = data || [];
     _bpPg.konseling = 1;
     bpGambarKonseling();
@@ -10711,10 +10760,11 @@ window.bpMuatRekap = async function(kelasIdArg){
       ? kelasIdArg
       : ($("bprKelas") ? $("bprKelas").value : "");
     _bpRekapKelas = kelasId;
-    let q = sb.from("bp_catatan").select("siswa_id, tipe, poin");
-    if (periode.tahun_ajaran) q = q.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
-    const { data, error } = await q;
-    if (error) throw new Error(error.message);
+    const data = await ambilSemuaBaris(() => {   // #S26
+      let q = sb.from("bp_catatan").select("siswa_id, tipe, poin");
+      if (periode.tahun_ajaran) q = q.eq("tahun_ajaran", periode.tahun_ajaran).eq("semester", periode.semester);
+      return q.order("id");
+    });
 
     // siswa terpilih (sesuai filter kelas)
     const siswaFilter = kelasId
@@ -10815,7 +10865,7 @@ window.bpCetakRekap = async () => {
         (nipBP ? '<br><span class="nip-ttd">NIP. ' + esc(nipBP) + '</span>' : '') + '</td></tr>' +
     '</table>';
 
-  const w = window.open("", "_blank");
+  const w = ambilJendelaCetak();   // #S26
   if (!w) return toast("Popup diblokir.");
   w.document.write(
     '<html><head><title>Rekap BP - ' + esc(namaKelas) + '</title>' +
@@ -10992,14 +11042,14 @@ function pkPesanError(e){
 
 async function muatPKL(){
   if (!pkBoleh()) {
-    $("main").innerHTML = '<div class="card"><div class="page-kosong">Menu ini khusus admin &amp; guru yang diberi izin PKL.</div></div>';
+    mainUntuk("pkl").innerHTML = '<div class="card"><div class="page-kosong">Menu ini khusus admin &amp; guru yang diberi izin PKL.</div></div>';
     return;
   }
-  $("main").innerHTML = '<div class="card"><div class="page-kosong">Memuat...</div></div>';
+  mainUntuk("pkl").innerHTML = '<div class="card"><div class="page-kosong">Memuat...</div></div>';
   try {
     const [kl, sw, dd, pr] = await Promise.all([
       sb.from("kelas").select("id, nama_kelas").order("nama_kelas"),
-      sb.from("siswa").select("id, nis, nama_siswa, kelas_id").eq("aktif", true).order("nama_siswa"),
+      semuaRes(() => sb.from("siswa").select("id, nis, nama_siswa, kelas_id").eq("aktif", true).order("nama_siswa").order("id")),   // #S26
       sb.from("pkl_dudi").select("*").order("nama"),
       sb.from("profil").select("id, nama, email, role, nip")
     ]);
@@ -11015,13 +11065,13 @@ async function muatPKL(){
       .sort((a,b) => String(a.nama||"").localeCompare(String(b.nama||"")));
     _pkKepsek = (pr.data || []).find(u => u.role === "kepsek") || null;
   } catch (e) {
-    $("main").innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat: ' + esc(e.message) +
+    mainUntuk("pkl").innerHTML = '<div class="card"><div class="page-kosong">Gagal memuat: ' + esc(e.message) +
       '<br><small>Pastikan SQL tabel PKL sudah dijalankan.</small></div></div>';
     return;
   }
   if (!_pkKelas.find(k => k.id === _pkKelasForm)) _pkKelasForm = _pkKelas[0] ? _pkKelas[0].id : "";
 
-  $("main").innerHTML =
+  mainUntuk("pkl").innerHTML =
     '<div class="card"><h2>Praktik Kerja Lapangan (PKL)</h2>' +
       '<p style="color:var(--ink-lembut);font-size:13px;margin:-6px 0 14px">Kelola penempatan siswa. Status dihitung otomatis dari tanggal ' +
         'dan dipakai absensi: siswa yang sedang PKL tidak perlu diabsen guru.</p>' +
@@ -11335,7 +11385,7 @@ async function pkCetak(judul, meta, isi){
         '<td class="kolom-kanan"><span class="nama-ttd">' + esc(ME.nama || ME.email || "") + '</span>' +
         (ME.nip ? '<br><span class="nip-ttd">NIP. ' + esc(ME.nip) + '</span>' : '') + '</td></tr>' +
     '</table>';
-  const w = window.open("", "_blank");
+  const w = ambilJendelaCetak();   // #S26
   if (!w) return toast("Popup diblokir. Izinkan popup untuk mencetak.");
   w.document.write('<html><head><title>' + esc(judul) + '</title>' +
     '<style>@page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;padding:0 0 30px;color:#000;font-size:12px}' +
@@ -11742,6 +11792,47 @@ function khBoxTanpaJurnal(d){
     '<br><span style="font-size:12px">Tanggal itu <b>belum dihitung hari efektif</b>, jadi kehadiran siswa belum masuk rekap. ' +
     'Bila libur, minta admin menandainya di Pengaturan → Hari Libur. Bila ada KBM, minta guru mengisi jurnalnya.</span></div>';
 }
+
+/* ===== #S26: JENDELA CETAK DIBUKA SAAT TOMBOL DITEKAN =====
+   Browser HP (Safari, browser bawaan aplikasi, iframe Blogger) memblokir popup yang dibuka setelah
+   menunggu data. Jendela dibuka di awal (berisi "Menyiapkan cetakan…"), lalu diisi setelah data siap.
+   Bila fungsi berhenti sebelum mencetak (error/validasi), jendela kosong itu ditutup otomatis. */
+let _wCetak = null;
+function jendelaCetakAwal(){
+  tutupJendelaCetakSisa();
+  try {
+    const w = window.open("", "_blank");
+    if (w) {
+      w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Menyiapkan cetakan…</title></head>' +
+        '<body style="font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;height:90vh;color:#555">' +
+        'Menyiapkan cetakan…</body></html>');
+      w.document.close();
+    }
+    _wCetak = w;
+  } catch (e) { _wCetak = null; }
+}
+function ambilJendelaCetak(){
+  const w = (_wCetak && !_wCetak.closed) ? _wCetak : window.open("", "_blank");
+  _wCetak = null;   // sudah dipakai → tidak ditutup otomatis
+  return w;
+}
+function tutupJendelaCetakSisa(){
+  if (_wCetak && !_wCetak.closed) { try { _wCetak.close(); } catch (e) {} }
+  _wCetak = null;
+}
+function denganJendelaCetak(fn){
+  return async (...arg) => {
+    jendelaCetakAwal();
+    try { return await fn(...arg); }
+    finally { tutupJendelaCetakSisa(); }
+  };
+}
+["cetakNilai", "cetakRapor", "khCetakHarian", "khCetakBulanan", "khCetakSemester", "cetakKartuSiswa",
+ "cetakSemuaKartu", "cetakDaftarNilai", "cetakRekapNilai", "cetakRekapAbsensi", "cetakRekapHarian",
+ "lihatFoto", "cetakJurnal", "rsCetak", "rsCetakMinggu", "rsCetakKamus", "rsCetakGuru", "rsCetakBeban",
+ "bpCetakRekap", "pkCetakDaftar", "pkCetakPerTempat"].forEach(n => {
+  if (typeof window[n] === "function") window[n] = denganJendelaCetak(window[n]);
+});
 
 </script>
 </body>
