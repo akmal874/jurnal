@@ -3617,17 +3617,22 @@ function ijKosongkanPilihan(){
 function ijGambar(){
   const area = $("ijSlotArea"); if (!area) return;
   const manual = _ijMode === "manual";
+  const edit = !!_editJurnalId;   // #S25b: sedang mengedit jurnal lama
   // kunci/buka field
   if ($("jJam")) { $("jJam").readOnly = !manual; $("jJam").placeholder = manual ? "mis. 5 atau 3-4" : "Pilih dari jadwal di atas"; }
   if ($("jKelas")) $("jKelas").disabled = !manual;
   if ($("jMapel")) $("jMapel").disabled = !manual;
-  if ($("ijAsal")) $("ijAsal").innerHTML = manual ? '<span class="ij-tag ij-tag-manual">manual</span>'
+  if ($("ijAsal")) $("ijAsal").innerHTML = manual ? '<span class="ij-tag ij-tag-manual">' + (edit ? 'edit' : 'manual') + '</span>'   // #S25b
     : (_ijSlot ? '<span class="ij-tag ij-tag-jadwal">dari jadwal</span>' : '');
 
   if (manual) {
-    area.innerHTML = '<div class="ij-kotak"><div class="ij-judul"><span>✍ Isi manual (di luar jadwal)</span>' +
-      '<a class="ra-nama-link" onclick="ijModeJadwal()">← Kembali pilih dari jadwal</a></div>' +
-      '<div style="font-size:12px;color:#6b7280">Untuk tukar jam, jam tambahan, atau perubahan roster yang belum diperbarui.</div></div>';
+    area.innerHTML = edit
+      // #S25b: mode edit — tanpa tautan "Kembali pilih dari jadwal" (mencegah absensi tersimpan terhapus)
+      ? '<div class="ij-kotak"><div class="ij-judul"><span>✎ Edit jurnal</span></div>' +
+        '<div style="font-size:12px;color:var(--ink-lembut)">Jam/kelas bisa diubah; dicek terhadap roster pemilik jurnal.</div></div>'
+      : '<div class="ij-kotak"><div class="ij-judul"><span>✍ Isi manual (di luar jadwal)</span>' +
+        '<a class="ra-nama-link" onclick="ijModeJadwal()">← Kembali pilih dari jadwal</a></div>' +
+        '<div style="font-size:12px;color:#6b7280">Untuk tukar jam, jam tambahan, atau perubahan roster yang belum diperbarui.</div></div>';
     ijCekManual();
     return;
   }
@@ -3675,7 +3680,8 @@ window.ijPilihSlot = async (i) => {
 };
 
 window.ijModeManual = () => { _ijMode = "manual"; _ijSlot = null; ijKosongkanPilihan(); ijGambar(); };
-window.ijModeJadwal = () => { _ijMode = "jadwal"; _ijSlot = null; ijKosongkanPilihan(); ijGambar(); };
+window.ijModeJadwal = () => { if (_editJurnalId) return;   // #S25b: dikunci saat edit
+  _ijMode = "jadwal"; _ijSlot = null; ijKosongkanPilihan(); ijGambar(); };
 
 /* Mode edit jurnal lama: isian dibiarkan, masuk mode manual. */
 function ijModeEdit(j){
